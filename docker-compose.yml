@@ -62,7 +62,7 @@ services:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health/ready').status==200 else 1)"]
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health/ready', timeout=4).status==200 else 1)"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -89,6 +89,13 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    # The image healthcheck probes the API port, which the worker does not serve.
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1 && python -c \"import sys; from archive.db import db_healthy; sys.exit(0 if db_healthy() else 1)\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     # Visitor serving has priority over ingestion on shared hardware (spec 3.4).
     cpus: ${WORKER_CPUS:-2}
     mem_limit: ${WORKER_MEM:-3g}
