@@ -1,0 +1,17 @@
+{
+  "_note": "OCR ground truth for REAL archive pages (spec 10.1): 30-50 pages, hand-transcribed and double-checked, split by document class and language, half calibration and half test. Same row format as fixtures/ground_truth.json so `python -m archive.cli eval-ocr` can read it. Only pages whose rights record allows this use. Replace this note with a description of the real page set; eval-ocr copies the note into its result and calibrate_gate.py refuses results whose note marks them as fixture data.",
+  "_row_fields": {
+    "id": "stable page id",
+    "image": "path relative to this file",
+    "half": "optional: 0 or 1 for the left/right half of a two-page spread",
+    "language": "en | hi | mr",
+    "doc_class": "printed (handwritten pages are excluded from the OCR fallback rate, spec 4.2)",
+    "split": "calibration | test",
+    "acceptable_wer": "archivist's limit for this page class (default 0.1)",
+    "text": "exact transcription",
+    "transcribed_by": "named person",
+    "checked_by": "a second named person",
+    "rights_source_key": "rights register entry that permits this use"
+  },
+  "pages": []
+}

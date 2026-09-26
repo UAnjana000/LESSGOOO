@@ -1,0 +1,17 @@
+{
+  "_note": "Spec 3.4: the team sets these targets BEFORE the capacity test and records who set them and when. Leave null until decided; never back-fill from results.",
+  "set_by": null,
+  "set_on": null,
+  "planned_kiosks": null,
+  "targets_ms": {
+    "search_p95": null,
+    "page_open_p95": null,
+    "ask_p95_excluding_provider": null
+  },
+  "ingestion_min_pages_per_hour": null,
+  "decision_order_if_missed": [
+    "Schedule batch ingestion outside visitor hours and cap its CPU and memory",
+    "Move Langfuse to a separate machine",
+    "Move OCR, embeddings and transcoding to a second machine or GPU box"
+  ]
+}

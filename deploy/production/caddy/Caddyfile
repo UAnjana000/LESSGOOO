@@ -1,0 +1,122 @@
+# Production edge proxy [PROD]. Terminates HTTPS and enforces the visitor / staff access boundary.
+#
+#   :443  visitor site  - gallery network (kiosks, smart displays). Read-only visitor API, IIIF, PWA.
+#   :8443 staff site    - staff network (archivist workstations, digitisation room). Full API.
+#   :80   visitor HTTP  - redirect to HTTPS only.
+#   :8081 healthcheck   - container-internal, not published.
+#
+# Environment (set by compose.yaml from deploy/production/.env):
+#   VISITOR_SITE, STAFF_SITE     one hostname each; must match the certificate SAN
+#   VISITOR_TLS, STAFF_TLS       arguments of the tls directive: "<cert> <key>" files under /certs, or
+#                                "internal" (staging rehearsal only), see docs/ops/https-and-access.md
+#   STAFF_ALLOWED_CIDRS          source ranges allowed on the staff site (defence in depth; see docs)
+#   STAFF_MAX_UPLOAD             request body cap for staff uploads (scans, recordings)
+#
+# All handle blocks use named matchers on purpose: Caddy keeps named-matcher handles in written order,
+# whereas single-path handles are re-sorted ahead of them and would bypass the boundary rules.
+
+{
+	admin off
+	skip_install_trust
+	auto_https disable_redirects
+	servers {
+		protocols h1 h2
+	}
+	log {
+		output stdout
+		format json
+	}
+}
+
+(security_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), interest-cohort=()"
+		Content-Security-Policy "default-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+		-Server
+	}
+}
+
+# Load-balances across every api replica (docker compose up --scale api=N) via Docker DNS.
+(api_upstream) {
+	reverse_proxy {
+		dynamic a {
+			name api
+			port 8000
+			refresh 10s
+		}
+		lb_policy least_conn
+		lb_try_duration 5s
+		fail_duration 30s
+	}
+}
+
+(pwa_upstream) {
+	reverse_proxy web:8080
+}
+
+http://:8081 {
+	respond /healthz "ok" 200
+}
+
+http://{$VISITOR_SITE} {
+	log
+	redir https://{host}{uri} permanent
+}
+
+https://{$VISITOR_SITE}:443 {
+	tls {$VISITOR_TLS}
+	import security_headers
+	encode zstd gzip
+	log
+	request_body {
+		max_size 64KB
+	}
+
+	# Visitor boundary: allowlist. Only the read-only visitor API, IIIF tiles and liveness reach the api.
+	@visitor_api path /api/visitor/* /iiif/* /api/health
+	handle @visitor_api {
+		import api_upstream
+	}
+
+	# Staff API, readiness details and the OpenAPI docs are not routed on the gallery listener.
+	@other_api path /api/*
+	handle @other_api {
+		respond "Not found" 404
+	}
+
+	@staff_ui path /staff /staff/*
+	handle @staff_ui {
+		redir * / 302
+	}
+
+	handle {
+		import pwa_upstream
+	}
+}
+
+https://{$STAFF_SITE}:8443 {
+	tls {$STAFF_TLS}
+	import security_headers
+	encode zstd gzip
+	log
+	request_body {
+		max_size {$STAFF_MAX_UPLOAD}
+	}
+
+	@outside not remote_ip {$STAFF_ALLOWED_CIDRS}
+	handle @outside {
+		respond "Forbidden" 403
+	}
+
+	@api path /api/* /iiif/*
+	handle @api {
+		import api_upstream
+	}
+
+	handle {
+		import pwa_upstream
+	}
+}

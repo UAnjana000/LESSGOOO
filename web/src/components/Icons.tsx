@@ -1,0 +1,54 @@
+const base = { fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" } as const;
+
+export const IconHome = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true" {...base}>
+    <path d="M3 10.5 12 3l9 7.5" />
+    <path d="M5 9.5V21h14V9.5" />
+    <path d="M10 21v-6h4v6" />
+  </svg>
+);
+export const IconSearch = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true" {...base}>
+    <circle cx="11" cy="11" r="6.5" />
+    <path d="m16 16 5 5" />
+  </svg>
+);
+export const IconAsk = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true" {...base}>
+    <path d="M4 5h16v11H9l-5 4z" />
+    <path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.4" />
+    <path d="M12 14.6v.1" />
+  </svg>
+);
+export const IconTimeline = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true" {...base}>
+    <path d="M3 12h18" />
+    <circle cx="7" cy="12" r="2" />
+    <circle cx="17" cy="12" r="2" />
+    <path d="M7 5v3M17 16v3M12 7v10" />
+  </svg>
+);
+export const IconStories = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true" {...base}>
+    <path d="M4 5.5C6.5 4 9.5 4 12 5.5 14.5 4 17.5 4 20 5.5V19c-2.5-1.5-5.5-1.5-8 0-2.5-1.5-5.5-1.5-8 0z" />
+    <path d="M12 5.5V19" />
+  </svg>
+);
+export const IconMap = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true" {...base}>
+    <circle cx="6" cy="6" r="2.5" />
+    <circle cx="18" cy="8" r="2.5" />
+    <circle cx="10" cy="18" r="2.5" />
+    <path d="m8.2 7 7.4.8M7 8.3l2.2 7.4M16.5 10l-4.8 6.3" />
+  </svg>
+);
+export const IconList = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true" {...base}>
+    <path d="M6 3h12v18l-6-4-6 4z" />
+  </svg>
+);
+export const IconPlay = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true" width="18" height="18" {...base}>
+    <path d="M7 4.5v15l12-7.5z" />
+  </svg>
+);

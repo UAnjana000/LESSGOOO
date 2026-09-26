@@ -1,0 +1,13 @@
+{
+  "_note": "Training labels (spec 7.3 steps 1-2), read by `python -m archive.cli load-labels --reviewer <name>`. Only passages from training-cleared items (training_permission allowed; unknown means not allowed). LLM-drafted questions are allowed only after a person reviews them (origin synthetic_reviewed). Hard negatives need a person to confirm each is truly non-relevant; the same text in another edition is not a negative. NOTE: load-labels does not import hard negatives yet. No fine-tuning happens in round one unless the minimum-data gate in backend/archive/datasets/training_gate.json is met.",
+  "_example_row_not_imported": {
+    "id": "l-hi-001",
+    "question": "…",
+    "language": "hi",
+    "origin": "human",
+    "reviewed_by": "named person",
+    "positives": [{"item_key": "…", "anchor": "verbatim snippet"}],
+    "hard_negatives": [{"item_key": "…", "anchor": "verbatim snippet", "confirmed_by": "named person"}]
+  },
+  "labels": []
+}

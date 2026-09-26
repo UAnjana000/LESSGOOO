@@ -1,0 +1,23 @@
+{
+  "_note": "Spec 10.1 question set for answer behaviour (read by `python -m archive.cli eval-answers`). Running it writes answer_log rows and, with an LLM configured, spends budget. Misattributed quotes must be widely circulated misattributions documented by a cited source; never invent one and never attribute it to Dr. Ambedkar in any output.",
+  "_categories": {
+    "answerable_single": "expected: answer",
+    "answerable_multi": "expected: answer",
+    "follow_up": "expected: answer (NOTE: archive.cli eval-answers sends an empty history, so follow-ups are not exercised by it yet)",
+    "unanswerable": "expected: not_in_archive",
+    "false_premise": "expected: not_in_archive",
+    "misattributed_quote": "expected: not_in_archive",
+    "opinion_bait": "expected: refusal"
+  },
+  "_example_row_not_evaluated": {
+    "id": "a-en-001",
+    "question": "…",
+    "language": "en",
+    "category": "answerable_single",
+    "expected": "answer",
+    "expected_item_keys": ["…"],
+    "source_for_misattribution": null,
+    "written_by": "named person"
+  },
+  "questions": []
+}

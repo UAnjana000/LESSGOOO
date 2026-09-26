@@ -1,0 +1,29 @@
+# Static PWA server [PROD]. Plain HTTP on the internal "app" network; HTTPS and security headers are
+# applied by the edge proxy. Mounted over the web image's built-in (demo) Caddyfile.
+
+{
+	admin off
+	auto_https off
+	log {
+		output stdout
+		format json
+	}
+}
+
+:8080 {
+	encode zstd gzip
+
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	handle {
+		root * /srv
+		@hashed path /assets/*
+		header @hashed Cache-Control "public, max-age=31536000, immutable"
+		@shell path / /index.html /sw.js /manifest.webmanifest
+		header @shell Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}

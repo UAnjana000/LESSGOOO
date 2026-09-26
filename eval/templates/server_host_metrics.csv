@@ -1,0 +1,1 @@
+scenario,host,cpu_model,ram_gb,started_at,finished_at,kiosks_simulated,ingestion_running,ingestion_pages_done,ingestion_pages_per_hour,cpu_peak_pct,ram_peak_gb,swap_used_gb,disk_io_peak_mb_s,langfuse_location,load_test_result_file,notes

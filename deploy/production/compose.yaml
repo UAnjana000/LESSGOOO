@@ -1,0 +1,339 @@
+# PRODUCTION TOPOLOGY [PROD] - spec section 9, one institution site.
+# The repository-root docker-compose.yml is the section 3 SIH prototype (one edge server, demo accounts,
+# fixtures, self-signed CA, secrets in a local .env). It is not institution-ready; do not deploy it to a gallery.
+#
+# Run from this directory (deploy/production). Read docs/ops/README.md before the first start.
+#   docker compose --env-file .env -f compose.yaml build
+#   docker compose --env-file .env -f compose.yaml up -d
+#
+# Services: db (PostgreSQL + pgvector), migrate (one-shot), api, worker, web (static PWA), proxy (HTTPS edge).
+# ops is an on-demand container for backup, restore, fixity and manifest import (profile "ops").
+# Secrets are Docker secrets (files under SECRETS_DIR, never committed); .env holds non-secret settings only.
+
+name: ambedkar-archive-prod
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "${LOG_MAX_SIZE:-20m}"
+    max-file: "${LOG_MAX_FILE:-10}"
+
+x-hardening: &hardening
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+
+x-api-build: &api-build
+  context: ../../backend
+  args:
+    INSTALL_DEV: "0"
+    PREFETCH_MODELS: "1"
+
+# Non-secret settings. Secret values are loaded from /run/secrets by scripts/with-secrets.sh.
+x-app-env: &app-env
+  ARCHIVE_ENVIRONMENT: production
+  ARCHIVE_PRESERVATION_ROOT: /data/preservation
+  ARCHIVE_DELIVERY_ROOT: /data/delivery
+  ARCHIVE_DERIVATIVE_ROOT: /data/derivatives
+  ARCHIVE_QUARANTINE_ROOT: /data/quarantine
+  ARCHIVE_TRACE_ROOT: /data/traces
+  ARCHIVE_BACKUP_ROOT: /backups
+  ARCHIVE_MODEL_CACHE: /models
+  ARCHIVE_GATE_CONFIG_PATH: /app/archive/ingest/gate_thresholds.json
+  ARCHIVE_PUBLIC_BASE_URL: ${ARCHIVE_PUBLIC_BASE_URL:?set ARCHIVE_PUBLIC_BASE_URL in .env}
+  ARCHIVE_CORS_ORIGINS: ${ARCHIVE_CORS_ORIGINS:?set ARCHIVE_CORS_ORIGINS in .env}
+  ARCHIVE_LOG_LEVEL: ${ARCHIVE_LOG_LEVEL:-INFO}
+  ARCHIVE_BOOTSTRAP_ADMIN_EMAIL: ${ARCHIVE_BOOTSTRAP_ADMIN_EMAIL:?set ARCHIVE_BOOTSTRAP_ADMIN_EMAIL in .env}
+  ARCHIVE_JWT_TTL_MINUTES: ${ARCHIVE_JWT_TTL_MINUTES:-480}
+  ARCHIVE_LLM_PROVIDER: ${ARCHIVE_LLM_PROVIDER:-none}
+  ARCHIVE_LLM_BASE_URL: ${ARCHIVE_LLM_BASE_URL:-https://api.openai.com/v1}
+  ARCHIVE_LLM_MODEL: ${ARCHIVE_LLM_MODEL:-}
+  ARCHIVE_LLM_INPUT_COST_PER_MTOK: ${ARCHIVE_LLM_INPUT_COST_PER_MTOK:-0}
+  ARCHIVE_LLM_OUTPUT_COST_PER_MTOK: ${ARCHIVE_LLM_OUTPUT_COST_PER_MTOK:-0}
+  ARCHIVE_DAILY_COST_ALERT_USD: ${ARCHIVE_DAILY_COST_ALERT_USD:-5}
+  ARCHIVE_LANGFUSE_PUBLIC_KEY: ${ARCHIVE_LANGFUSE_PUBLIC_KEY:-}
+  ARCHIVE_LANGFUSE_HOST: ${ARCHIVE_LANGFUSE_HOST:-}
+  ARCHIVE_TRACE_QUESTION_MODE: ${ARCHIVE_TRACE_QUESTION_MODE:-scrubbed}
+  ARCHIVE_EXHIBIT_LEASE_HOURS: ${ARCHIVE_EXHIBIT_LEASE_HOURS:-72}
+  ARCHIVE_QR_LINK_TTL_HOURS: ${ARCHIVE_QR_LINK_TTL_HOURS:-24}
+  # Demo staff accounts are never created in production.
+  ARCHIVE_DEMO_STAFF_PASSWORD: ""
+
+# Preservation masters live on a separate disk. create_host_path=false makes start-up fail if that disk is
+# not mounted, instead of silently writing masters into an empty folder on the system drive.
+x-preservation: &preservation
+  type: bind
+  source: ${PRESERVATION_PATH:?set PRESERVATION_PATH in .env}
+  target: /data/preservation
+  bind:
+    create_host_path: false
+
+x-secrets-entrypoint: &secrets-entrypoint
+  type: bind
+  source: ./scripts/with-secrets.sh
+  target: /opt/ops/with-secrets.sh
+  read_only: true
+
+services:
+  db:
+    image: pgvector/pgvector:0.8.1-pg17
+    environment:
+      POSTGRES_DB: archive
+      POSTGRES_USER: archive
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      # Page checksums catch silent corruption of database pages. Only applies when the volume is first created.
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    secrets: [postgres_password]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    shm_size: 256mb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U archive -d archive"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    mem_limit: ${DB_MEM:-4g}
+    security_opt: ["no-new-privileges:true"]
+    stop_grace_period: 60s
+    networks: [data]
+    logging: *logging
+    restart: unless-stopped
+
+  # Runs once per `up`, before any api or worker replica starts, so concurrent replicas never race on
+  # migrations. Manual equivalent: docker compose run --rm migrate
+  migrate:
+    image: ambedkar-archive/api:${RELEASE_TAG:-prod}
+    entrypoint: ["sh", "/opt/ops/with-secrets.sh"]
+    command: ["sh", "-c", "alembic upgrade head && python -m archive.cli bootstrap"]
+    environment: *app-env
+    secrets: [postgres_password, jwt_secret, bootstrap_admin_password]
+    volumes:
+      - *preservation
+      - delivery:/data/delivery
+      - derivatives:/data/derivatives
+      - quarantine:/data/quarantine
+      - traces:/data/traces
+      - *secrets-entrypoint
+    depends_on:
+      db:
+        condition: service_healthy
+    <<: *hardening
+    networks: [data]
+    logging: *logging
+    restart: "no"
+
+  api:
+    image: ambedkar-archive/api:${RELEASE_TAG:-prod}
+    build: *api-build
+    entrypoint: ["sh", "/opt/ops/with-secrets.sh"]
+    command: ["uvicorn", "archive.api.main:app", "--host", "0.0.0.0", "--port", "8000",
+              "--proxy-headers", "--forwarded-allow-ips=*", "--no-access-log",
+              "--log-config", "/etc/archive/uvicorn-log.json"]
+    environment: *app-env
+    secrets: [postgres_password, jwt_secret, sarvam_api_key, llm_api_key, langfuse_secret_key]
+    volumes:
+      - *preservation
+      - delivery:/data/delivery
+      - derivatives:/data/derivatives
+      - quarantine:/data/quarantine
+      - traces:/data/traces
+      - *secrets-entrypoint
+      - ./logging/uvicorn-log.json:/etc/archive/uvicorn-log.json:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health/ready', timeout=4).status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+    cpus: ${API_CPUS:-4}
+    mem_limit: ${API_MEM:-4g}
+    <<: *hardening
+    stop_grace_period: 30s
+    # app: reached only by the proxy. data: database. egress: Sarvam / LLM / Langfuse over HTTPS.
+    networks: [app, data, egress]
+    logging: *logging
+    restart: unless-stopped
+
+  worker:
+    image: ambedkar-archive/api:${RELEASE_TAG:-prod}
+    entrypoint: ["sh", "/opt/ops/with-secrets.sh"]
+    command: ["python", "-m", "archive.worker"]
+    environment: *app-env
+    secrets: [postgres_password, jwt_secret, sarvam_api_key, llm_api_key, langfuse_secret_key]
+    volumes:
+      - *preservation
+      - delivery:/data/delivery
+      - derivatives:/data/derivatives
+      - quarantine:/data/quarantine
+      - traces:/data/traces
+      - *secrets-entrypoint
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    # The image's HEALTHCHECK probes port 8000, which the worker does not serve. Check instead that the
+    # worker process is alive and can reach the database (healthchecks bypass the entrypoint, hence the wrapper).
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1 && sh /opt/ops/with-secrets.sh python -c \"import sys; from archive.db import db_healthy; sys.exit(0 if db_healthy() else 1)\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    # Visitor serving has priority over ingestion (spec 3.4): hard caps plus half the CPU weight of the api.
+    cpus: ${WORKER_CPUS:-2}
+    mem_limit: ${WORKER_MEM:-3g}
+    cpu_shares: 512
+    <<: *hardening
+    stop_grace_period: 60s
+    networks: [data, egress]
+    logging: *logging
+    restart: unless-stopped
+
+  web:
+    image: ambedkar-archive/web:${RELEASE_TAG:-prod}
+    build:
+      context: ../..
+      dockerfile: web/Dockerfile
+    # Same image as the demo proxy, reconfigured as a plain static file server behind the edge proxy.
+    volumes:
+      - ./caddy/web.Caddyfile:/etc/caddy/Caddyfile:ro
+    tmpfs:
+      - /data
+      - /config
+    read_only: true
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+    mem_limit: 256m
+    <<: *hardening
+    # The caddy binary carries a file capability; exec fails if NET_BIND_SERVICE is not in the bounding set.
+    cap_add: [NET_BIND_SERVICE]
+    networks: [app]
+    logging: *logging
+    restart: unless-stopped
+
+  proxy:
+    image: caddy:2.10-alpine
+    environment:
+      VISITOR_SITE: ${VISITOR_SITE:?set VISITOR_SITE in .env}
+      STAFF_SITE: ${STAFF_SITE:?set STAFF_SITE in .env}
+      VISITOR_TLS: ${VISITOR_TLS:-/certs/visitor.crt /certs/visitor.key}
+      STAFF_TLS: ${STAFF_TLS:-/certs/staff.crt /certs/staff.key}
+      STAFF_ALLOWED_CIDRS: ${STAFF_ALLOWED_CIDRS:-private_ranges}
+      STAFF_MAX_UPLOAD: ${STAFF_MAX_UPLOAD:-2GB}
+    # Visitor and staff listeners are separate container ports, so the staff site is unreachable through
+    # the visitor binding even if a client forges the Host header. Bind each to its own host interface.
+    ports:
+      - "${VISITOR_BIND_IP:?set VISITOR_BIND_IP in .env}:${VISITOR_HTTP_PORT:-80}:80"
+      - "${VISITOR_BIND_IP}:${VISITOR_HTTPS_PORT:-443}:443"
+      - "${STAFF_BIND_IP:?set STAFF_BIND_IP in .env}:${STAFF_HTTPS_PORT:-8443}:8443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${CERTS_PATH:-./certs}:/certs:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8081/healthz"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+    mem_limit: 512m
+    <<: *hardening
+    cap_add: [NET_BIND_SERVICE]
+    networks: [public, app]
+    logging: *logging
+    restart: unless-stopped
+
+  # On-demand operations container (never runs by itself):
+  #   docker compose run --rm ops python -m archive.cli backup
+  # The only container that sees the backup disk, the restore staging area and the intake share.
+  # Its image adds PostgreSQL client tools matching the server (ops/Dockerfile). It is built only by
+  # scripts/Invoke-ReleaseBuild.ps1, never implicitly: a nightly `run` must not rebuild images from the checkout.
+  ops:
+    profiles: [ops]
+    image: ambedkar-archive/ops:${RELEASE_TAG:-prod}
+    pull_policy: never
+    entrypoint: ["sh", "/opt/ops/with-secrets.sh"]
+    command: ["python", "-m", "archive.cli", "--help"]
+    environment: *app-env
+    secrets: [postgres_password]
+    volumes:
+      - *preservation
+      - delivery:/data/delivery
+      - derivatives:/data/derivatives
+      - quarantine:/data/quarantine
+      - traces:/data/traces
+      - type: bind
+        source: ${BACKUP_PATH:?set BACKUP_PATH in .env}
+        target: /backups
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${RESTORE_STAGING_PATH:?set RESTORE_STAGING_PATH in .env}
+        target: /restore
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${INTAKE_PATH:?set INTAKE_PATH in .env}
+        target: /intake
+        read_only: true
+        bind:
+          create_host_path: false
+      - ./scripts:/opt/ops:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    <<: *hardening
+    networks: [data]
+    logging: *logging
+    restart: "no"
+
+# One file per secret, created by scripts/New-ProductionSecrets.ps1 or from the institution's secret store.
+# Compose (non-Swarm) bind-mounts these read-only at /run/secrets/<name>; see docs/ops/secrets.md.
+secrets:
+  postgres_password:
+    file: ${SECRETS_DIR:-./secrets}/postgres_password
+  jwt_secret:
+    file: ${SECRETS_DIR:-./secrets}/jwt_secret
+  bootstrap_admin_password:
+    file: ${SECRETS_DIR:-./secrets}/bootstrap_admin_password
+  sarvam_api_key:
+    file: ${SECRETS_DIR:-./secrets}/sarvam_api_key
+  llm_api_key:
+    file: ${SECRETS_DIR:-./secrets}/llm_api_key
+  langfuse_secret_key:
+    file: ${SECRETS_DIR:-./secrets}/langfuse_secret_key
+
+networks:
+  # Only the proxy is on a network with published ports.
+  public: {}
+  # proxy <-> web, api. No route out.
+  app:
+    internal: true
+  # api, worker, migrate, ops <-> db. The database has no published port and no internet route.
+  data:
+    internal: true
+  # Outbound HTTPS for api and worker. Restrict destinations to the allowlisted providers at the host or
+  # network firewall (spec 9); Docker does not filter egress by destination.
+  egress: {}
+
+volumes:
+  pgdata: {}
+  delivery: {}
+  derivatives: {}
+  quarantine: {}
+  traces: {}
+  caddy_data: {}
+  caddy_config: {}

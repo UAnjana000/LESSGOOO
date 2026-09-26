@@ -1,0 +1,380 @@
+{
+ "manifest_version": 1,
+ "_note": "SYNTHETIC FIXTURES ONLY. Not works of Dr. B. R. Ambedkar.",
+ "rights": [
+  {
+   "source_institution": "Synthetic fixture collection (this repository)",
+   "rights_holder": "Build team (synthetic content written for testing)",
+   "basis_for_use": "Original synthetic test content",
+   "evidence": "fixtures/README.md",
+   "attribution": "Synthetic fixture - not a work of Dr. B. R. Ambedkar",
+   "date_checked": "2026-09-26",
+   "checked_by": "build-agent (fixture)",
+   "is_fixture": true,
+   "source_key": "fx-open",
+   "title": "Synthetic fixtures: display, training and external OCR allowed",
+   "display_permission": "allowed",
+   "training_permission": "allowed",
+   "external_processing": "allowed",
+   "training_basis": "synthetic content owned by the build team"
+  },
+  {
+   "source_institution": "Synthetic fixture collection (this repository)",
+   "rights_holder": "Build team (synthetic content written for testing)",
+   "basis_for_use": "Original synthetic test content",
+   "evidence": "fixtures/README.md",
+   "attribution": "Synthetic fixture - not a work of Dr. B. R. Ambedkar",
+   "date_checked": "2026-09-26",
+   "checked_by": "build-agent (fixture)",
+   "is_fixture": true,
+   "source_key": "fx-no-training",
+   "title": "Synthetic fixtures: display only",
+   "display_permission": "allowed",
+   "training_permission": "not_allowed",
+   "external_processing": "not_allowed"
+  },
+  {
+   "source_institution": "Synthetic fixture collection (this repository)",
+   "rights_holder": "Build team (synthetic content written for testing)",
+   "basis_for_use": "Original synthetic test content",
+   "evidence": "fixtures/README.md",
+   "attribution": "Synthetic fixture - not a work of Dr. B. R. Ambedkar",
+   "date_checked": "2026-09-26",
+   "checked_by": "build-agent (fixture)",
+   "is_fixture": true,
+   "source_key": "fx-rights-unknown",
+   "title": "Synthetic fixture with unresolved rights",
+   "display_permission": "unknown",
+   "training_permission": "unknown",
+   "external_processing": "unknown"
+  }
+ ],
+ "items": [
+  {
+   "item_key": "fx-essay-reading-rooms",
+   "rights_source_key": "fx-open",
+   "title": "On Public Reading Rooms (synthetic essay)",
+   "item_type": "text",
+   "collection": "writings",
+   "doc_class": "born_digital",
+   "languages": [
+    "en"
+   ],
+   "creator": "A. N. Example (fictional synthetic author)",
+   "date_text": "1926 (fictional)",
+   "date_start": "1926-01-01",
+   "date_certainty": "approximate",
+   "files": [
+    {
+     "path": "../files/fx-essay-reading-rooms.pdf",
+     "sha256": "84c8bb9fe47edca81aa0fc29c4d602f38edd81b014dbe7457aae16b9517ecf0a"
+    }
+   ],
+   "page_labels": [
+    "1",
+    "2"
+   ],
+   "capture": {
+    "work_key": "work-essay",
+    "station": "born-digital"
+   }
+  },
+  {
+   "item_key": "fx-lecture-education",
+   "rights_source_key": "fx-open",
+   "title": "Lecture on Education and Work (synthetic)",
+   "item_type": "printed_scan",
+   "collection": "speeches",
+   "doc_class": "printed",
+   "languages": [
+    "en"
+   ],
+   "creator": "A. N. Example (fictional synthetic author)",
+   "date_text": "1929 (fictional)",
+   "date_start": "1929-06-01",
+   "date_certainty": "approximate",
+   "files": [
+    {
+     "path": "../files/fx-lecture-education.png",
+     "sha256": "3607d408b90c2fc04c144cbd88264f7b0b0303f31484ddcb7ea8ff16f68be4a7"
+    }
+   ],
+   "capture": {
+    "work_key": "work-lecture-education",
+    "station": "fixture-generator",
+    "dpi": 200
+   }
+  },
+  {
+   "item_key": "fx-lecture-tank",
+   "rights_source_key": "fx-open",
+   "title": "Lecture on Water and the Common Tank (synthetic, degraded scan)",
+   "item_type": "printed_scan",
+   "collection": "speeches",
+   "doc_class": "printed",
+   "languages": [
+    "en"
+   ],
+   "creator": "A. N. Example (fictional synthetic author)",
+   "date_text": "1928 (fictional)",
+   "date_start": "1928-03-01",
+   "date_certainty": "approximate",
+   "files": [
+    {
+     "path": "../files/fx-lecture-tank-degraded.png",
+     "sha256": "2979b1ea055d7e463dd3f9ff29c81f47e10e1a8ad91d0836658d49698a070500"
+    }
+   ],
+   "capture": {
+    "work_key": "work-lecture-tank",
+    "station": "fixture-generator",
+    "dpi": 200
+   }
+  },
+  {
+   "item_key": "fx-proceedings-1",
+   "rights_source_key": "fx-open",
+   "title": "Proceedings of the Samarpur Civic Assembly, Sitting 1 (synthetic)",
+   "item_type": "printed_scan",
+   "collection": "debates",
+   "doc_class": "printed",
+   "languages": [
+    "en"
+   ],
+   "creator": "Samarpur Civic Assembly (fictional)",
+   "date_text": "1927 (fictional)",
+   "date_start": "1927-02-10",
+   "date_certainty": "exact",
+   "files": [
+    {
+     "path": "../files/fx-proceedings-spread.png",
+     "sha256": "c4fa2968dc7a63930229d03e5933111a68635164e6e980f5ba8f1710f9fdc159"
+    }
+   ],
+   "page_labels": [
+    "1",
+    "2"
+   ],
+   "capture": {
+    "work_key": "work-proceedings",
+    "station": "fixture-generator",
+    "dpi": 200,
+    "spread": true
+   }
+  },
+  {
+   "item_key": "fx-pamphlet-hi",
+   "rights_source_key": "fx-open",
+   "title": "सार्वजनिक वाचनालय पर्चा (कृत्रिम नमूना) / Reading-room pamphlet (synthetic, Hindi)",
+   "item_type": "printed_scan",
+   "collection": "writings",
+   "doc_class": "printed",
+   "languages": [
+    "hi"
+   ],
+   "scripts": [
+    "Deva"
+   ],
+   "creator": "A. N. Example (fictional synthetic author)",
+   "date_text": "1930 (fictional)",
+   "date_start": "1930-01-01",
+   "date_certainty": "approximate",
+   "files": [
+    {
+     "path": "../files/fx-pamphlet-hi.png",
+     "sha256": "c89349a25943d035935a59e34801f5555fa3fa153011f5ee2d43cb92a4f849fc"
+    }
+   ],
+   "capture": {
+    "work_key": "work-pamphlet-hi",
+    "station": "fixture-generator",
+    "dpi": 200
+   }
+  },
+  {
+   "item_key": "fx-petition-mr",
+   "rights_source_key": "fx-no-training",
+   "title": "पाणवठा निवेदन (कृत्रिम नमुना) / Water petition (synthetic, Marathi)",
+   "item_type": "printed_scan",
+   "collection": "writings",
+   "doc_class": "printed",
+   "languages": [
+    "mr"
+   ],
+   "scripts": [
+    "Deva"
+   ],
+   "creator": "A. N. Example (fictional synthetic author)",
+   "date_text": "1928 (fictional)",
+   "date_start": "1928-05-01",
+   "date_certainty": "approximate",
+   "files": [
+    {
+     "path": "../files/fx-petition-mr.png",
+     "sha256": "f96534842b42b38b394a1efc74a6f735efc4ab82cee0f464dde3c5c43c78ee3b"
+    }
+   ],
+   "capture": {
+    "work_key": "work-petition-mr",
+    "station": "fixture-generator"
+   }
+  },
+  {
+   "item_key": "fx-manuscript-note",
+   "rights_source_key": "fx-open",
+   "title": "Handwritten note on the library board (synthetic)",
+   "item_type": "manuscript",
+   "collection": "manuscripts",
+   "doc_class": "handwritten",
+   "languages": [
+    "en"
+   ],
+   "creator": "A. N. Example (fictional synthetic author)",
+   "date_text": "3 March 1927 (fictional)",
+   "date_start": "1927-03-03",
+   "date_certainty": "exact",
+   "files": [
+    {
+     "path": "../files/fx-manuscript-note.png",
+     "sha256": "5e6594bdb61a37e06a54f99c93c78df119ce5aed9fc06fb4f16136d07c7cbd54"
+    }
+   ],
+   "capture": {
+    "work_key": "work-manuscript-note"
+   }
+  },
+  {
+   "item_key": "fx-photo-reading-room",
+   "rights_source_key": "fx-open",
+   "title": "Readers at the Samarpur reading room (synthetic illustration)",
+   "item_type": "photograph",
+   "collection": "photographs",
+   "doc_class": "photograph",
+   "languages": [
+    "en"
+   ],
+   "date_text": "around 1925 (fictional)",
+   "date_start": "1925-01-01",
+   "date_certainty": "approximate",
+   "files": [
+    {
+     "path": "../files/fx-photo-reading-room.jpg",
+     "sha256": "975c3cd12ab2eba9580948353665ea92e93ccab112623aee00b18419a68c5228"
+    }
+   ],
+   "photo": {
+    "caption": "Readers at a reading room in the fictional town of Samarpur, around 1925. Synthetic illustration generated for testing; not a historical photograph.",
+    "people": [],
+    "place": "Samarpur (fictional)",
+    "event": "Evening reading hours",
+    "date_text": "around 1925 (fictional)",
+    "date_certainty": "approximate",
+    "photographer": "Synthetic generator",
+    "source_reference": "fixtures/generate_fixtures.py"
+   },
+   "capture": {
+    "work_key": "work-photo"
+   }
+  },
+  {
+   "item_key": "fx-talk-audio",
+   "rights_source_key": "fx-open",
+   "title": "Talk on the reading room (synthetic speech, not a historical recording)",
+   "item_type": "audio",
+   "collection": "audio_video",
+   "doc_class": "audio_video",
+   "languages": [
+    "en"
+   ],
+   "creator": "espeak-ng synthetic voice",
+   "date_text": "2026 (generated)",
+   "date_start": "2026-09-26",
+   "date_certainty": "exact",
+   "files": [
+    {
+     "path": "../files/fx-talk-synthetic.flac",
+     "sha256": "c78dfe86a2573c13363159479cdb0355b06933d08e1d3458851b11797ae41b50"
+    }
+   ],
+   "transcript_draft": [
+    {
+     "start_ms": 0,
+     "end_ms": 6181,
+     "text": "This is a synthetic recording made for testing the archive. It is not a historical recording.",
+     "speaker": "Synthetic voice",
+     "language": "en"
+    },
+    {
+     "start_ms": 6681,
+     "end_ms": 10613,
+     "text": "The reading room opened in two rented rooms above a grain shop.",
+     "speaker": "Synthetic voice",
+     "language": "en"
+    },
+    {
+     "start_ms": 11113,
+     "end_ms": 14797,
+     "text": "Night schools taught members to read the books they borrowed.",
+     "speaker": "Synthetic voice",
+     "language": "en"
+    },
+    {
+     "start_ms": 15297,
+     "end_ms": 19199,
+     "text": "A fee at the door keeps out those who most need to enter.",
+     "speaker": "Synthetic voice",
+     "language": "en"
+    }
+   ],
+   "capture": {
+    "work_key": "work-talk"
+   }
+  },
+  {
+   "item_key": "fx-restricted-memo",
+   "rights_source_key": "fx-rights-unknown",
+   "title": "Draft memorandum (synthetic, rights unknown)",
+   "item_type": "text",
+   "collection": "writings",
+   "doc_class": "born_digital",
+   "languages": [
+    "en"
+   ],
+   "creator": "A. N. Example (fictional synthetic author)",
+   "files": [
+    {
+     "path": "../files/fx-restricted-memo.pdf",
+     "sha256": "aee1513e160e4e55433694d9db0fcb549f76960dae4586174ac1ece7cd8d4bc5"
+    }
+   ],
+   "capture": {
+    "work_key": "work-restricted"
+   }
+  },
+  {
+   "item_key": "fx-online-only-report",
+   "rights_source_key": "fx-no-training",
+   "title": "Newspaper report on the library board (synthetic, online only)",
+   "item_type": "text",
+   "collection": "writings",
+   "doc_class": "born_digital",
+   "languages": [
+    "en"
+   ],
+   "access_level": "public_online_only",
+   "creator": "The Samarpur Gazette (fictional)",
+   "date_text": "12 April 1927 (fictional)",
+   "date_start": "1927-04-12",
+   "date_certainty": "exact",
+   "files": [
+    {
+     "path": "../files/fx-online-only-report.pdf",
+     "sha256": "519dde287b6c58123a461fd36c88916f88dc6d1b622490b6a6284a4da7e669e5"
+    }
+   ],
+   "capture": {
+    "work_key": "work-online-only"
+   }
+  }
+ ]
+}

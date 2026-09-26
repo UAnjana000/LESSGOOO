@@ -1,0 +1,297 @@
+﻿{
+  "import": {
+    "items": [
+      [
+        "fx-essay-reading-rooms",
+        "imported"
+      ],
+      [
+        "fx-lecture-education",
+        "imported"
+      ],
+      [
+        "fx-lecture-tank",
+        "imported"
+      ],
+      [
+        "fx-proceedings-1",
+        "imported"
+      ],
+      [
+        "fx-pamphlet-hi",
+        "imported"
+      ],
+      [
+        "fx-petition-mr",
+        "imported"
+      ],
+      [
+        "fx-manuscript-note",
+        "imported"
+      ],
+      [
+        "fx-photo-reading-room",
+        "imported"
+      ],
+      [
+        "fx-talk-audio",
+        "imported"
+      ],
+      [
+        "fx-restricted-memo",
+        "imported"
+      ],
+      [
+        "fx-online-only-report",
+        "imported"
+      ]
+    ],
+    "rejected": []
+  },
+  "routing": {
+    "fx-talk-audio": [],
+    "fx-photo-reading-room": [
+      [
+        "caption_review",
+        "needs_full_review",
+        null
+      ]
+    ],
+    "fx-manuscript-note": [
+      [
+        "manual",
+        "manual_transcription",
+        null
+      ]
+    ],
+    "fx-pamphlet-hi": [
+      [
+        "local",
+        "in_batch_review",
+        true
+      ]
+    ],
+    "fx-proceedings-1": [
+      [
+        "local",
+        "in_batch_review",
+        true
+      ],
+      [
+        "local",
+        "sarvam_pending",
+        false
+      ]
+    ],
+    "fx-lecture-tank": [
+      [
+        "local",
+        "sarvam_pending",
+        false
+      ]
+    ],
+    "fx-lecture-education": [
+      [
+        "local",
+        "in_batch_review",
+        true
+      ]
+    ],
+    "fx-essay-reading-rooms": [
+      [
+        "text_layer",
+        "in_batch_review",
+        true
+      ],
+      [
+        "text_layer",
+        "in_batch_review",
+        true
+      ]
+    ],
+    "fx-online-only-report": [
+      [
+        "text_layer",
+        "in_batch_review",
+        true
+      ]
+    ],
+    "fx-petition-mr": [
+      [
+        "local",
+        "needs_full_review",
+        false
+      ]
+    ],
+    "fx-restricted-memo": [
+      [
+        "text_layer",
+        "in_batch_review",
+        true
+      ]
+    ]
+  },
+  "reviews": {
+    "fx-essay-reading-rooms": {
+      "state": "approved",
+      "actions": [
+        "batch 4 passed (seeded)"
+      ]
+    },
+    "fx-lecture-education": {
+      "state": "approved",
+      "actions": [
+        "batch 3 passed (seeded)"
+      ]
+    },
+    "fx-lecture-tank": {
+      "state": "approved",
+      "actions": [
+        "page 1 corrected from local (seeded)"
+      ]
+    },
+    "fx-proceedings-1": {
+      "state": "approved",
+      "actions": [
+        "batch 2 passed (seeded)",
+        "page 2 corrected from local (seeded)"
+      ]
+    },
+    "fx-pamphlet-hi": {
+      "state": "approved",
+      "actions": [
+        "batch 1 passed (seeded)"
+      ]
+    },
+    "fx-manuscript-note": {
+      "state": "approved",
+      "actions": [
+        "page 1 corrected from manual (seeded)"
+      ]
+    },
+    "fx-photo-reading-room": {
+      "state": "approved",
+      "actions": [
+        "caption approved (seeded)"
+      ]
+    },
+    "fx-talk-audio": {
+      "state": "in_review",
+      "actions": [
+        "segment 0ms approved (seeded)",
+        "segment 6681ms approved (seeded)",
+        "segment 11113ms approved (seeded)",
+        "segment 15297ms approved (seeded)"
+      ]
+    },
+    "fx-petition-mr": {
+      "state": "approved",
+      "actions": [
+        "page 1 corrected from local (seeded)"
+      ]
+    },
+    "fx-online-only-report": {
+      "state": "approved",
+      "actions": [
+        "batch 5 passed (seeded)"
+      ]
+    },
+    "fx-restricted-memo": {
+      "state": "approved",
+      "actions": [
+        "batch 6 passed (seeded)"
+      ]
+    }
+  },
+  "quote_checks_seeded": [
+    "fx-essay-reading-rooms p1",
+    "fx-essay-reading-rooms p2",
+    "fx-lecture-education p1"
+  ],
+  "publication": {
+    "fx-photo-reading-room": {
+      "published": true,
+      "item_id": 8,
+      "version": 1,
+      "index_version": 1
+    },
+    "fx-manuscript-note": {
+      "published": true,
+      "item_id": 7,
+      "version": 1,
+      "index_version": 2
+    },
+    "fx-pamphlet-hi": {
+      "published": true,
+      "item_id": 5,
+      "version": 1,
+      "index_version": 3
+    },
+    "fx-proceedings-1": {
+      "published": true,
+      "item_id": 4,
+      "version": 1,
+      "index_version": 4
+    },
+    "fx-lecture-tank": {
+      "published": true,
+      "item_id": 3,
+      "version": 1,
+      "index_version": 5
+    },
+    "fx-lecture-education": {
+      "published": true,
+      "item_id": 2,
+      "version": 1,
+      "index_version": 6
+    },
+    "fx-essay-reading-rooms": {
+      "published": true,
+      "item_id": 1,
+      "version": 1,
+      "index_version": 7
+    },
+    "fx-online-only-report": {
+      "published": true,
+      "item_id": 11,
+      "version": 1,
+      "index_version": 8
+    },
+    "fx-petition-mr": {
+      "published": true,
+      "item_id": 6,
+      "version": 1,
+      "index_version": 9
+    },
+    "fx-restricted-memo": {
+      "blocked": [
+        "rights register does not allow display"
+      ]
+    }
+  },
+  "translations_seeded": [
+    "hi",
+    "mr"
+  ],
+  "essay_republished_with_translations": {
+    "item_id": 1,
+    "version": 2,
+    "index_version": 10
+  },
+  "summaries_seeded": [
+    "fx-essay-reading-rooms",
+    "fx-proceedings-1",
+    "fx-lecture-education"
+  ],
+  "narration": [
+    "en:espeak-ng voice=en-gb",
+    "hi:espeak-ng voice=hi",
+    "mr:espeak-ng voice=mr"
+  ],
+  "curation": {
+    "timeline": 11,
+    "stories": 1,
+    "nodes": 24,
+    "edges": 22
+  }
+}

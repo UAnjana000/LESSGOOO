@@ -1,0 +1,93 @@
+{
+ "manifest_version": 1,
+ "_note": "TEMPLATE for the first real sources named in spec section 11. Every permission is 'unknown' and download_permitted is false until the rights owner records a decision with evidence. The importer will register these rights records but REFUSE to ingest content. No source files are bundled in this repository. Links were not verified by this build.",
+ "rights": [
+  {
+   "source_key": "mea-writings-speeches-vol1",
+   "title": "Dr. Babasaheb Ambedkar: Writings and Speeches, Volume 1",
+   "source_url": "https://www.mea.gov.in/Images/attach/amb/Volume_01.pdf",
+   "source_institution": "Ministry of External Affairs, Government of India",
+   "edition": "Education Department, Government of Maharashtra (reprint)",
+   "volume": "1",
+   "rights_holder": "TO BE CONFIRMED (Government of Maharashtra / MEA)",
+   "basis_for_use": "TO BE CONFIRMED",
+   "display_permission": "unknown",
+   "training_permission": "unknown",
+   "external_processing": "unknown",
+   "evidence": "PENDING - attach written permission or licence text",
+   "attribution": "Government of Maharashtra, Writings and Speeches Vol. 1",
+   "date_checked": "2026-09-26",
+   "checked_by": "build-agent (template only; not a rights decision)"
+  },
+  {
+   "source_key": "dli-scan-example",
+   "title": "Digital Library of India scan (example entry)",
+   "source_url": "https://archive.org/details/in.ernet.dli.2015.EXAMPLE",
+   "source_institution": "Digital Library of India via Internet Archive",
+   "rights_holder": "TO BE CONFIRMED",
+   "basis_for_use": "TO BE CONFIRMED - public availability is not a licence",
+   "display_permission": "unknown",
+   "training_permission": "unknown",
+   "external_processing": "unknown",
+   "evidence": "PENDING",
+   "attribution": "Digital Library of India",
+   "date_checked": "2026-09-26",
+   "checked_by": "build-agent (template only; not a rights decision)"
+  },
+  {
+   "source_key": "lok-sabha-cad",
+   "title": "Constituent Assembly Debates (official record)",
+   "source_url": "https://eparlib.sansad.in/",
+   "source_institution": "Lok Sabha Secretariat",
+   "rights_holder": "TO BE CONFIRMED (Lok Sabha Secretariat)",
+   "basis_for_use": "TO BE CONFIRMED",
+   "display_permission": "unknown",
+   "training_permission": "unknown",
+   "external_processing": "unknown",
+   "evidence": "PENDING",
+   "attribution": "Lok Sabha Secretariat, Constituent Assembly Debates",
+   "date_checked": "2026-09-26",
+   "checked_by": "build-agent (template only; not a rights decision)"
+  },
+  {
+   "source_key": "ndli-discovery",
+   "title": "National Digital Library of India (discovery and linking only)",
+   "source_url": "https://ndl.iitkgp.ac.in/",
+   "source_institution": "IIT Kharagpur / Ministry of Education",
+   "rights_holder": "Individual content providers",
+   "basis_for_use": "Metadata discovery and outbound links only",
+   "display_permission": "not_allowed",
+   "training_permission": "not_allowed",
+   "external_processing": "not_allowed",
+   "discovery_only": true,
+   "evidence": "Spec section 5: NDLI is discovery/linking only",
+   "attribution": "National Digital Library of India",
+   "date_checked": "2026-09-26",
+   "checked_by": "build-agent"
+  }
+ ],
+ "items": [
+  {
+   "item_key": "mea-vol1",
+   "rights_source_key": "mea-writings-speeches-vol1",
+   "title": "Writings and Speeches, Volume 1",
+   "item_type": "text",
+   "collection": "writings",
+   "doc_class": "born_digital",
+   "languages": ["en"],
+   "creator": "Dr. B. R. Ambedkar",
+   "download_permitted": false,
+   "files": [{"url": "https://www.mea.gov.in/Images/attach/amb/Volume_01.pdf"}]
+  },
+  {
+   "item_key": "ndli-record-example",
+   "rights_source_key": "ndli-discovery",
+   "title": "NDLI record (link only)",
+   "item_type": "text",
+   "collection": "writings",
+   "doc_class": "born_digital",
+   "languages": ["en"],
+   "files": []
+  }
+ ]
+}

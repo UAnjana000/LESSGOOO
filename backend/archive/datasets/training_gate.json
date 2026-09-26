@@ -1,0 +1,12 @@
+{
+  "version": "training-gate-v1",
+  "set_on": "2026-09-26",
+  "set_by": "build team (to be confirmed by the institution before labelling starts)",
+  "note": "Minimum-data gate (spec 7.3). Fine-tuning and any trained-vs-base comparison run ONLY when every check passes.",
+  "min_independent_works_total": 6,
+  "min_works_in_test": 2,
+  "min_pairs": {"train": 300, "dev": 60, "test": 60},
+  "min_test_pairs_per_claimed_language": 30,
+  "require_ci_separation": true,
+  "bootstrap_samples": 1000
+}

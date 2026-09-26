@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/.ruff_cache/
+backend/data/
+web/node_modules/
+web/dist/
+build-*.log
+eval/results/*.json
+!eval/results/.gitkeep
+deploy/production/secrets/*
+!deploy/production/secrets/README.md
+# Downloaded source bytes (PDFs, scans, images, audio, video): never commit
+/data/

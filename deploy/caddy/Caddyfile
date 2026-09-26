@@ -1,0 +1,54 @@
+{
+	admin off
+	log {
+		output stdout
+		format json
+	}
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+# Demo: plain HTTP on the mapped port redirects to the mapped HTTPS port.
+http:// {
+	redir https://{host}:{$PUBLIC_HTTPS_PORT:8443}{uri} permanent
+}
+
+# SITE_ADDRESS: "localhost" for the demo, or the edge server's LAN name/IP for tablets
+# (e.g. "archive.gallery.lan, 192.168.10.5"). A secure origin is required for the service worker.
+{$SITE_ADDRESS:localhost} {
+	# Demo uses Caddy's local CA; tablets must trust its root certificate (see docs/DEPLOYMENT.md).
+	# Production replaces this with managed certificates (deploy/production/Caddyfile).
+	tls internal
+
+	encode zstd gzip
+	log {
+		output stdout
+		format json
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), interest-cohort=()"
+		Content-Security-Policy "default-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+		-Server
+	}
+
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+	handle /iiif/* {
+		reverse_proxy api:8000
+	}
+	handle {
+		root * /srv
+		@hashed path /assets/*
+		header @hashed Cache-Control "public, max-age=31536000, immutable"
+		@shell path / /index.html /sw.js /manifest.webmanifest
+		header @shell Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}

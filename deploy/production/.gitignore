@@ -1,0 +1,6 @@
+# Real configuration, secrets and certificates stay on the server. Only templates and READMEs are committed.
+.env
+secrets/*
+!secrets/README.md
+certs/*
+!certs/README.md

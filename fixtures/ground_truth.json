@@ -1,0 +1,125 @@
+{
+ "_note": "Ground truth for SYNTHETIC fixture pages. OCR evaluation on these is a smoke test only; real calibration needs real archive pages (spec 10.1).",
+ "pages": [
+  {
+   "id": "fx-lecture-education-p1",
+   "image": "files/fx-lecture-education.png",
+   "language": "en",
+   "doc_class": "printed",
+   "text": "[Synthetic fixture page - not a historical document]\nLecture on Education and Work\n\nFriends, education is not a gift that one class hands to another. It is a tool that every worker must hold in his own hands. A school that closes its doors at the hour when the labourer is free has not been built for the labourer. I ask this assembly to support night schools in every ward of the city, with lamps paid for by the municipality and teachers chosen by the families who send their children. When a mother can read the notice on the mill gate, no one can deceive her about her wages.",
+   "split": "calibration"
+  },
+  {
+   "id": "fx-lecture-tank-degraded-p1",
+   "image": "files/fx-lecture-tank-degraded.png",
+   "language": "en",
+   "doc_class": "printed",
+   "text": "[Synthetic fixture page - not a historical document]\nLecture on Water and the Common Tank\n\nThe common tank in the centre of the village was dug by the labour of all its families, yet for many years only some families were allowed to draw water from it. A public resource that is closed to part of the public is not a public resource at all. The village council must publish the rules of the tank on a board beside the steps, and any person refused water must be able to complain to the council within one week.",
+   "split": "calibration"
+  },
+  {
+   "id": "fx-proceedings-p1",
+   "image": "files/fx-proceedings-spread.png",
+   "half": 0,
+   "language": "en",
+   "doc_class": "printed",
+   "text": "[Synthetic fixture page - not a historical document]\nProceedings of the Samarpur Civic Assembly\nSitting 1\n\nThe Assembly met at eleven o'clock. The Chairman read the motion on the establishment of a municipal library board. Member Rao said that the board should include at least two members elected by the users of the reading rooms. Member Desai asked how the board would be funded and whether a small fee would be charged.",
+   "split": "test"
+  },
+  {
+   "id": "fx-proceedings-p2",
+   "image": "files/fx-proceedings-spread.png",
+   "half": 1,
+   "language": "en",
+   "doc_class": "printed",
+   "text": "[Synthetic fixture page - not a historical document]\nMember Rao replied that no fee should be charged for reading within the rooms, because a fee at the door keeps out precisely those who most need to enter. The motion was put to the vote and carried by twenty-one votes to six. The Assembly adjourned at one o'clock.",
+   "split": "test"
+  },
+  {
+   "id": "fx-pamphlet-hi-p1",
+   "image": "files/fx-pamphlet-hi.png",
+   "language": "hi",
+   "doc_class": "printed",
+   "text": "[कृत्रिम नमूना पृष्ठ - ऐतिहासिक दस्तावेज़ नहीं]\nसार्वजनिक वाचनालय के बारे में एक पर्चा\n\nहर शहर में एक सार्वजनिक वाचनालय होना चाहिए जिसके दरवाज़े सभी के लिए खुले हों। पुस्तकें केवल अलमारियों में रखने के लिए नहीं होतीं, वे पढ़ने के लिए होती हैं। रात्रि पाठशालाएँ मज़दूरों को पढ़ना और लिखना सिखाती हैं। जब एक माँ मिल के दरवाज़े पर लगी सूचना पढ़ सकती है, तब कोई उसे उसकी मज़दूरी के बारे में धोखा नहीं दे सकता।",
+   "split": "test"
+  },
+  {
+   "id": "fx-petition-mr-p1",
+   "image": "files/fx-petition-mr.png",
+   "language": "mr",
+   "doc_class": "printed",
+   "text": "[कृत्रिम नमुना पान - ऐतिहासिक दस्तऐवज नाही]\nसार्वजनिक पाणवठ्याविषयी निवेदन\n\nगावातील सार्वजनिक तलाव सर्व कुटुंबांच्या श्रमाने खोदला गेला. तरीही अनेक वर्षे काही कुटुंबांनाच त्यातून पाणी घेण्याची परवानगी होती. जे सार्वजनिक साधन सर्वांसाठी खुले नाही, ते खरे सार्वजनिक साधन नाही. ग्रामपंचायतीने तलावाचे नियम पायऱ्यांजवळ फलकावर लावावेत आणि पाणी नाकारलेल्या व्यक्तीला एका आठवड्यात तक्रार करता यावी.",
+   "split": "test"
+  },
+  {
+   "id": "fx-manuscript-note-p1",
+   "image": "files/fx-manuscript-note.png",
+   "language": "en",
+   "doc_class": "handwritten",
+   "text": "Note on the library board, 3 March 1927.\nAsk the committee to keep the rooms open until ten at night during the harvest months. Write to the municipality about the lamp oil. Bring the register to the next meeting.",
+   "split": "test"
+  }
+ ],
+ "texts": {
+  "essay": [
+   "On Public Reading Rooms\n\nA reading room is a promise made by a town to every person who walks through its door. The promise is simple: knowledge kept on a shelf belongs to anyone who can reach for it. In the town of Samarpur the first reading room opened in 1921 in two rented rooms above a grain shop. It held four hundred books, three newspapers and a single lamp. The committee that ran it wrote in its first report that the doors must open before the mills began their shifts and close after they ended, so that workers could read on the way to work and on the way home.",
+   "The committee kept a register of every borrower. By 1925 the register listed more than eleven hundred names, and nearly half of the borrowers had signed with a thumb impression when they first joined. The committee organised evening classes so that members could learn to read the books they borrowed. The report of 1926 says that a reading room should be judged not by the number of books on its shelves but by the number of people who leave able to read a book they could not read before."
+  ],
+  "lecture_clean": [
+   "[Synthetic fixture page - not a historical document]\nLecture on Education and Work\n\nFriends, education is not a gift that one class hands to another. It is a tool that every worker must hold in his own hands. A school that closes its doors at the hour when the labourer is free has not been built for the labourer. I ask this assembly to support night schools in every ward of the city, with lamps paid for by the municipality and teachers chosen by the families who send their children. When a mother can read the notice on the mill gate, no one can deceive her about her wages."
+  ],
+  "lecture_degraded": [
+   "[Synthetic fixture page - not a historical document]\nLecture on Water and the Common Tank\n\nThe common tank in the centre of the village was dug by the labour of all its families, yet for many years only some families were allowed to draw water from it. A public resource that is closed to part of the public is not a public resource at all. The village council must publish the rules of the tank on a board beside the steps, and any person refused water must be able to complain to the council within one week."
+  ],
+  "proceedings": [
+   "[Synthetic fixture page - not a historical document]\nProceedings of the Samarpur Civic Assembly\nSitting 1\n\nThe Assembly met at eleven o'clock. The Chairman read the motion on the establishment of a municipal library board. Member Rao said that the board should include at least two members elected by the users of the reading rooms. Member Desai asked how the board would be funded and whether a small fee would be charged.",
+   "[Synthetic fixture page - not a historical document]\nMember Rao replied that no fee should be charged for reading within the rooms, because a fee at the door keeps out precisely those who most need to enter. The motion was put to the vote and carried by twenty-one votes to six. The Assembly adjourned at one o'clock."
+  ],
+  "hindi": [
+   "[कृत्रिम नमूना पृष्ठ - ऐतिहासिक दस्तावेज़ नहीं]\nसार्वजनिक वाचनालय के बारे में एक पर्चा\n\nहर शहर में एक सार्वजनिक वाचनालय होना चाहिए जिसके दरवाज़े सभी के लिए खुले हों। पुस्तकें केवल अलमारियों में रखने के लिए नहीं होतीं, वे पढ़ने के लिए होती हैं। रात्रि पाठशालाएँ मज़दूरों को पढ़ना और लिखना सिखाती हैं। जब एक माँ मिल के दरवाज़े पर लगी सूचना पढ़ सकती है, तब कोई उसे उसकी मज़दूरी के बारे में धोखा नहीं दे सकता।"
+  ],
+  "marathi": [
+   "[कृत्रिम नमुना पान - ऐतिहासिक दस्तऐवज नाही]\nसार्वजनिक पाणवठ्याविषयी निवेदन\n\nगावातील सार्वजनिक तलाव सर्व कुटुंबांच्या श्रमाने खोदला गेला. तरीही अनेक वर्षे काही कुटुंबांनाच त्यातून पाणी घेण्याची परवानगी होती. जे सार्वजनिक साधन सर्वांसाठी खुले नाही, ते खरे सार्वजनिक साधन नाही. ग्रामपंचायतीने तलावाचे नियम पायऱ्यांजवळ फलकावर लावावेत आणि पाणी नाकारलेल्या व्यक्तीला एका आठवड्यात तक्रार करता यावी."
+  ],
+  "manuscript": [
+   "Note on the library board, 3 March 1927.\nAsk the committee to keep the rooms open until ten at night during the harvest months. Write to the municipality about the lamp oil. Bring the register to the next meeting."
+  ],
+  "restricted": [
+   "Draft memorandum (synthetic fixture, rights unknown)\n\nThis draft memorandum is held with unknown display rights. It must never be shown to visitors until the rights register allows display. It mentions a secret reading room budget of forty rupees."
+  ],
+  "online_only": [
+   "Synthetic newspaper report on the library board\n\nThe Samarpur Gazette reported that the new library board held its first meeting on 12 April 1927 and resolved to open three branch reading rooms in the mill districts. The report is shown online only."
+  ]
+ },
+ "audio_segments": [
+  {
+   "start_ms": 0,
+   "end_ms": 6181,
+   "text": "This is a synthetic recording made for testing the archive. It is not a historical recording.",
+   "speaker": "Synthetic voice",
+   "language": "en"
+  },
+  {
+   "start_ms": 6681,
+   "end_ms": 10613,
+   "text": "The reading room opened in two rented rooms above a grain shop.",
+   "speaker": "Synthetic voice",
+   "language": "en"
+  },
+  {
+   "start_ms": 11113,
+   "end_ms": 14797,
+   "text": "Night schools taught members to read the books they borrowed.",
+   "speaker": "Synthetic voice",
+   "language": "en"
+  },
+  {
+   "start_ms": 15297,
+   "end_ms": 19199,
+   "text": "A fee at the door keeps out those who most need to enter.",
+   "speaker": "Synthetic voice",
+   "language": "en"
+  }
+ ],
+ "photo_caption": "Readers at a reading room in the fictional town of Samarpur, around 1925. Synthetic illustration generated for testing; not a historical photograph."
+}

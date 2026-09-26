@@ -1,0 +1,52 @@
+{
+ "manifest_version": 1,
+ "_note": "Intake-control test only (spec 4.1): exact-duplicate detection and checksum-mismatch quarantine, using the already-imported CAD file. Neither item may ever be published: rights are not_allowed and access is restricted. The rights entry is an exact copy of the one in cad_lok_sabha.manifest.json so the register row is unchanged.",
+ "rights": [
+  {
+   "source_key": "lok-sabha-cad-en-vol11-reprint2014",
+   "title": "Constituent Assembly Debates, Official Report, Vol. XI (14-11-1949 to 26-11-1949), sitting of 25 November 1949",
+   "source_url": "https://eparlib.sansad.in/handle/123456789/763285",
+   "source_institution": "Lok Sabha Secretariat (Parliament Digital Library)",
+   "edition": "Sixth reprint 2014, Lok Sabha Secretariat, New Delhi (per the file's title page)",
+   "volume": "XI",
+   "pages": "Per-sitting PDF for 25-11-1949, 62 PDF pages",
+   "rights_holder": "Lok Sabha Secretariat",
+   "basis_for_use": "Local copy for non-commercial research and prototype testing only, relying on the Parliament Digital Library copyright policy: material may be reproduced without formal permission for non-commercial research and private study, with attribution; any other re-use needs permission. Display, publication in a retrieval system, external processing and training are NOT covered.",
+   "display_permission": "not_allowed",
+   "training_permission": "not_allowed",
+   "training_basis": "No grant. Rightsholder terms require permission for re-use beyond non-commercial research and private study.",
+   "external_processing": "not_allowed",
+   "evidence": "https://eparlib.sansad.in/help/copyright-policy.jsp (text read from web-search index on 2026-09-26; direct fetch failed: connection refused / 504). Confirmed directly on 2026-09-26: https://elibrary.sansad.in/copyright-policy ('All copyrights are reserved with the Lok Sabha Secretariat ... formal permission from the Speaker'). Bytes fetched from the Internet Archive mirror https://archive.org/details/eparlib.nic.in.763285; the mirror's CC public-domain licenseurl was set by a third-party uploader and is NOT relied on.",
+   "attribution": "Constituent Assembly Debates, Official Report, Vol. XI, sitting of 25 November 1949 (Lok Sabha Secretariat, sixth reprint 2014). Source: Parliament Digital Library, Lok Sabha Secretariat.",
+   "date_checked": "2026-09-26",
+   "checked_by": "data-acquisition agent (recorded from published terms; not a human rights decision)",
+   "notes": "Contains Dr. B. R. Ambedkar's speech of 25 Nov 1949 (spec 8.1 item 3). Not quote-verified. Needs written permission from the Speaker, Lok Sabha, before any visitor display."
+  }
+ ],
+ "items": [
+  {
+   "item_key": "intake-check-exact-duplicate",
+   "rights_source_key": "lok-sabha-cad-en-vol11-reprint2014",
+   "title": "[intake check] exact duplicate of cad-1949-11-25-en",
+   "item_type": "text",
+   "collection": "debates",
+   "doc_class": "born_digital",
+   "languages": ["en"],
+   "access_level": "restricted",
+   "files": [{"path": "../data/incoming/cad/cad_25-11-1949.pdf",
+              "sha256": "b91746973cdc627d27b2bae85e39ca212f00a26068a44ab0204c4adf52d981bf"}]
+  },
+  {
+   "item_key": "intake-check-checksum-mismatch",
+   "rights_source_key": "lok-sabha-cad-en-vol11-reprint2014",
+   "title": "[intake check] deliberately wrong expected SHA-256",
+   "item_type": "text",
+   "collection": "debates",
+   "doc_class": "born_digital",
+   "languages": ["en"],
+   "access_level": "restricted",
+   "files": [{"path": "../data/incoming/cad/cad_25-11-1949.pdf",
+              "sha256": "0000000000000000000000000000000000000000000000000000000000000000"}]
+  }
+ ]
+}

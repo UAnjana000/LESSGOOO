@@ -1,0 +1,38 @@
+{
+ "spki_b64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEs8A/pVrGIwWM+0KyAAkl9soGUBRzufI8BTGfEh+B4gstGKuu8G+FAystVQm/XvoTLUHNEAzjc4bqpHWmtNxp1A==",
+ "manifest": {
+  "payload": {
+   "manifest_version": 7,
+   "issued_at": "2026-09-26T10:00:00+00:00",
+   "lease_expires_at": "2026-09-29T10:00:00+00:00",
+   "lease_hours": 72,
+   "budget_bytes": 1000,
+   "total_bytes": 10,
+   "device_id": "kiosk-test",
+   "items": [
+    {
+     "item_id": 3,
+     "version": 2,
+     "bytes": 10,
+     "urls": [
+      "/api/visitor/items/3",
+      "/api/visitor/files/9"
+     ],
+     "sha256": [
+      "ab"
+     ]
+    }
+   ],
+   "skipped_over_budget": [],
+   "withdrawn_item_ids": [
+    5
+   ],
+   "shared_urls": [
+    "/api/visitor/home"
+   ],
+   "note": "सार्वजनिक — “quotes”"
+  },
+  "alg": "ECDSA-P256-SHA256",
+  "signature": "qOhkwKRlIgUJWWrVrl5JiXOQAgFjPFElo5nfwa6VS9HVpJRZ0rnh9yWD4GgbJUbWcWYEwMx/LEywE4xlx7ioig=="
+ }
+}

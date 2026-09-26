@@ -1,0 +1,13 @@
+{
+  "_note": "Spec 10.1 question set for retrieval (read by `python -m archive.cli eval-retrieval`). 50-100 questions in English, Hindi and Marathi. Positives are located by item_key plus a verbatim anchor snippet from the approved passage. Held-out test questions must never appear in training labels: run eval/check_training_leakage.py before freezing a dataset.",
+  "_example_row_not_evaluated": {
+    "id": "q-en-001",
+    "question": "…",
+    "language": "en",
+    "split": "test",
+    "positives": [{"item_key": "…", "anchor": "verbatim snippet from the approved passage"}],
+    "written_by": "named person",
+    "reviewed_by": "named person"
+  },
+  "questions": []
+}

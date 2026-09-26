@@ -1,0 +1,131 @@
+# LOCAL DEMO TOPOLOGY - one edge server (mini PC) running every service.
+# This is the SIH prototype layout from spec section 3, NOT institution-ready production.
+# Production topology (spec section 9) lives in deploy/production/.
+
+name: ambedkar-archive
+
+x-app-env: &app-env
+  ARCHIVE_ENVIRONMENT: ${ARCHIVE_ENVIRONMENT:-demo}
+  ARCHIVE_DATABASE_URL: postgresql+psycopg://archive:${POSTGRES_PASSWORD:-archive-dev}@db:5432/archive
+  ARCHIVE_PRESERVATION_ROOT: /data/preservation
+  ARCHIVE_DELIVERY_ROOT: /data/delivery
+  ARCHIVE_DERIVATIVE_ROOT: /data/derivatives
+  ARCHIVE_QUARANTINE_ROOT: /data/quarantine
+  ARCHIVE_TRACE_ROOT: /data/traces
+  ARCHIVE_BACKUP_ROOT: /backups
+  ARCHIVE_MODEL_CACHE: /models
+  ARCHIVE_GATE_CONFIG_PATH: /app/archive/ingest/gate_thresholds.json
+  ARCHIVE_PUBLIC_BASE_URL: ${ARCHIVE_PUBLIC_BASE_URL:-https://localhost:8443}
+
+services:
+  db:
+    image: pgvector/pgvector:0.8.1-pg17
+    environment:
+      POSTGRES_DB: archive
+      POSTGRES_USER: archive
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-archive-dev}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${DB_HOST_PORT:-55432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U archive -d archive"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [backend]
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./backend
+      args:
+        PREFETCH_MODELS: ${PREFETCH_MODELS:-1}
+    image: ambedkar-archive/api:local
+    command: ["sh", "-c", "alembic upgrade head && python -m archive.cli bootstrap && uvicorn archive.api.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips='*'"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      <<: *app-env
+    volumes:
+      - preservation:/data/preservation
+      - delivery:/data/delivery
+      - derivatives:/data/derivatives
+      - quarantine:/data/quarantine
+      - traces:/data/traces
+      - backups:/backups
+      - ./fixtures:/fixtures:ro
+      - ./eval:/eval
+      - ./intake:/intake:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health/ready').status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    networks: [backend, frontend]
+    restart: unless-stopped
+
+  worker:
+    image: ambedkar-archive/api:local
+    command: ["python", "-m", "archive.worker"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      <<: *app-env
+    volumes:
+      - preservation:/data/preservation
+      - delivery:/data/delivery
+      - derivatives:/data/derivatives
+      - quarantine:/data/quarantine
+      - traces:/data/traces
+      - backups:/backups
+      - ./fixtures:/fixtures:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    # Visitor serving has priority over ingestion on shared hardware (spec 3.4).
+    cpus: ${WORKER_CPUS:-2}
+    mem_limit: ${WORKER_MEM:-3g}
+    networks: [backend]
+    restart: unless-stopped
+
+  proxy:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    image: ambedkar-archive/proxy:local
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+      - "${HTTPS_PORT:-8443}:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [frontend]
+    restart: unless-stopped
+
+networks:
+  backend:
+    internal: false
+  frontend: {}
+
+volumes:
+  pgdata: {}
+  preservation: {}
+  delivery: {}
+  derivatives: {}
+  quarantine: {}
+  traces: {}
+  backups: {}
+  caddy_data: {}
+  caddy_config: {}
