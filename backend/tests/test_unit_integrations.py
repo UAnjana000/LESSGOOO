@@ -15,7 +15,12 @@ import pytest
 from archive import exhibit
 from archive.datasets.corpus import assign_split, eligibility
 from archive.ingest.intake import IntakeRejected, sniff_format, validate_manifest
-from archive.ingest.sarvam_ocr import SarvamDocAI, SarvamRejected, SarvamUnavailable, transcription_from_markdown
+from archive.ingest.sarvam_ocr import (
+    SarvamDocAI,
+    SarvamRejected,
+    SarvamUnavailable,
+    transcription_from_markdown,
+)
 
 from .conftest import FIXTURES, sarvam_image_dump_markdown
 
@@ -91,17 +96,24 @@ class TestSarvamDocAIWireProtocol:
         assert out.text == ""
         assert out.not_transcription and "no transcription" in out.not_transcription
         assert out.raw_markdown == raw  # kept for the reviewer, separately from the OCR text
-        assert out.stripped["images_removed"] == 7 and out.stripped["description_blocks_removed"] == 14
+        assert out.stripped["images_removed"] == 7 and out.stripped["description_blocks_removed"] == 49
 
 
 class TestSarvamTranscriptionCleaning:
-    def test_images_and_descriptions_are_stripped_around_real_text(self):
-        real = "Friends, education is not a gift that one class hands to another.\nIt is a right."
+    def test_images_and_captions_are_stripped_around_real_text(self):
+        real = ("(Synthetic fixture page - not a historical document)", "Lecture on Water and the Common Tank",
+                "The common tank in the centre of the village was dug by the labour of all its families.")
         cleaned = transcription_from_markdown(sarvam_image_dump_markdown(transcription=real))
         assert cleaned.not_transcription is None
-        assert cleaned.text == real
-        assert "base64" not in cleaned.text and "data:image" not in cleaned.text
-        assert "appears to be" not in cleaned.text
+        assert cleaned.text == "\n\n".join(real)
+        assert "base64" not in cleaned.text and "image" not in cleaned.text.lower()
+
+    def test_unitalicised_description_paragraphs_are_dropped(self):
+        md = ("![Image](data:image/jpeg;base64,QUJD)\n\n"
+              "This image depicts a document with several paragraphs; details cannot be made out.\n\n"
+              "The village council must publish the rules of the tank.")
+        cleaned = transcription_from_markdown(md)
+        assert cleaned.text == "The village council must publish the rules of the tank."
 
     def test_html_images_and_bare_base64_runs_are_removed(self):
         md = ('<img src="data:image/png;base64,' + "QUJD" * 100 + '">\n\n' + "Zm9v" * 80

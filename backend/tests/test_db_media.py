@@ -96,3 +96,28 @@ def test_published_transcript_passages_carry_segment_quote_status(db):
     assert by_seg[segs[0].id].quote_verified is True
     assert by_seg[segs[1].id].quote_verified is False
     assert all(p.kind == "reviewed_transcript" for p in passages)
+
+
+def test_seed_media_delivery_replaces_a_bad_copy_but_publication_still_waits_for_review(db):
+    from archive.cli import SEED, _seed_media_delivery
+
+    item, segs = _audio_item(db, make_rights(db))
+    master = storage.put_bytes(b"fLaC synthetic master bytes", "preservation_master", ".flac")
+    db.add(FileVersion(item_id=item.id, role="preservation_master", kind="original", format="audio/flac",
+                       byte_size=master.byte_size, sha256=master.sha256, storage_uri=master.uri))
+    bad = db.execute(select(FileVersion).where(FileVersion.item_id == item.id,
+                                               FileVersion.role == "delivery")).scalar_one()
+    bad.sha256 = "0" * 64
+    review.review_segment(db, segs[0], "approve", SEED, seeded=True)
+
+    assert _seed_media_delivery(db) == {"synthetic-talk": "stored"}
+    live = db.execute(select(FileVersion).where(FileVersion.item_id == item.id, FileVersion.role == "delivery",
+                                                FileVersion.deleted_at.is_(None))).scalar_one()
+    assert live.sha256 == master.sha256 and storage.verify(live.storage_uri, live.sha256)
+    assert bad.deleted_at is not None
+    with pytest.raises(publish.PublicationError, match="segment"):
+        publish.publish_item(db, item, SEED)
+
+    review.review_segment(db, segs[1], "approve", SEED, seeded=True)
+    publish.publish_item(db, item, SEED)
+    assert item.publication_state == "published"

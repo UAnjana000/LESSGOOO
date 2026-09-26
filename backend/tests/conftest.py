@@ -16,7 +16,8 @@ from pathlib import Path
 import pytest
 
 _TMP = Path(tempfile.mkdtemp(prefix="archive-test-"))
-_base = os.environ.get("ARCHIVE_DATABASE_URL", "postgresql+psycopg://archive:archive-dev@localhost:55432/archive")
+# 127.0.0.1, not localhost: localhost resolves to ::1 first on Windows and [::1]:55432 stalls instead of refusing.
+_base = os.environ.get("ARCHIVE_DATABASE_URL", "postgresql+psycopg://archive:archive-dev@127.0.0.1:55432/archive")
 TEST_DB_URL = os.environ.get("ARCHIVE_TEST_DATABASE_URL") or _base.rsplit("/", 1)[0] + "/archive_test"
 
 os.environ.update({
@@ -116,20 +117,32 @@ def png_page(text: str = "Synthetic test page", size=(800, 1000)) -> bytes:
     return buf.getvalue()
 
 
-def sarvam_image_dump_markdown(images: int = 7, transcription: str = "") -> str:
+SARVAM_CAPTION = (
+    "*The image appears to be a grayscale, low-resolution photograph of a printed page. "
+    "The text is blurred and largely illegible.\n\n"
+    "### Analysis and Description:\n\n"
+    "1. **Primary Object**:\n   - **Shape**: The primary object in the image is a circle.\n\n"
+    '- "Synthetic"\n- "Lecture on"\n\n'
+    "### Possible Questions and Answers:\n\n"
+    "1. **Is the circle complete?**\n   - No, the circle has a small gap on the right side.\n\n"
+    "Given the limited visibility of the text, it is not possible to ascertain the full content.*"
+)
+
+
+def sarvam_image_dump_markdown(images: int = 7, transcription: tuple[str, ...] = ()) -> str:
     """Shape of the live Sarvam Doc AI output for fx-lecture-tank-degraded.png (docs/LIVE_TEST.md 3.3):
-    inline data-URI JPEGs, each followed by a model-written description, and no transcription."""
+    inline data-URI JPEGs, each followed by one multi-paragraph italic caption (7 blocks), with any
+    transcribed paragraphs interleaved between the captioned images."""
     import base64
 
     blob = base64.b64encode(bytes(range(256)) * 60).decode("ascii")  # ~20k chars per image, like the live dump
     parts = []
     for i in range(images):
-        parts.append(f"![Image {i + 1}](data:image/jpeg;base64,{blob})")
-        parts.append("*The image appears to be a grayscale, low-resolution photograph of a printed page. "
-                     "The text is blurred and largely illegible, with heavy noise across the scan.*")
-        parts.append("This image depicts a document with several paragraphs; details cannot be made out.")
-    if transcription:
-        parts.insert(3, transcription)
+        if i < len(transcription):
+            parts.append(transcription[i])
+        parts.append(f"![Image](data:image/jpeg;base64,{blob})")
+        parts.append(SARVAM_CAPTION)
+    parts.extend(transcription[images:])
     return "\n\n".join(parts)
 
 

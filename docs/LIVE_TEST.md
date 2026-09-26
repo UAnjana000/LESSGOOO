@@ -135,3 +135,27 @@ docker compose run --rm --no-deps -v "${PWD}/backend:/app:ro" -e PYTHONDONTWRITE
 
 - Host note: `PGHOSTADDR=127.0.0.1` is only a workaround for connecting from this machine. `localhost` resolves to `::1` first, and connecting to `[::1]:55432` stalls. The Alembic engine in `conftest.py` has no connect timeout, so it hangs instead of falling back to IPv4. No credentials were passed on the command line.
 - Not fixed here: the live seeded `fx-talk-audio` item is still `in_review`. `seed.log` shows four segments approved "(seeded)" and an empty processing route list, which suggests media processing (the step that creates the delivery copy) did not run for it. This was not checked against the live database. It is a separate seed/processing issue in the running archive, and it was not touched.
+
+## Sarvam OCR image/description stripping (fix for 3.3)
+
+Retry on 2026-09-26 at about 21:57 IST, after the parser fix. No commits were made and no services were restarted.
+
+- Root cause: `extract_markdown()` returned the whole Doc AI Markdown, and `run_sarvam()` stored it as `OcrResult.text`. For this page, the Markdown has 7 inline `![Image](data:image/jpeg;base64,...)` images. After each image comes one italic caption span that runs over many paragraphs (headings, analysis lists, "Possible Questions and Answers", conclusion). Sarvam did transcribe the page, but the three transcribed paragraphs sit between those caption spans.
+- Fix (`backend/archive/ingest/sarvam_ocr.py`): the new `transcription_from_markdown()` removes images (Markdown and HTML images, data URIs, long base64 runs), each whole italic caption span that follows an image, and any other paragraph that reads as an image description. If no letters remain, the output is marked as not a transcription, with a reason. `SarvamOcrOutput.text` now holds only the cleaned text. The raw Markdown is returned separately as `raw_markdown`.
+- Storage (`backend/archive/ingest/processing.py::run_sarvam`):
+  - The raw Markdown is saved as a staff-only derivative `FileVersion` (`kind="sarvam_raw"`, `text/markdown`). Its id is in `OcrResult.raw_meta.raw_file_id`, along with strip counts. No schema change.
+  - If no transcription remains, the Sarvam `OcrResult` is `status="failed"` with `text=""` and the reason in `error`. The page stays `needs_full_review` (`review_mode="full"`, route stays `local`, reason in `sarvam_last_error`), and the local draft stays the candidate.
+  - If text remains, it is stored as the Sarvam candidate. It is still never selected or auto-accepted, and the page still goes to full review.
+- Tests: new cases in `tests/test_unit_integrations.py` and `tests/test_db_pipeline.py` use a synthetic payload shaped like this live output (`conftest.sarvam_image_dump_markdown`). Sarvam is not called.
+
+One live call, on the same synthetic fixture only (`fixtures/files/fx-lecture-tank-degraded.png`, language `en`). The client was called directly from the host. **Nothing was written to the demo database, and page 4 is unchanged and unpublished.** No other page was sent.
+
+| | Value |
+|---|---|
+| Job status | `completed`, about 12 s |
+| Raw Markdown | 140,814 chars, 7 data-URI images (still kept, now only as the raw payload) |
+| Text selected by the parser as first shipped | 10,281 chars; ratio 0.094 against the 510-char ground truth. The italic caption spans were not yet recognised. |
+| Text selected by the final parser (re-run offline on the same saved response; no second call) | 511 chars; **ratio 0.995**; no base64 and no mention of "image" |
+
+- The final selected text is the page's disclaimer line, its title and its paragraph, as Sarvam transcribed them. Through `run_sarvam` this would be stored as the Sarvam candidate for **full archivist review**. It would not be auto-accepted or published.
+- This is one deliberately degraded synthetic page. The caption-span rule matches the output format observed here. Behaviour on real gate-failing archive pages is still **unmeasured**.

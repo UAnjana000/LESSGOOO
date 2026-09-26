@@ -119,14 +119,19 @@ class TestOcrRouting:
         processing.process_page(db, pages[0], fb)
         assert fb.calls == 0 and pages[0].status == "needs_full_review"
 
-    def test_sarvam_image_dump_is_not_stored_as_transcription(self, db, monkeypatch):
-        monkeypatch.setattr(processing, "_run_local", _fake_local(BAD))
-        raw = sarvam_image_dump_markdown()
+    @staticmethod
+    def _fallback_returning(raw: str) -> FakeFallback:
         cleaned = transcription_from_markdown(raw)
         fb = FakeFallback()
         fb.digitise_page = lambda image_png, language: SarvamOcrOutput(
             text=cleaned.text, engine_version="fake-sarvam", job_id="fake-2", raw_status="completed",
             raw_markdown=raw, not_transcription=cleaned.not_transcription, stripped=cleaned.stripped)
+        return fb
+
+    def test_sarvam_image_dump_is_not_stored_as_transcription(self, db, monkeypatch):
+        monkeypatch.setattr(processing, "_run_local", _fake_local(BAD))
+        raw = sarvam_image_dump_markdown()
+        fb = self._fallback_returning(raw)
         pages, _ = _intake_printed(db, make_rights(db))
         processing.process_page(db, pages[0], fb)
         page = pages[0]
@@ -139,6 +144,21 @@ class TestOcrRouting:
         assert raw_file.role == "derivative" and raw_file.kind == "sarvam_raw"
         assert storage.read_bytes(raw_file.storage_uri).decode("utf-8") == raw
         assert review.candidate_text(page) == "local ocr text of the synthetic page"
+
+    def test_sarvam_text_between_captions_is_kept_for_full_review(self, db, monkeypatch):
+        monkeypatch.setattr(processing, "_run_local", _fake_local(BAD))
+        real = ("Lecture on Water and the Common Tank", "The common tank was dug by the labour of all its families.")
+        raw = sarvam_image_dump_markdown(transcription=real)
+        pages, _ = _intake_printed(db, make_rights(db))
+        processing.process_page(db, pages[0], self._fallback_returning(raw))
+        page = pages[0]
+        assert page.status == "needs_full_review" and page.ocr_route == "sarvam" and page.approved_text is None
+        sarvam = db.execute(select(OcrResult).where(OcrResult.page_id == page.id,
+                                                    OcrResult.engine == "sarvam-doc-ai")).scalar_one()
+        assert sarvam.status == "ok" and sarvam.text == "\n\n".join(real) and not sarvam.selected
+        assert "disagreement" in sarvam.raw_meta and sarvam.raw_meta["images_removed"] == 7
+        raw_file = db.get(FileVersion, sarvam.raw_meta["raw_file_id"])
+        assert storage.read_bytes(raw_file.storage_uri).decode("utf-8") == raw
 
     def test_sarvam_rejection_routes_to_manual_transcription(self, db, monkeypatch):
         monkeypatch.setattr(processing, "_run_local", _fake_local(BAD))

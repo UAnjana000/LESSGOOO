@@ -2,7 +2,8 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
-const api = process.env.VITE_API_PROXY ?? "http://localhost:8000";
+// The local Caddy proxy serves a `tls internal` certificate, so allow it when proxying in dev.
+const api = { target: process.env.VITE_API_PROXY ?? "http://localhost:8000", changeOrigin: true, secure: false };
 
 export default defineConfig({
   plugins: [

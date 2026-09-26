@@ -21,6 +21,7 @@ from archive.models import (
     ArchivalItem,
     CollectionSetting,
     Derivative,
+    FileVersion,
     KnowledgeEdge,
     KnowledgeNode,
     MediaSegment,
@@ -33,6 +34,7 @@ from archive.models import (
     Story,
     TimelineEvent,
     Translation,
+    utcnow,
 )
 
 log = logging.getLogger("archive.cli")
@@ -175,6 +177,60 @@ def _seed_quote_checks(db) -> list[str]:
                 review.verify_page_quotes(db, p, SEED, confirm_compared_with_scan=True, seeded=True)
                 out.append(f"{key} p{p.sequence}")
     return out
+
+
+def _seed_media_delivery(db) -> dict[str, str]:
+    """Fixture recordings need a delivery copy whose SHA-256 publish.verify can confirm on disk.
+
+    Ingest normally makes an FFmpeg copy; if that copy is absent or fails its checksum, the synthetic
+    master bytes are stored as the delivery copy instead."""
+    out = {}
+    for key, item in _items_by_key(db).items():
+        if item.item_type not in ("audio", "video"):
+            continue
+        live = db.execute(select(FileVersion).where(
+            FileVersion.item_id == item.id, FileVersion.role == "delivery", FileVersion.kind == "media",
+            FileVersion.deleted_at.is_(None))).scalars().first()
+        if live and storage.verify(live.storage_uri, live.sha256):
+            out[key] = f"present ({live.generator})"
+            continue
+        if live:
+            live.deleted_at = utcnow()
+        master = db.execute(select(FileVersion).where(FileVersion.item_id == item.id,
+                                                      FileVersion.role == "preservation_master")).scalars().first()
+        if master is None:
+            out[key] = "no preservation master"
+            continue
+        stored = storage.put_bytes(storage.read_bytes(master.storage_uri), "delivery",
+                                   Path(master.storage_uri).suffix)
+        fv = FileVersion(item_id=item.id, role="delivery", kind="media", format=master.format,
+                         byte_size=stored.byte_size, sha256=stored.sha256, storage_uri=stored.uri,
+                         derived_from_id=master.id, generator="fixture-seed: copy of synthetic master")
+        db.add(fv)
+        db.flush()
+        audit.record(db, SEED, "file.store_delivery", "file_version", fv.id, checksum_after=stored.sha256,
+                     detail={"item_id": item.id, "replaced": live.id if live else None, "seeded_fixture": True})
+        out[key] = "stored"
+    return out
+
+
+def _seed_publish(graph, ready: list[tuple[str, int]]) -> dict[str, Any]:
+    from archive.ingest import graph as ingest_graph
+    from archive.ingest import publish
+
+    pub = {}
+    for key, item_id in ready:
+        if ingest_graph.has_checkpoint(graph, item_id):
+            state = ingest_graph.resume_publish(graph, item_id, SEED)
+            pub[key] = state.get("result") or {"blocked": state.get("review_problems") or state.get("error")}
+        else:
+            with session_scope() as db:
+                try:
+                    r = publish.publish_item(db, db.get(ArchivalItem, item_id), SEED)
+                    pub[key] = {k: v for k, v in r.items() if k != "verification"}
+                except publish.PublicationError as exc:
+                    pub[key] = {"blocked": str(exc)}
+    return pub
 
 
 def _seed_translations(db) -> list[str]:
@@ -388,20 +444,10 @@ def cmd_seed_fixtures(args: argparse.Namespace) -> None:
         with session_scope() as db:
             report["quote_checks_seeded"] = _seed_quote_checks(db)
         with session_scope() as db:
+            report["media_delivery"] = _seed_media_delivery(db)
+        with session_scope() as db:
             ready = [(k, i.id) for k, i in _items_by_key(db).items() if i.publication_state == "approved"]
-        pub = {}
-        for key, item_id in ready:
-            if ingest_graph.has_checkpoint(graph, item_id):
-                state = ingest_graph.resume_publish(graph, item_id, SEED)
-                pub[key] = state.get("result") or {"blocked": state.get("review_problems") or state.get("error")}
-            else:
-                with session_scope() as db:
-                    try:
-                        r = publish.publish_item(db, db.get(ArchivalItem, item_id), SEED)
-                        pub[key] = {k: v for k, v in r.items() if k != "verification"}
-                    except publish.PublicationError as exc:
-                        pub[key] = {"blocked": str(exc)}
-        report["publication"] = pub
+        report["publication"] = _seed_publish(graph, ready)
     with session_scope() as db:
         report["translations_seeded"] = _seed_translations(db)
     if report["translations_seeded"]:
@@ -419,6 +465,32 @@ def cmd_seed_fixtures(args: argparse.Namespace) -> None:
             cs = db.get(CollectionSetting, c) or CollectionSetting(collection=c)
             cs.machine_translation_enabled = enabled
             db.merge(cs)
+    _print(report)
+
+
+def cmd_seed_fixture_media(_: argparse.Namespace) -> None:
+    """Repair already-seeded fixture recordings in place: delivery copy, review state, then the normal
+    publish step. Approves nothing, so an item whose transcript review is incomplete stays unpublished."""
+    from archive.ingest import graph as ingest_graph
+    from archive.ingest import review
+    from archive.worker import postgres_checkpointer
+
+    report: dict[str, Any] = {}
+    with session_scope() as db:
+        report["media_delivery"] = _seed_media_delivery(db)
+        items = _items_by_key(db)
+        for key in report["media_delivery"]:
+            review._update_item_state(db, items[key])
+    keys = set(report["media_delivery"])
+    with postgres_checkpointer() as cp:
+        graph = ingest_graph.build_ingest_graph(checkpointer=cp, rng=random.Random(7))
+        with session_scope() as db:
+            ready = [(k, i.id) for k, i in _items_by_key(db).items()
+                     if k in keys and i.publication_state == "approved"]
+        report["publication"] = _seed_publish(graph, ready)
+    with session_scope() as db:
+        report["state"] = {k: {"publication_state": i.publication_state, "published_version_id": i.published_version_id}
+                           for k, i in _items_by_key(db).items() if k in keys}
     _print(report)
 
 
@@ -596,6 +668,7 @@ def main(argv: list[str] | None = None) -> None:
     p = sub.add_parser("seed-fixtures")
     p.add_argument("--fixtures", default="/fixtures")
     p.set_defaults(fn=cmd_seed_fixtures)
+    sub.add_parser("seed-fixture-media").set_defaults(fn=cmd_seed_fixture_media)
     p = sub.add_parser("validate-manifest")
     p.add_argument("path")
     p.set_defaults(fn=cmd_validate_manifest)

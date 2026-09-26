@@ -129,27 +129,30 @@ def extract_markdown(zip_bytes: bytes) -> str:
 
 
 _IMAGE_PATTERNS = (
-    re.compile(r"<figure\b.*?</figure>", re.I | re.S),
+    re.compile(r"<figure\b.*?</figure>", re.IGNORECASE | re.DOTALL),
     re.compile(r"!\[[^\]]*\]\([^)]*\)"),
-    re.compile(r"<img\b[^>]*>", re.I),
-    re.compile(r"data:[\w/+.-]+;base64,[A-Za-z0-9+/=\s]*", re.I),
+    re.compile(r"<img\b[^>]*>", re.IGNORECASE),
+    re.compile(r"data:[\w/+.-]+;base64,[A-Za-z0-9+/=\s]*", re.IGNORECASE),
     re.compile(r"[A-Za-z0-9+/]{200,}={0,2}"),
 )
-_HTML_COMMENT = re.compile(r"<!--.*?-->", re.S)
+_HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 _DESCRIPTION_LEAD = re.compile(
     r"^(?:"
     r"(?:image|figure|photo|picture|illustration)\s*(?:description|caption)?\s*[:\-\u2013\u2014]"
     r"|(?:the|this)\s+(?:(?:scanned|page|document)\s+)?(?:image|photo(?:graph)?|picture|figure|illustration|scan)\b"
     r"|(?:the|this)\s+(?:page|document)\s+(?:appears|seems)\s+to\b"
     r")",
-    re.I,
+    re.IGNORECASE,
 )
 _DESCRIPTION_CUES = re.compile(
     r"grayscale|greyscale|low[- ]resolution|blurr(?:y|ed)|pixelated|noisy|illegible|legible|depicts"
     r"|appears to (?:be|show|depict|contain)|photograph|the image",
-    re.I,
+    re.IGNORECASE,
 )
 _MD_DECORATION = re.compile(r"^[\s>*_#\-]+|[\s*_]+$")
+_IMAGE_SLOT = "\x00"
+_ITALIC_OPEN = re.compile(r"^([*_])(?![*_])")
+_ITALIC_CLOSE = re.compile(r"(?<![*_])[*_]$")
 
 
 @dataclass
@@ -167,16 +170,31 @@ def _is_description(block: str) -> bool:
 
 
 def transcription_from_markdown(markdown: str) -> CleanedMarkdown:
-    """Drop embedded images and image-description paragraphs; decide whether any transcription remains."""
+    """Drop embedded images and image-description paragraphs; decide whether any transcription remains.
+
+    Sarvam captions each detected image region with one italic span that may run over many paragraphs
+    (headings, lists, Q&A); the whole span after an image is treated as description.
+    """
     images = 0
     text = _HTML_COMMENT.sub("", markdown)
     for pattern in _IMAGE_PATTERNS:
-        text, n = pattern.subn("", text)
+        text, n = pattern.subn(f"\n\n{_IMAGE_SLOT}\n\n", text)
         images += n
     kept, descriptions = [], 0
+    after_image = in_caption = False
     for block in re.split(r"\n\s*\n", text):
         block = block.strip()
         if not block:
+            continue
+        if block == _IMAGE_SLOT:
+            after_image = True
+            continue
+        if after_image and _ITALIC_OPEN.match(block):
+            in_caption = True
+        after_image = False
+        if in_caption:
+            descriptions += 1
+            in_caption = not _ITALIC_CLOSE.search(block)
             continue
         if _is_description(block):
             descriptions += 1
