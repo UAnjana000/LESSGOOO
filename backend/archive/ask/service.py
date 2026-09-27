@@ -99,7 +99,7 @@ def ask(db: Session, question: str, history: list[dict[str, str]], ui_language: 
                         if c not in used:
                             used.append(c)
                 citations = [_citation_payload(by_id[c], quotes_by_pid.get(c, [])) for c in used]
-        if outcome in ("extractive", "insufficient", "refused"):
+        if outcome in ("extractive", "insufficient", "refused", "error"):
             citations = [_citation_payload(h, []) for h in hits[:3]]
         msg_key = outcome if outcome in policy.MESSAGES else ("insufficient" if outcome == "error" else None)
         payload: dict[str, Any] = {

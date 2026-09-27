@@ -159,3 +159,95 @@ One live call, on the same synthetic fixture only (`fixtures/files/fx-lecture-ta
 
 - The final selected text is the page's disclaimer line, its title and its paragraph, as Sarvam transcribed them. Through `run_sarvam` this would be stored as the Sarvam candidate for **full archivist review**. It would not be auto-accepted or published.
 - This is one deliberately degraded synthetic page. The caption-span rule matches the output format observed here. Behaviour on real gate-failing archive pages is still **unmeasured**.
+
+## Seeded audio delivery
+
+Checked against the live demo database on 2026-09-26. No commits were made, no services were restarted and nothing was taken down.
+
+- The earlier guess in "Audio publish checksum" was wrong: media processing did run for `fx-talk-audio` (item 9). The delivery copy `file_version` 12 (`ffmpeg aac64k`, `audio/mp4`) was created at ingest. It is on the delivery volume, and its SHA-256 matches. The processing route list in `seed.log` is empty only because recordings have no pages.
+- Why the item stayed `in_review`: the seed ran at about 21:08 IST, and `archive/cli.py` and `archive/ingest/review.py` were changed about a minute later. The old files were not kept, so their exact behaviour is unknown. With the current code, the same four seeded segment approvals leave the item `approved`. This was replayed in a transaction that was then rolled back. Because the item never reached `approved`, the seed's publish step never picked it up.
+- Seed change (`archive/cli.py`):
+  - Before publishing, `seed-fixtures` now makes sure every fixture recording has a delivery copy whose checksum matches the file on disk.
+  - If the copy is missing or its checksum fails, the synthetic master bytes are stored as the delivery copy and recorded with their SHA-256. A copy that fails its checksum is marked deleted.
+  - A new command, `seed-fixture-media`, repairs already-seeded recordings in place. It re-checks the delivery copy, recomputes the review state, and then runs the existing publish step. It approves nothing, so a recording whose transcript review is incomplete stays unpublished. It imports nothing, so no items are duplicated.
+- Test: `tests/test_db_media.py::test_seed_media_delivery_replaces_a_bad_copy_but_publication_still_waits_for_review` (host run, 6 passed in that file). `tests/conftest.py` now connects to `127.0.0.1:55432` by default instead of `localhost`, so the `PGHOSTADDR` workaround described above is no longer needed. No credentials were put on the command line.
+
+Command, run from the repository root (one-off container, no services restarted):
+
+```powershell
+docker compose run --rm --no-deps -v "${PWD}/backend:/app:ro" -e PYTHONDONTWRITEBYTECODE=1 api python -m archive.cli seed-fixture-media
+```
+
+- About 22:07 IST: the existing FFmpeg copy was kept (`present (ffmpeg aac64k)`). Publish ran stage, then verify (`ok: true`, 4 passages, 4 embedded, no errors), then switch.
+- Later, Docker could not start new containers. The same command was run again by piping the updated `cli.py` into `docker compose exec -T api python - seed-fixture-media`. It found the item already published and changed nothing.
+
+**Publication state afterwards: `fx-talk-audio` is `published`** (`published_version_id` 11, item version 1, index version 11, actor `fixture-seed`). There are no duplicate item keys. There are 10 published fixture items, plus `fx-restricted-memo`, which is `approved` but blocked by its rights.
+
+- The 4 `reviewed_transcript` passages have `quote_verified = false`. The segment approvals are seeded fixture records, not a person checking the recording. No quote verification was seeded for this item.
+
+## Continuation run — 2026-09-26/27, about 23:40–00:30 IST
+
+### Sarvam OCR parse — live retry with the current parser
+
+The parser fix above was already on disk, so it was not rewritten. The tests covering it were run first, from `backend/`:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider -k "sarvam" tests/test_unit_integrations.py tests/test_db_pipeline.py -rA
+```
+
+**Result: 17 passed.** These include `test_image_dump_is_not_returned_as_ocr_text`, `test_images_and_captions_are_stripped_around_real_text`, `test_sarvam_image_dump_is_not_stored_as_transcription` and `test_sarvam_text_between_captions_is_kept_for_full_review`.
+
+One live call was then made on the same synthetic page only (`fixtures/files/fx-lecture-tank-degraded.png`, language `en`). The client was called directly from the host through a temporary script outside the repo. The key was read from `.env` and never printed. **Nothing was written to any database, and no other page or file was sent.** The Constituent Assembly PDFs were not sent.
+
+| | Value |
+|---|---|
+| Job status | `completed`, 14.1 s, engine `sarvam-vision (doc-ai v1)` |
+| Raw Markdown | 141,525 chars; 7 `data:image` URIs |
+| Parser strip counts | 7 images removed, 63 description blocks removed |
+| `not_transcription` | none (text remained) |
+| Selected text | 511 chars against 510 chars of ground truth; **rapidfuzz ratio 0.995**; no `base64`; no mention of "image" |
+
+This time the current parser produced the 0.995 result live, not only in the offline re-parse. Through `run_sarvam` the text would still only be a Sarvam candidate for **full archivist review**. It is never auto-selected or published. This is one synthetic page; behaviour on real gate-failing pages is still unmeasured.
+### Live visitor Ask through the running API — outcome `error` (answer model call failed inside the container)
+
+The Ask was sent through the running stack (`POST https://localhost:8443/api/visitor/ask`, Caddy to the compose `api` container) by a temporary host script outside the repo. No secrets were read by the script.
+
+- Question (English UI): "According to the lecture on education, why should mothers learn to read?" This targets the published synthetic fixture `fx-lecture-education` (item 2).
+- Container configuration, checked through `GET /api/staff/settings/status` after archivist login: `llm_configured: true`, `llm_model: gpt-4o-mini`, `sarvam_configured: true`, trace backend `local-jsonl (Langfuse keys not configured)`. The api container was recreated after `.env` was last written (21:41 IST).
+- Retrieval (visitor search, same question): the top three results were passage 18 (item 9, audio transcript, `quote_verified` false), passage 3 (item 5, Hindi pamphlet, false) and passage 7 (item 2, p. 1, `quote_verified` true). All are published synthetic fixtures.
+
+| | Attempt 1 (`answer_id` 6) | Attempt 2 (`answer_id` 7) |
+|---|---|---|
+| HTTP | 200 | 200 |
+| `outcome` | `error` | `error` |
+| Language detected | `en` | `en` |
+| `model` / tokens / cost | none / 0 in, 0 out / $0 | none / 0 in, 0 out / $0 |
+| `label` ("AI-generated answer…") | none (no answer) | none (no answer) |
+| Sentences / citations returned | 0 / 0 | 0 / 0 |
+| Latency | 26.6 s | 10.5 s |
+
+- What this shows: language detection, retrieval and sufficiency ran. The sufficiency check passed, because the graph reached `generate`, which is the only node that sets `outcome = "error"`. The answer-model call then raised `LLMUnavailable`: zero tokens and no model name came back. The visitor got the abstention message, and no AI-generated text was shown.
+- Why the model call failed: **not determined**. The reason is written only to the container's local JSONL trace, and Docker could no longer run `docker exec` (the engine returned HTTP 500), so the trace could not be read. The same key and model had returned a JSON object from the host earlier (§3.2). The most likely cause is the degraded Docker VM (see below), but this is not proven.
+- Citation check: nothing to check, because no answer and no citations came back.
+- Bug found and fixed in code, **not yet deployed or run against a database**:
+  - For `outcome = "error"`, the API returned the message "These are the closest items to browse" with an empty citation list, and the web Ask page showed only a generic error.
+  - `archive/ask/service.py` now returns the closest passages for `error` too, and `web/src/pages/Ask.tsx` shows them under "Related".
+  - New test: `tests/test_db_ask_datasets.py::test_answer_model_failure_offers_closest_passages_without_an_answer`. It could not run: all 18 tests in that file were skipped with "PostgreSQL test database not reachable", because host connections to port 55432 were taking longer than 3 s. `tsc` passes on the web change.
+
+### Docker engine degraded during this run (blocker)
+
+From about 00:05 IST, the Docker Desktop engine stopped answering management commands:
+
+- `docker ps` timed out after 45–60 s every time.
+- `docker compose build api` and `docker build` never started; buildx reported "context deadline exceeded: driver not connecting".
+- `docker exec` returned HTTP 500.
+- Host connections to the proxy (8443) and database (55432) alternated between working, TLS resets, 502 from Caddy and connect timeouts.
+- About 20 client processes were left hanging, including other engineers' runs: a CAD ingestion attached since 21:42 IST, and seed and remove commands. Host free memory was 2.4 of 15.6 GB.
+
+Effects:
+
+- **api and worker were not restarted** and the api image was **not rebuilt**. The running image predates the current `sarvam_ocr.py` and `cli.py`, and today's `service.py` fix.
+- The worker healthcheck change in `docker-compose.yml` is written but not applied.
+- `web/scripts/smoke_test.py` could not complete: its first request got a TLS connection reset.
+
+The database was not taken down, and Docker Desktop was not restarted, because a restart would stop the database and other engineers' running jobs. Next step: restart Docker Desktop at a moment agreed with the other engineers, then run `docker compose build api` and `docker compose up -d --force-recreate --no-deps api worker`, re-run the Ask, run `pytest tests/test_db_ask_datasets.py`, and run `smoke_test.py --ask`.
