@@ -1,0 +1,2663 @@
+{
+  "config": {
+    "argv": [
+      "C:\\Users\\cvbal\\AppData\\Local\\Volta\\tools\\image\\node\\24.18.0\\node.exe",
+      "C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\node_modules\\@playwright\\test\\cli.js",
+      "test",
+      "-c",
+      "e2e/playwright.config.ts",
+      "--project=kiosk-chrome"
+    ],
+    "configFile": "C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\playwright.config.ts",
+    "rootDir": "C:/Users/cvbal/Desktop/lessgooo/web/e2e/specs",
+    "failOnFlakyTests": false,
+    "forbidOnly": true,
+    "fullyParallel": false,
+    "globalSetup": "C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\global-setup.ts",
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "C:/Users/cvbal/Desktop/lessgooo/web/e2e/artifacts/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "kiosk-chrome",
+        "name": "kiosk-chrome",
+        "testDir": "C:/Users/cvbal/Desktop/lessgooo/web/e2e/specs",
+        "testIgnore": [
+          "ask-model-down.e2e.ts"
+        ],
+        "testMatch": [
+          "*.e2e.ts"
+        ],
+        "timeout": 90000
+      },
+      {
+        "outputDir": "C:/Users/cvbal/Desktop/lessgooo/web/e2e/artifacts/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "model-down",
+        "name": "model-down",
+        "testDir": "C:/Users/cvbal/Desktop/lessgooo/web/e2e/specs",
+        "testIgnore": [],
+        "testMatch": [
+          "ask-model-down.e2e.ts"
+        ],
+        "timeout": 90000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\artifacts\\results.json"
+        }
+      ],
+      [
+        "html",
+        {
+          "outputFolder": "C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\artifacts\\html-report",
+          "open": "never"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.62.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "01-visitor-kiosk.e2e.ts",
+      "file": "01-visitor-kiosk.e2e.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Visitor on a kiosk",
+          "file": "01-visitor-kiosk.e2e.ts",
+          "line": 4,
+          "column": 6,
+          "specs": [
+            {
+              "title": "home → keyword search → result → reader shows scan beside text, cited passage marked",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3647,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:11:23.844Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "24553c2f4d43289ccbcb-5bd81e5f3d8b27388433",
+              "file": "01-visitor-kiosk.e2e.ts",
+              "line": 5,
+              "column": 3
+            },
+            {
+              "title": "search result opens the reader with the cited region outlined on the scan",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2213,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:11:28.034Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "24553c2f4d43289ccbcb-442a2196570c1680406f",
+              "file": "01-visitor-kiosk.e2e.ts",
+              "line": 36,
+              "column": 3
+            },
+            {
+              "title": "Hindi query finds Hindi material",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1232,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:11:53.169Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "24553c2f4d43289ccbcb-c489399b0aa76e4f8654",
+              "file": "01-visitor-kiosk.e2e.ts",
+              "line": 51,
+              "column": 3
+            },
+            {
+              "title": "label chips: reviewed transcription on a scan, reviewed translation tab",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1489,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:11:54.426Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "24553c2f4d43289ccbcb-24afdc94dad289e3936e",
+              "file": "01-visitor-kiosk.e2e.ts",
+              "line": 63,
+              "column": 3
+            },
+            {
+              "title": "machine translation chip reads 'Machine translation — not reviewed'",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "description": "Machine translation needs Sarvam; the e2e stack has no Sarvam key (no live Sarvam calls from tests).",
+                      "location": {
+                        "file": "C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\specs\\01-visitor-kiosk.e2e.ts",
+                        "line": 82,
+                        "column": 10
+                      }
+                    }
+                  ],
+                  "expectedStatus": "skipped",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "skipped",
+                      "duration": 272,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:11:55.933Z",
+                      "annotations": [
+                        {
+                          "type": "skip",
+                          "description": "Machine translation needs Sarvam; the e2e stack has no Sarvam key (no live Sarvam calls from tests).",
+                          "location": {
+                            "file": "C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\specs\\01-visitor-kiosk.e2e.ts",
+                            "line": 82,
+                            "column": 10
+                          }
+                        }
+                      ],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "24553c2f4d43289ccbcb-47857403e1218912f66c",
+              "file": "01-visitor-kiosk.e2e.ts",
+              "line": 80,
+              "column": 3
+            },
+            {
+              "title": "language switch EN → HI → MR relabels the interface",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1299,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:11:56.224Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "24553c2f4d43289ccbcb-b2946344ae3042bf34ee",
+              "file": "01-visitor-kiosk.e2e.ts",
+              "line": 91,
+              "column": 3
+            },
+            {
+              "title": "text size cycles and high contrast toggles",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2258,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:11:57.580Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "24553c2f4d43289ccbcb-2503e2fd3806cf18239a",
+              "file": "01-visitor-kiosk.e2e.ts",
+              "line": 110,
+              "column": 3
+            },
+            {
+              "title": "kiosk idle: warning after inactivity, then the attract screen, and Finish clears the list",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1774,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:11:59.901Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "24553c2f4d43289ccbcb-ae7903db510e2c6d511d",
+              "file": "01-visitor-kiosk.e2e.ts",
+              "line": 134,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "02-ask.e2e.ts",
+      "file": "02-ask.e2e.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Ask the archive",
+          "file": "02-ask.e2e.ts",
+          "line": 8,
+          "column": 6,
+          "specs": [
+            {
+              "title": "answerable question: labelled AI answer whose citations open the reader at the cited page",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 150000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 17689,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:12:01.775Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "f7456dd75253b0b68f5b-2d6a454d4a0e640f767f",
+              "file": "02-ask.e2e.ts",
+              "line": 11,
+              "column": 3
+            },
+            {
+              "title": "off-topic question abstains instead of answering",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 150000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 12304,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:12:19.515Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "f7456dd75253b0b68f5b-bf0b3296257b41330885",
+              "file": "02-ask.e2e.ts",
+              "line": 46,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "03-media.e2e.ts",
+      "file": "03-media.e2e.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Recordings",
+          "file": "03-media.e2e.ts",
+          "line": 54,
+          "column": 6,
+          "specs": [
+            {
+              "title": "synthetic audio plays, transcript lines seek, captions exist",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 4148,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:12:31.965Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "71ad5dd316bbd8d1e92b-173fa8fcdb2122c4242b",
+              "file": "03-media.e2e.ts",
+              "line": 55,
+              "column": 3
+            },
+            {
+              "title": "synthetic video plays, transcript lines seek, captions exist",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 6877,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:12:36.220Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "71ad5dd316bbd8d1e92b-98a7dd66b0dc3ea99f26",
+              "file": "03-media.e2e.ts",
+              "line": 60,
+              "column": 3
+            },
+            {
+              "title": "?t= deep link starts the recording at the cited moment",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1478,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:12:43.198Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "71ad5dd316bbd8d1e92b-43fb98f0eaeadc5a6f24",
+              "file": "03-media.e2e.ts",
+              "line": 67,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "04-content-types.e2e.ts",
+      "file": "04-content-types.e2e.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Photos, manuscripts and summaries",
+          "file": "04-content-types.e2e.ts",
+          "line": 7,
+          "column": 6,
+          "specs": [
+            {
+              "title": "photographs collection shows reviewed captions and credits",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1767,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:12:44.823Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9acfdd17c856da49ceb3-87beb0cc17aeb8fa1dee",
+              "file": "04-content-types.e2e.ts",
+              "line": 8,
+              "column": 3
+            },
+            {
+              "title": "manuscript shows its scan with a reviewed transcription",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2199,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:12:46.676Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9acfdd17c856da49ceb3-d45d4c2cd5b43f2059c8",
+              "file": "04-content-types.e2e.ts",
+              "line": 28,
+              "column": 3
+            },
+            {
+              "title": "a reviewed summary is shown; a draft summary is not",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2366,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:12:48.958Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9acfdd17c856da49ceb3-68c43caae52db2a2f301",
+              "file": "04-content-types.e2e.ts",
+              "line": 40,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "05-constitution.e2e.ts",
+      "file": "05-constitution.e2e.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "Constitution article lists its curated debate passages and opens the original",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "kiosk-chrome",
+              "projectName": "kiosk-chrome",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2635,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-27T09:12:51.429Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c3290203e2aa5e1fd093-5b9c6ebf6cd50a3ec514",
+          "file": "05-constitution.e2e.ts",
+          "line": 4,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "06-facets.e2e.ts",
+      "file": "06-facets.e2e.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Facets and filters",
+          "file": "06-facets.e2e.ts",
+          "line": 16,
+          "column": 6,
+          "specs": [
+            {
+              "title": "browse by subject, person and place tags",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2814,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:12:54.117Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "820203fd4e74f5a614f4-aa4e98dd9cb58a8e7099",
+              "file": "06-facets.e2e.ts",
+              "line": 17,
+              "column": 3
+            },
+            {
+              "title": "a tag chip in the reader opens the filtered list",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1512,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:12:56.970Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "820203fd4e74f5a614f4-03d960e0df8db84dde4c",
+              "file": "06-facets.e2e.ts",
+              "line": 36,
+              "column": 3
+            },
+            {
+              "title": "date range narrows search results to that period",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 1805,
+                      "error": {
+                        "message": "Error: \"E2E capture mujln4olaix9: Letter to the Library Board (synthetic fixture)\" is dated within 1927\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoMatch\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected pattern: \u001b[32m/1927/\u001b[39m\nReceived string:  \u001b[31m\"(no date)\"\u001b[39m",
+                        "stack": "Error: \"E2E capture mujln4olaix9: Letter to the Library Board (synthetic fixture)\" is dated within 1927\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoMatch\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected pattern: \u001b[32m/1927/\u001b[39m\nReceived string:  \u001b[31m\"(no date)\"\u001b[39m\n    at C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\specs\\06-facets.e2e.ts:61:101",
+                        "location": {
+                          "file": "C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\specs\\06-facets.e2e.ts",
+                          "column": 101,
+                          "line": 61
+                        },
+                        "snippet": "  59 |     const hits = (await page.locator(\"ul.results > li.result h2 a\").allInnerTexts()).map((h) => h.trim());\n  60 |     expect(hits).toContain(proceedings.title);\n> 61 |     for (const h of hits) expect(dates.get(h) ?? \"(not in catalog)\", `\"${h}\" is dated within 1927`).toMatch(/1927/);\n     |                                                                                                     ^\n  62 |   });\n  63 |\n  64 |   test(\"collection, type and language filters combine\", async ({ page, api }) => {"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\specs\\06-facets.e2e.ts",
+                            "column": 101,
+                            "line": 61
+                          },
+                          "message": "Error: \"E2E capture mujln4olaix9: Letter to the Library Board (synthetic fixture)\" is dated within 1927\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoMatch\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected pattern: \u001b[32m/1927/\u001b[39m\nReceived string:  \u001b[31m\"(no date)\"\u001b[39m\n\n  59 |     const hits = (await page.locator(\"ul.results > li.result h2 a\").allInnerTexts()).map((h) => h.trim());\n  60 |     expect(hits).toContain(proceedings.title);\n> 61 |     for (const h of hits) expect(dates.get(h) ?? \"(not in catalog)\", `\"${h}\" is dated within 1927`).toMatch(/1927/);\n     |                                                                                                     ^\n  62 |   });\n  63 |\n  64 |   test(\"collection, type and language filters combine\", async ({ page, api }) => {\n    at C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\specs\\06-facets.e2e.ts:61:101"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:12:58.527Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\artifacts\\test-results\\06-facets.e2e.ts-Facets-an-6ac6f-arch-results-to-that-period-kiosk-chrome\\test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\artifacts\\test-results\\06-facets.e2e.ts-Facets-an-6ac6f-arch-results-to-that-period-kiosk-chrome\\error-context.md"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\artifacts\\test-results\\06-facets.e2e.ts-Facets-an-6ac6f-arch-results-to-that-period-kiosk-chrome\\trace.zip"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\specs\\06-facets.e2e.ts",
+                        "column": 101,
+                        "line": 61
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "820203fd4e74f5a614f4-d255921fce3f0b8e0b7a",
+              "file": "06-facets.e2e.ts",
+              "line": 48,
+              "column": 3
+            },
+            {
+              "title": "collection, type and language filters combine",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1099,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:13:04.706Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "820203fd4e74f5a614f4-0119d2f20f7a1fcd8b0a",
+              "file": "06-facets.e2e.ts",
+              "line": 64,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "07-compile.e2e.ts",
+      "file": "07-compile.e2e.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "compile a list, open its QR link on a phone, withdrawal and expiry reach the shared list",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "kiosk-chrome",
+              "projectName": "kiosk-chrome",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 19125,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-27T09:13:06.180Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "79ec8e3101a24d486486-93ff75373ab5355be33d",
+          "file": "07-compile.e2e.ts",
+          "line": 6,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "08-explore-signage.e2e.ts",
+      "file": "08-explore-signage.e2e.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Timeline, stories, connections and signage",
+          "file": "08-explore-signage.e2e.ts",
+          "line": 3,
+          "column": 6,
+          "specs": [
+            {
+              "title": "timeline lists dated events that open their items",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2023,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:13:25.395Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "1339958d46bf41170ed0-c82edff5fd3abf5ae217",
+              "file": "08-explore-signage.e2e.ts",
+              "line": 4,
+              "column": 3
+            },
+            {
+              "title": "story page shows captioned blocks with citations",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2096,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:13:27.479Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "1339958d46bf41170ed0-bbbfc2de22f7e65f6927",
+              "file": "08-explore-signage.e2e.ts",
+              "line": 20,
+              "column": 3
+            },
+            {
+              "title": "connections: choosing a name shows its links and the items that support them",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1803,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:13:29.627Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "1339958d46bf41170ed0-37da8a88885e9ba82f4a",
+              "file": "08-explore-signage.e2e.ts",
+              "line": 33,
+              "column": 3
+            },
+            {
+              "title": "/display rotates approved slides unattended",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2643,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:13:31.484Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "1339958d46bf41170ed0-48ae3a31f69e0c5fd80a",
+              "file": "08-explore-signage.e2e.ts",
+              "line": 52,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "09-offline.e2e.ts",
+      "file": "09-offline.e2e.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Offline kiosk",
+          "file": "09-offline.e2e.ts",
+          "line": 35,
+          "column": 6,
+          "specs": [
+            {
+              "title": "cached exhibit items open offline; Ask shows it needs a connection",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 180000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 6143,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:13:34.207Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "30338a15a1a10bf61465-a4fd9559954a6a8d1c56",
+              "file": "09-offline.e2e.ts",
+              "line": 38,
+              "column": 3
+            },
+            {
+              "title": "reloading a saved item's address while offline still opens it",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 180000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 7498,
+                      "error": {
+                        "message": "Error: page.reload: net::ERR_INTERNET_DISCONNECTED\nCall log:\n\u001b[2m  - waiting for navigation until \"load\"\u001b[22m\n",
+                        "stack": "Error: page.reload: net::ERR_INTERNET_DISCONNECTED\nCall log:\n\u001b[2m  - waiting for navigation until \"load\"\u001b[22m\n\n    at C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\specs\\09-offline.e2e.ts:70:18",
+                        "location": {
+                          "file": "C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\specs\\09-offline.e2e.ts",
+                          "column": 18,
+                          "line": 70
+                        },
+                        "snippet": "  68 |     await context.setOffline(true);\n  69 |     try {\n> 70 |       await page.reload();\n     |                  ^\n  71 |       await expect(page.getByRole(\"heading\", { level: 1, name: target.title })).toBeVisible();\n  72 |     } finally {\n  73 |       await context.setOffline(false);"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\specs\\09-offline.e2e.ts",
+                            "column": 18,
+                            "line": 70
+                          },
+                          "message": "Error: page.reload: net::ERR_INTERNET_DISCONNECTED\nCall log:\n\u001b[2m  - waiting for navigation until \"load\"\u001b[22m\n\n\n  68 |     await context.setOffline(true);\n  69 |     try {\n> 70 |       await page.reload();\n     |                  ^\n  71 |       await expect(page.getByRole(\"heading\", { level: 1, name: target.title })).toBeVisible();\n  72 |     } finally {\n  73 |       await context.setOffline(false);\n    at C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\specs\\09-offline.e2e.ts:70:18"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:13:40.442Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\artifacts\\test-results\\09-offline.e2e.ts-Offline--26d2e-hile-offline-still-opens-it-kiosk-chrome\\test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\artifacts\\test-results\\09-offline.e2e.ts-Offline--26d2e-hile-offline-still-opens-it-kiosk-chrome\\error-context.md"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\artifacts\\test-results\\09-offline.e2e.ts-Offline--26d2e-hile-offline-still-opens-it-kiosk-chrome\\trace.zip"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\specs\\09-offline.e2e.ts",
+                        "column": 18,
+                        "line": 70
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "30338a15a1a10bf61465-c3bd0248e461567966c5",
+              "file": "09-offline.e2e.ts",
+              "line": 63,
+              "column": 3
+            },
+            {
+              "title": "after the lease runs out the kiosk shows the expired-cache notice",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 180000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 5470,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:13:54.073Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "30338a15a1a10bf61465-c4c9aa6d2b3e4a563450",
+              "file": "09-offline.e2e.ts",
+              "line": 77,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "10-staff.e2e.ts",
+      "file": "10-staff.e2e.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Archivist workspace",
+          "file": "10-staff.e2e.ts",
+          "line": 6,
+          "column": 6,
+          "specs": [
+            {
+              "title": "sign in and see the dashboard",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 420000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1026,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:14:00.027Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "d742bd0f9293b67fe69e-75b19f2ce380d578ad99",
+              "file": "10-staff.e2e.ts",
+              "line": 30,
+              "column": 3
+            },
+            {
+              "title": "intake a synthetic two-page capture",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 420000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1351,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:14:01.376Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "d742bd0f9293b67fe69e-781b0d1310f173c5a757",
+              "file": "10-staff.e2e.ts",
+              "line": 36,
+              "column": 3
+            },
+            {
+              "title": "sample check: failing the batch sends every page to full review",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 420000,
+                  "annotations": [
+                    {
+                      "type": "pages after ingestion",
+                      "description": "1:in_batch_review/local, 2:in_batch_review/local"
+                    }
+                  ],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 8505,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:14:02.773Z",
+                      "annotations": [
+                        {
+                          "type": "pages after ingestion",
+                          "description": "1:in_batch_review/local, 2:in_batch_review/local"
+                        }
+                      ],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "d742bd0f9293b67fe69e-d525f8b8847d7f195eb8",
+              "file": "10-staff.e2e.ts",
+              "line": 61,
+              "column": 3
+            },
+            {
+              "title": "page review: approve page 1 as read, correct page 2",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 420000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 16656,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('status').filter({ hasText: 'Page approved.' })\nExpected: visible\nTimeout: 15000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 15000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('status').filter({ hasText: 'Page approved.' })\u001b[22m\n",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('status').filter({ hasText: 'Page approved.' })\nExpected: visible\nTimeout: 15000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 15000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('status').filter({ hasText: 'Page approved.' })\u001b[22m\n\n    at C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\specs\\10-staff.e2e.ts:89:44",
+                        "location": {
+                          "file": "C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\specs\\10-staff.e2e.ts",
+                          "column": 44,
+                          "line": 89
+                        },
+                        "snippet": "  87 |     await expect(text1).not.toHaveValue(\"\");\n  88 |     await page.getByRole(\"button\", { name: \"Approve this text\" }).click();\n> 89 |     await expect(status(\"Page approved.\")).toBeVisible();\n     |                                            ^\n  90 |     await expect(page.getByText(\"status: approved\")).toBeVisible();\n  91 |     await expect(page.getByRole(\"table\", { name: \"Review decisions\" }).getByRole(\"row\").filter({ hasText: \"approve\" }).first()).toBeVisible();\n  92 |     await page.getByRole(\"checkbox\", { name: /I compared the approved text with the original scan/ }).check();"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\specs\\10-staff.e2e.ts",
+                            "column": 44,
+                            "line": 89
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('status').filter({ hasText: 'Page approved.' })\nExpected: visible\nTimeout: 15000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 15000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('status').filter({ hasText: 'Page approved.' })\u001b[22m\n\n\n  87 |     await expect(text1).not.toHaveValue(\"\");\n  88 |     await page.getByRole(\"button\", { name: \"Approve this text\" }).click();\n> 89 |     await expect(status(\"Page approved.\")).toBeVisible();\n     |                                            ^\n  90 |     await expect(page.getByText(\"status: approved\")).toBeVisible();\n  91 |     await expect(page.getByRole(\"table\", { name: \"Review decisions\" }).getByRole(\"row\").filter({ hasText: \"approve\" }).first()).toBeVisible();\n  92 |     await page.getByRole(\"checkbox\", { name: /I compared the approved text with the original scan/ }).check();\n    at C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\specs\\10-staff.e2e.ts:89:44"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:14:11.336Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\artifacts\\test-results\\10-staff.e2e.ts-Archivist--b8069-ge-1-as-read-correct-page-2-kiosk-chrome\\test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\artifacts\\test-results\\10-staff.e2e.ts-Archivist--b8069-ge-1-as-read-correct-page-2-kiosk-chrome\\error-context.md"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\artifacts\\test-results\\10-staff.e2e.ts-Archivist--b8069-ge-1-as-read-correct-page-2-kiosk-chrome\\error-context.md"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\artifacts\\test-results\\10-staff.e2e.ts-Archivist--b8069-ge-1-as-read-correct-page-2-kiosk-chrome\\trace.zip"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\specs\\10-staff.e2e.ts",
+                        "column": 44,
+                        "line": 89
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "d742bd0f9293b67fe69e-911403bd8d35f3524edc",
+              "file": "10-staff.e2e.ts",
+              "line": 79,
+              "column": 3
+            },
+            {
+              "title": "Sarvam-vs-local diff can be reviewed when a fixture has one",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 420000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:14:36.713Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "d742bd0f9293b67fe69e-c0fe7579fb531e7564fb",
+              "file": "10-staff.e2e.ts",
+              "line": 110,
+              "column": 3
+            },
+            {
+              "title": "publish: staged version switched in atomically",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 420000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:14:36.714Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "d742bd0f9293b67fe69e-06fb42163b1d6e938e4b",
+              "file": "10-staff.e2e.ts",
+              "line": 130,
+              "column": 3
+            },
+            {
+              "title": "edit descriptive metadata tags; visitors see them",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 420000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:14:36.714Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "d742bd0f9293b67fe69e-1b9410cb759d828e940e",
+              "file": "10-staff.e2e.ts",
+              "line": 147,
+              "column": 3
+            },
+            {
+              "title": "add a curated Constitution link; it appears on the article page",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 420000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:14:36.714Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "d742bd0f9293b67fe69e-45cd0ce8d3de6ddce07d",
+              "file": "10-staff.e2e.ts",
+              "line": 170,
+              "column": 3
+            },
+            {
+              "title": "approve a summary: hidden while draft, shown once approved",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 420000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:14:36.714Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "d742bd0f9293b67fe69e-0d42974f3154ca6541c3",
+              "file": "10-staff.e2e.ts",
+              "line": 193,
+              "column": 3
+            },
+            {
+              "title": "withdraw: the item disappears for visitors",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 420000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:14:36.714Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "d742bd0f9293b67fe69e-f3dcc42e69562cbccba3",
+              "file": "10-staff.e2e.ts",
+              "line": 214,
+              "column": 3
+            },
+            {
+              "title": "audit log records the workflow and the hash chain verifies",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 420000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:14:36.714Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "d742bd0f9293b67fe69e-efda4f20bbd12b9b0909",
+              "file": "10-staff.e2e.ts",
+              "line": 227,
+              "column": 3
+            },
+            {
+              "title": "restore a withdrawn item",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 420000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:14:36.715Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "d742bd0f9293b67fe69e-aca844843266f755e9b3",
+              "file": "10-staff.e2e.ts",
+              "line": 250,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "a11y.e2e.ts",
+      "file": "a11y.e2e.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Accessibility (axe, WCAG 2.2 AA rules)",
+          "file": "a11y.e2e.ts",
+          "line": 49,
+          "column": 6,
+          "specs": [
+            {
+              "title": "home",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 7847,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:14:37.714Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-home.json",
+                          "contentType": "application/json",
+                          "body": "W10="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "015d3090417eed0a93b0-77c31d66db02dde93d83",
+              "file": "a11y.e2e.ts",
+              "line": 60,
+              "column": 5
+            },
+            {
+              "title": "home (high contrast, 130% text)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 4115,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:14:46.129Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-home_high_contrast_130_text_.json",
+                          "contentType": "application/json",
+                          "body": "W10="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "015d3090417eed0a93b0-a849efe26839aa81264a",
+              "file": "a11y.e2e.ts",
+              "line": 60,
+              "column": 5
+            },
+            {
+              "title": "home (Hindi)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 4805,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:14:50.289Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-home_Hindi_.json",
+                          "contentType": "application/json",
+                          "body": "W10="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "015d3090417eed0a93b0-4487ed7f336f7ae4b98a",
+              "file": "a11y.e2e.ts",
+              "line": 60,
+              "column": 5
+            },
+            {
+              "title": "search results",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 4827,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:14:55.143Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-search_results.json",
+                          "contentType": "application/json",
+                          "body": "W10="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "015d3090417eed0a93b0-5f7738e52d822d401e76",
+              "file": "a11y.e2e.ts",
+              "line": 60,
+              "column": 5
+            },
+            {
+              "title": "browse photographs",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 4414,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:15:00.031Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-browse_photographs.json",
+                          "contentType": "application/json",
+                          "body": "W10="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "015d3090417eed0a93b0-65ab6a82e5f7cebb31de",
+              "file": "a11y.e2e.ts",
+              "line": 60,
+              "column": 5
+            },
+            {
+              "title": "reader: essay with translation",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3790,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:15:04.530Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-reader_essay_with_translation.json",
+                          "contentType": "application/json",
+                          "body": "W10="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "015d3090417eed0a93b0-106aa97de22b3484cd07",
+              "file": "a11y.e2e.ts",
+              "line": 60,
+              "column": 5
+            },
+            {
+              "title": "reader: debate with Constitution link",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3954,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:15:08.413Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-reader_debate_with_Constitution_link.json",
+                          "contentType": "application/json",
+                          "body": "W10="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "015d3090417eed0a93b0-0839e51f8df6610d9dac",
+              "file": "a11y.e2e.ts",
+              "line": 60,
+              "column": 5
+            },
+            {
+              "title": "reader: photograph",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3216,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:15:12.429Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-reader_photograph.json",
+                          "contentType": "application/json",
+                          "body": "W10="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "015d3090417eed0a93b0-0a8b540d59621cbc1df8",
+              "file": "a11y.e2e.ts",
+              "line": 60,
+              "column": 5
+            },
+            {
+              "title": "reader: audio",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3981,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:15:15.688Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-reader_audio.json",
+                          "contentType": "application/json",
+                          "body": "W10="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "015d3090417eed0a93b0-b31d76744ae353eea4ea",
+              "file": "a11y.e2e.ts",
+              "line": 60,
+              "column": 5
+            },
+            {
+              "title": "reader: video",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 4320,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:15:19.739Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-reader_video.json",
+                          "contentType": "application/json",
+                          "body": "W10="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "015d3090417eed0a93b0-0c7ceca998a833b3a170",
+              "file": "a11y.e2e.ts",
+              "line": 60,
+              "column": 5
+            },
+            {
+              "title": "ask",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2562,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:15:24.142Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-ask.json",
+                          "contentType": "application/json",
+                          "body": "W10="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "015d3090417eed0a93b0-9503cd4efdf71150dea1",
+              "file": "a11y.e2e.ts",
+              "line": 60,
+              "column": 5
+            },
+            {
+              "title": "timeline",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 5285,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:15:26.792Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-timeline.json",
+                          "contentType": "application/json",
+                          "body": "W10="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "015d3090417eed0a93b0-e35d8662b13d684e527d",
+              "file": "a11y.e2e.ts",
+              "line": 60,
+              "column": 5
+            },
+            {
+              "title": "stories",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2070,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:15:32.144Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-stories.json",
+                          "contentType": "application/json",
+                          "body": "W10="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "015d3090417eed0a93b0-71db66cfa26acc15531a",
+              "file": "a11y.e2e.ts",
+              "line": 60,
+              "column": 5
+            },
+            {
+              "title": "story",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 4093,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:15:34.296Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-story.json",
+                          "contentType": "application/json",
+                          "body": "W10="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "015d3090417eed0a93b0-baf25244fa9667b1b24e",
+              "file": "a11y.e2e.ts",
+              "line": 60,
+              "column": 5
+            },
+            {
+              "title": "connections",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2749,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:15:38.456Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-connections.json",
+                          "contentType": "application/json",
+                          "body": "W10="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "015d3090417eed0a93b0-b7ec32a0f6acb6986a84",
+              "file": "a11y.e2e.ts",
+              "line": 60,
+              "column": 5
+            },
+            {
+              "title": "connections (name chosen)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3413,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:15:41.254Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-connections_name_chosen_.json",
+                          "contentType": "application/json",
+                          "body": "W10="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "015d3090417eed0a93b0-dd6dc3460b56796177c0",
+              "file": "a11y.e2e.ts",
+              "line": 60,
+              "column": 5
+            },
+            {
+              "title": "constitution index",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2471,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:15:44.744Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-constitution_index.json",
+                          "contentType": "application/json",
+                          "body": "W10="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "015d3090417eed0a93b0-9af20a8669fd45cbb755",
+              "file": "a11y.e2e.ts",
+              "line": 60,
+              "column": 5
+            },
+            {
+              "title": "constitution article",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3531,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:15:47.275Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-constitution_article.json",
+                          "contentType": "application/json",
+                          "body": "W10="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "015d3090417eed0a93b0-9f986af75c5b441b8681",
+              "file": "a11y.e2e.ts",
+              "line": 60,
+              "column": 5
+            },
+            {
+              "title": "my list with QR",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2860,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:15:50.868Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-my_list_with_QR.json",
+                          "contentType": "application/json",
+                          "body": "W10="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "015d3090417eed0a93b0-2ad16e9e817e54de0544",
+              "file": "a11y.e2e.ts",
+              "line": 60,
+              "column": 5
+            },
+            {
+              "title": "shared list on a phone",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2043,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:15:53.771Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-shared_list_on_a_phone.json",
+                          "contentType": "application/json",
+                          "body": "W10="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "015d3090417eed0a93b0-6440084db895a5801118",
+              "file": "a11y.e2e.ts",
+              "line": 60,
+              "column": 5
+            },
+            {
+              "title": "signage display",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "kiosk-chrome",
+                  "projectName": "kiosk-chrome",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 4669,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-27T09:15:55.848Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-signage_display.json",
+                          "contentType": "application/json",
+                          "body": "W10="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "015d3090417eed0a93b0-8d2042d26dd86d950176",
+              "file": "a11y.e2e.ts",
+              "line": 60,
+              "column": 5
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-27T09:11:21.716Z",
+    "duration": 283674.944,
+    "expected": 50,
+    "skipped": 9,
+    "unexpected": 3,
+    "flaky": 0
+  }
+}

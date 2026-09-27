@@ -1,0 +1,89 @@
+{
+  "id": 1,
+  "title": "On Public Reading Rooms (synthetic essay)",
+  "state": "in_review",
+  "version": 1,
+  "published_version_id": null,
+  "collection": "writings",
+  "item_type": "text",
+  "is_fixture": true,
+  "access_level": "public",
+  "rights": {
+    "id": 1,
+    "source_key": "fx-open",
+    "title": "Synthetic fixtures: display, training and external OCR allowed",
+    "source_url": null,
+    "source_institution": "Synthetic fixture collection (this repository)",
+    "edition": null,
+    "volume": null,
+    "pages": null,
+    "rights_holder": "Build team (synthetic content written for testing)",
+    "basis_for_use": "Original synthetic test content",
+    "display_permission": "allowed",
+    "training_permission": "allowed",
+    "training_basis": "synthetic content owned by the build team",
+    "external_processing": "allowed",
+    "evidence": "fixtures/README.md",
+    "attribution": "Synthetic fixture - not a work of Dr. B. R. Ambedkar",
+    "date_checked": "2026-09-26",
+    "checked_by": "build-agent (fixture)",
+    "discovery_only": false,
+    "is_fixture": true,
+    "notes": null,
+    "created_at": "2026-09-27T09:03:44.387425Z",
+    "updated_at": "2026-09-27T09:03:44.387431Z"
+  },
+  "capture": {
+    "station": "born-digital",
+    "item_key": "fx-essay-reading-rooms",
+    "work_key": "work-essay"
+  },
+  "edition": null,
+  "volume": null,
+  "ready": false,
+  "problems": [
+    "no pages"
+  ],
+  "pages": [],
+  "files": [],
+  "segments": [],
+  "photo": null,
+  "derivatives": [
+    {
+      "id": 1,
+      "kind": "summary",
+      "language": "en",
+      "status": "approved",
+      "content": "A synthetic essay describing how a fictional town's first reading room opened in 1921, kept hours around mill shifts, and ran evening reading classes.",
+      "label": "Reviewed summary",
+      "generator": "build-agent (hand-written fixture summary)"
+    }
+  ],
+  "batches": [],
+  "metadata": {
+    "subjects": [
+      "Reading rooms",
+      "Workers' education"
+    ],
+    "people": [
+      "A. N. Example (fictional)"
+    ],
+    "places": [
+      "Samarpur (fictional)"
+    ],
+    "date_text": "1926 (fictional)",
+    "date_start": "1926-01-01",
+    "date_end": null,
+    "date_certainty": "approximate",
+    "languages": [
+      "en"
+    ],
+    "edition": null,
+    "volume": null,
+    "publisher": null,
+    "creator": "A. N. Example (fictional synthetic author)"
+  },
+  "metadata_version": 2,
+  "published_passages": [],
+  "constitution_links": []
+}

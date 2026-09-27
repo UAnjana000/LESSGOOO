@@ -1,0 +1,147 @@
+{
+  "config": {
+    "argv": [
+      "C:\\Users\\cvbal\\AppData\\Local\\Volta\\tools\\image\\node\\24.18.0\\node.exe",
+      "C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\node_modules\\@playwright\\test\\cli.js",
+      "test",
+      "-c",
+      "e2e/playwright.config.ts",
+      "--project=model-down"
+    ],
+    "configFile": "C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\playwright.config.ts",
+    "rootDir": "C:/Users/cvbal/Desktop/lessgooo/web/e2e/specs",
+    "failOnFlakyTests": false,
+    "forbidOnly": true,
+    "fullyParallel": false,
+    "globalSetup": "C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\global-setup.ts",
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "C:/Users/cvbal/Desktop/lessgooo/web/e2e/artifacts/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "kiosk-chrome",
+        "name": "kiosk-chrome",
+        "testDir": "C:/Users/cvbal/Desktop/lessgooo/web/e2e/specs",
+        "testIgnore": [
+          "ask-model-down.e2e.ts"
+        ],
+        "testMatch": [
+          "*.e2e.ts"
+        ],
+        "timeout": 90000
+      },
+      {
+        "outputDir": "C:/Users/cvbal/Desktop/lessgooo/web/e2e/artifacts/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "model-down",
+        "name": "model-down",
+        "testDir": "C:/Users/cvbal/Desktop/lessgooo/web/e2e/specs",
+        "testIgnore": [],
+        "testMatch": [
+          "ask-model-down.e2e.ts"
+        ],
+        "timeout": 90000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\artifacts\\results.json"
+        }
+      ],
+      [
+        "html",
+        {
+          "outputFolder": "C:\\Users\\cvbal\\Desktop\\lessgooo\\web\\e2e\\artifacts\\html-report",
+          "open": "never"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.62.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "ask-model-down.e2e.ts",
+      "file": "ask-model-down.e2e.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "answer-model failure shows an error and the closest passages to read",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 150000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "model-down",
+              "projectName": "model-down",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 8312,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-27T09:28:44.681Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e7d31a28b2336b8f0ecc-b3bacedbac544d643ca5",
+          "file": "ask-model-down.e2e.ts",
+          "line": 8,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-27T09:28:43.774Z",
+    "duration": 10380.691,
+    "expected": 1,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

@@ -1,0 +1,13 @@
+8	photograph	Readers at the Samarpur reading room (synthetic illustration)
+1	text	On Public Reading Rooms (synthetic essay)
+4	printed_scan	Proceedings of the Samarpur Civic Assembly, Sitting 1 (synthetic)
+7	manuscript	Handwritten note on the library board (synthetic)
+3	printed_scan	Lecture on Water and the Common Tank (synthetic, degraded scan)
+6	printed_scan	पाणवठा निवेदन (कृत्रिम नमुना) / Water petition (synthetic, Marathi)
+2	printed_scan	Lecture on Education and Work (synthetic)
+5	printed_scan	सार्वजनिक वाचनालय पर्चा (कृत्रिम नमूना) / Reading-room pamphlet (synthetic, Hindi)
+9	audio	Talk on the reading room (synthetic speech, not a historical recording)
+10	video	Synthetic test-pattern video (not a historical recording)
+
+count=10
+missing=[]

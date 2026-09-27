@@ -1,0 +1,37 @@
+{
+  "staff_list_type": "list",
+  "preview": "list",
+  "matches": [
+    {
+      "id": 1,
+      "title": "On Public Reading Rooms (synthetic essay)",
+      "state": "in_review",
+      "item_type": "text",
+      "pages": 0,
+      "page_statuses": [],
+      "keys": [
+        "id",
+        "title",
+        "state",
+        "version",
+        "published_version_id",
+        "collection",
+        "item_type",
+        "is_fixture",
+        "access_level",
+        "rights",
+        "capture",
+        "edition",
+        "volume",
+        "ready",
+        "problems",
+        "pages",
+        "files",
+        "segments",
+        "photo",
+        "derivatives"
+      ]
+    }
+  ],
+  "list_len": 12
+}

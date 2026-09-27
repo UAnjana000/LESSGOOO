@@ -1,0 +1,57 @@
+{
+  "date": "2026-09-27",
+  "timezone": "Asia/Kolkata",
+  "project": "ambedkar-e2e",
+  "retries": 0,
+  "live_ask_posts_counted": 3,
+  "kiosk_chrome": {
+    "tests": 62,
+    "passed": 57,
+    "failed_product": 2,
+    "skipped": 2,
+    "expected_fail": 1,
+    "note": "Staff serial numbers are from the post-fix rerun (exit 0). Visitor/a11y numbers are from the first full kiosk run. Restore is test.fail (expected)."
+  },
+  "model_down": { "tests": 1, "passed": 1, "failed": 0 },
+  "per_spec": {
+    "01-visitor-kiosk.e2e.ts": { "tests": 8, "passed": 7, "failed": 0, "skipped": 1 },
+    "02-ask.e2e.ts": { "tests": 2, "passed": 2, "failed": 0, "skipped": 0 },
+    "03-media.e2e.ts": { "tests": 3, "passed": 3, "failed": 0, "skipped": 0 },
+    "04-content-types.e2e.ts": { "tests": 3, "passed": 3, "failed": 0, "skipped": 0 },
+    "05-constitution.e2e.ts": { "tests": 1, "passed": 1, "failed": 0, "skipped": 0 },
+    "06-facets.e2e.ts": { "tests": 4, "passed": 3, "failed": 1, "skipped": 0 },
+    "07-compile.e2e.ts": { "tests": 1, "passed": 1, "failed": 0, "skipped": 0 },
+    "08-explore-signage.e2e.ts": { "tests": 4, "passed": 4, "failed": 0, "skipped": 0 },
+    "09-offline.e2e.ts": { "tests": 3, "passed": 2, "failed": 1, "skipped": 0 },
+    "10-staff.e2e.ts": { "tests": 12, "passed": 10, "failed": 0, "skipped": 1, "expected_fail": 1 },
+    "a11y.e2e.ts": { "tests": 21, "passed": 21, "failed": 0, "skipped": 0 },
+    "ask-model-down.e2e.ts": { "tests": 1, "passed": 1, "failed": 0, "skipped": 0 }
+  },
+  "product_bugs": [
+    {
+      "severity": "high",
+      "title": "Date-range search 500s",
+      "file": "backend/archive/search/hybrid.py",
+      "lines": "111-114",
+      "repro": "GET /api/visitor/search?q=library%20board&date_from=1927-01-01&date_to=1927-12-31 returns 500. Postgres: operator does not exist: date >= character varying."
+    },
+    {
+      "severity": "medium",
+      "title": "Offline reload of an item URL fails",
+      "file": "web/src/sw.ts",
+      "repro": "Cache an exhibit item, setOffline, page.reload() on /item/{id} throws net::ERR_INTERNET_DISCONNECTED. No navigation fallback."
+    },
+    {
+      "severity": "medium",
+      "title": "No restore for a withdrawn item",
+      "file": "backend/archive/ingest/review.py",
+      "repro": "Staff item page has no Restore control; republication blocked with 'item is withdrawn; re-publication needs a rights decision and new review'. Marked test.fail."
+    },
+    {
+      "severity": "high",
+      "title": "Essay fixture SHA does not match the PDF; seed leaves item unpublished",
+      "file": "fixtures/manifests/fixture_manifest.json",
+      "repro": "fx-essay-reading-rooms.pdf sha256 on disk is f1f8f689...; manifest expects 84c8bb9f.... Intake quarantines the file; staff item 1 has 0 pages and stays in_review."
+    }
+  ]
+}
