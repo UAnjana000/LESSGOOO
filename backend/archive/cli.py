@@ -807,6 +807,51 @@ def cmd_storage_report(args: argparse.Namespace) -> None:
     _print(r)
 
 
+def cmd_draft_agent_summaries(args: argparse.Namespace) -> None:
+    import httpx
+
+    from archive.ask.llm import OpenAICompatibleLLM
+    from archive.services import summaries
+
+    if not get_settings().llm_available:
+        _print({"error": "no answer model configured"})
+        sys.exit(1)
+    llm = OpenAICompatibleLLM(client=httpx.Client(timeout=httpx.Timeout(180, connect=10)))
+    out, failed = [], False
+    for item_id in args.item:
+        with session_scope() as db:
+            item = db.get(ArchivalItem, item_id)
+            try:
+                if item is None:
+                    raise summaries.SummaryError(f"item {item_id} not found")
+                d = summaries.draft_from_published_text(db, item, llm, args.actor)
+                out.append({"item_id": item_id, "derivative_id": d.id, "label": d.label_shown,
+                            "status": d.status, "passages": len(d.source_ids), "text": d.content})
+            except summaries.SummaryError as exc:
+                failed = True
+                out.append({"item_id": item_id, "error": str(exc)})
+    _print(out)
+    sys.exit(1 if failed else 0)
+
+
+def cmd_approve_agent_summary(args: argparse.Namespace) -> None:
+    from archive.services import summaries
+
+    corrected = sys.stdin.read() if args.corrected_text_stdin else None
+    if corrected is not None and len(args.derivative) != 1:
+        raise SystemExit("--corrected-text-stdin takes exactly one --derivative")
+    with session_scope() as db:
+        out = []
+        for d_id in args.derivative:
+            d = db.get(Derivative, d_id)
+            if d is None:
+                raise SystemExit(f"derivative {d_id} not found")
+            summaries.approve_as_agent(db, d, args.actor, corrected_text=corrected)
+            out.append({"derivative_id": d.id, "item_id": d.item_id, "status": d.status, "label": d.label_shown,
+                        "reviewed_by": d.reviewed_by})
+    _print(out)
+
+
 def cmd_audit_verify(_: argparse.Namespace) -> None:
     with session_scope() as db:
         ok, n = audit.verify_chain(db)
@@ -904,6 +949,16 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--out")
     p.set_defaults(fn=cmd_storage_report)
     sub.add_parser("audit-verify").set_defaults(fn=cmd_audit_verify)
+    p = sub.add_parser("draft-agent-summaries", help="one answer-model call per published item; drafts stay hidden")
+    p.add_argument("--item", type=int, action="append", required=True)
+    p.add_argument("--actor", default="summary-agent")
+    p.set_defaults(fn=cmd_draft_agent_summaries)
+    p = sub.add_parser("approve-agent-summary", help="show an agent-drafted summary to visitors, labelled as AI")
+    p.add_argument("--derivative", type=int, action="append", required=True)
+    p.add_argument("--actor", default="summary-agent")
+    p.add_argument("--corrected-text-stdin", action="store_true",
+                   help="replace the model draft with text read from stdin (recorded as a correction)")
+    p.set_defaults(fn=cmd_approve_agent_summary)
     args = ap.parse_args(argv)
     args.fn(args)
 

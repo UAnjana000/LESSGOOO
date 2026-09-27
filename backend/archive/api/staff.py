@@ -817,7 +817,22 @@ def make_narration(body: NarrationBody, db: DB, user: Archivist) -> dict[str, An
 
 # ---------------------------------------------------------------- curation
 
-class TimelineBody(BaseModel):
+class CurationReason(BaseModel):
+    """Optional free-text reason, written to the audit event (for example who drafted the entry and from what)."""
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)] | None = None
+
+    def audit_detail(self) -> dict[str, Any] | None:
+        return {"reason": self.reason} if self.reason else None
+
+    def fields(self) -> dict[str, Any]:
+        return self.model_dump(exclude={"reason"})
+
+
+def _reason(body: CurationReason | None) -> dict[str, Any] | None:
+    return body.audit_detail() if body else None
+
+
+class TimelineBody(CurationReason):
     date_text: str
     sort_date: dt.date
     date_certainty: str = "exact"
@@ -836,24 +851,24 @@ def staff_timeline(db: DB, user: Staff) -> list[dict[str, Any]]:
 @router.post("/timeline")
 def create_timeline(body: TimelineBody, db: DB, user: Curator) -> dict[str, Any]:
     _check_items_exist(db, body.item_ids)
-    e = TimelineEvent(**body.model_dump(), curator=user.email)
+    e = TimelineEvent(**body.fields(), curator=user.email)
     db.add(e)
     db.flush()
-    audit.record(db, user.email, f"timeline.{body.status}", "timeline_event", e.id)
+    audit.record(db, user.email, f"timeline.{body.status}", "timeline_event", e.id, detail=body.audit_detail())
     db.commit()
     return {"id": e.id}
 
 
 @router.post("/timeline/{event_id}/approve")
-def approve_timeline(event_id: int, db: DB, user: Curator) -> dict[str, Any]:
+def approve_timeline(event_id: int, db: DB, user: Curator, body: CurationReason | None = None) -> dict[str, Any]:
     e = db.get(TimelineEvent, event_id)
     e.status = "approved"
-    audit.record(db, user.email, "timeline.approve", "timeline_event", e.id)
+    audit.record(db, user.email, "timeline.approve", "timeline_event", e.id, detail=_reason(body))
     db.commit()
     return {"id": e.id, "status": e.status}
 
 
-class StoryBody(BaseModel):
+class StoryBody(CurationReason):
     slug: str
     titles: dict[str, str]
     blocks: list[dict[str, Any]] = Field(min_length=1)
@@ -866,15 +881,15 @@ def create_story(body: StoryBody, db: DB, user: Curator) -> dict[str, Any]:
         if not b.get("item_id"):
             raise HTTPException(422, "every story block must cite an archive item")
     _check_items_exist(db, [b["item_id"] for b in body.blocks])
-    st = Story(**body.model_dump(), curator=user.email)
+    st = Story(**body.fields(), curator=user.email)
     db.add(st)
     db.flush()
-    audit.record(db, user.email, f"story.{body.status}", "story", st.id)
+    audit.record(db, user.email, f"story.{body.status}", "story", st.id, detail=body.audit_detail())
     db.commit()
     return {"id": st.id}
 
 
-class NodeBody(BaseModel):
+class NodeBody(CurationReason):
     node_type: str
     labels: dict[str, str]
     description: str | None = None
@@ -884,25 +899,25 @@ class NodeBody(BaseModel):
 @router.post("/map/nodes")
 def create_node(body: NodeBody, db: DB, user: Curator) -> dict[str, Any]:
     _check_items_exist(db, body.item_ids)
-    n = KnowledgeNode(**body.model_dump(), status="proposed")
+    n = KnowledgeNode(**body.fields(), status="proposed")
     db.add(n)
     db.flush()
-    audit.record(db, user.email, "map.node.propose", "knowledge_node", n.id)
+    audit.record(db, user.email, "map.node.propose", "knowledge_node", n.id, detail=body.audit_detail())
     db.commit()
     return {"id": n.id}
 
 
 @router.post("/map/nodes/{node_id}/approve")
-def approve_node(node_id: int, db: DB, user: Curator) -> dict[str, Any]:
+def approve_node(node_id: int, db: DB, user: Curator, body: CurationReason | None = None) -> dict[str, Any]:
     n = db.get(KnowledgeNode, node_id)
     n.status = "approved"
     n.approved_by = user.email
-    audit.record(db, user.email, "map.node.approve", "knowledge_node", n.id)
+    audit.record(db, user.email, "map.node.approve", "knowledge_node", n.id, detail=_reason(body))
     db.commit()
     return {"id": n.id, "status": n.status}
 
 
-class EdgeBody(BaseModel):
+class EdgeBody(CurationReason):
     from_node: int
     to_node: int
     relation: Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=40)]
@@ -915,21 +930,21 @@ def create_edge(body: EdgeBody, db: DB, user: Curator) -> dict[str, Any]:
             or db.get(KnowledgeNode, body.to_node) is None:
         raise HTTPException(422, "an edge joins two different existing nodes")
     _check_items_exist(db, body.evidence_item_ids)
-    e = KnowledgeEdge(**body.model_dump(), proposed_by=user.email, status="proposed")
+    e = KnowledgeEdge(**body.fields(), proposed_by=user.email, status="proposed")
     db.add(e)
     db.flush()
-    audit.record(db, user.email, "map.edge.propose", "knowledge_edge", e.id)
+    audit.record(db, user.email, "map.edge.propose", "knowledge_edge", e.id, detail=body.audit_detail())
     db.commit()
     return {"id": e.id}
 
 
 @router.post("/map/edges/{edge_id}/approve")
-def approve_edge(edge_id: int, db: DB, user: Curator) -> dict[str, Any]:
+def approve_edge(edge_id: int, db: DB, user: Curator, body: CurationReason | None = None) -> dict[str, Any]:
     e = db.get(KnowledgeEdge, edge_id)
     if e is None:
         raise HTTPException(404, "edge not found")
     e.status, e.approved_by = "approved", user.email
-    audit.record(db, user.email, "map.edge.approve", "knowledge_edge", e.id)
+    audit.record(db, user.email, "map.edge.approve", "knowledge_edge", e.id, detail=_reason(body))
     db.commit()
     return {"id": e.id, "status": e.status}
 

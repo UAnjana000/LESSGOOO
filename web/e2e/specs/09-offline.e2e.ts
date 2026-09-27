@@ -49,10 +49,10 @@ test.describe("Offline kiosk", () => {
       await expect(page.locator(".banner.offline").first()).toBeVisible();
       await expect(page.getByRole("region", { name: "Approved text" }).locator(".passage").first()).toBeVisible();
 
-      await page.getByRole("navigation", { name: "Main menu" }).getByRole("link", { name: "Ask" }).click();
+      await page.getByRole("navigation", { name: "Main menu" }).getByRole("link", { name: "Ask (AI)" }).click();
       await expect(page.getByText("Asking needs a connection. Search and reading still work from saved items.").first()).toBeVisible();
-      await page.getByRole("textbox", { name: "Ask a question about the archive" }).fill("What did the reading room committee report?");
-      await page.getByRole("button", { name: "Ask", exact: true }).click();
+      await page.getByRole("textbox", { name: "Ask the AI a question about the archive" }).fill("What did the reading room committee report?");
+      await page.getByRole("button", { name: "Ask with AI", exact: true }).click();
       await expect(page.locator("article.answer .notice")).toHaveText("Asking needs a connection. Search and reading still work from saved items.");
       await expect(page.locator("article.answer .chip.ai")).toHaveCount(0);
     } finally {

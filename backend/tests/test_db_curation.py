@@ -4,9 +4,10 @@ visible items. All content is synthetic."""
 from __future__ import annotations
 
 import pytest
+from sqlalchemy import select
 
 from archive.ingest import publish
-from archive.models import ArchivalItem
+from archive.models import ArchivalItem, AuditEvent
 
 from .factories import make_item, make_rights, publish_item
 from .test_db_visitor_features import _login
@@ -100,6 +101,38 @@ class TestTimelineAndStory:
         st = client.get("/api/visitor/stories/synthetic-story").json()
         assert [blk["item"]["id"] for blk in st["blocks"]] == [a.id, b.id]
         assert all(blk["deep_link"].startswith(f"/item/{blk['item']['id']}") for blk in st["blocks"])
+
+    def test_curation_writes_record_the_stated_reason_in_the_audit_log(self, db, client):
+        a, b, _ = _items(db)
+        h = _login(client, db, ["curator"], "curator@test")
+        why = "agent-drafted from the item's own manifest dates"
+        ev = client.post("/api/staff/timeline", json={"date_text": "1921", "sort_date": "1921-01-01",
+                                                      "titles": {"en": "Opens"}, "item_ids": [a.id],
+                                                      "reason": why}, headers=h).json()["id"]
+        assert client.post(f"/api/staff/timeline/{ev}/approve", json={"reason": why}, headers=h).status_code == 200
+        st = client.post("/api/staff/stories", json={"slug": "why", "titles": {"en": "Why"}, "reason": why,
+                                                     "blocks": [{"item_id": a.id}], "status": "approved"},
+                         headers=h).json()["id"]
+        na, nb = (client.post("/api/staff/map/nodes", json={"node_type": "document", "labels": {"en": i.title},
+                                                             "item_ids": [i.id], "reason": why}, headers=h).json()["id"]
+                  for i in (a, b))
+        client.post(f"/api/staff/map/nodes/{na}/approve", json={"reason": why}, headers=h)
+        client.post(f"/api/staff/map/nodes/{nb}/approve", headers=h)
+        edge = client.post("/api/staff/map/edges", json={"from_node": na, "to_node": nb, "relation": "same_day",
+                                                         "evidence_item_ids": [a.id, b.id], "reason": why},
+                           headers=h).json()["id"]
+        client.post(f"/api/staff/map/edges/{edge}/approve", json={"reason": why}, headers=h)
+
+        rows = db.execute(select(AuditEvent.action, AuditEvent.entity_id, AuditEvent.detail)
+                          .where(AuditEvent.actor == "curator@test")).all()
+        got = {(action, int(eid)): detail for action, eid, detail in rows}
+        for key in [("timeline.draft", ev), ("timeline.approve", ev), ("story.approved", st),
+                    ("map.node.propose", na), ("map.node.approve", na), ("map.edge.propose", edge),
+                    ("map.edge.approve", edge)]:
+            assert got[key].get("reason") == why, key
+        assert "reason" not in got[("map.node.approve", nb)]
+        assert client.get("/api/visitor/timeline").json()[0]["id"] == ev
+        assert [n["id"] for n in client.get("/api/visitor/map").json()["nodes"]] == [na, nb]
 
     def test_signage_loop_serves_the_timeline_and_first_story(self, db, client):
         a, _, _ = _items(db)

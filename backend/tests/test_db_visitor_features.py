@@ -101,7 +101,8 @@ class TestReviewedSummaries:
         review.review_derivative(db, draft, "approve", "archivist@test")
         db.commit()
         body = client.get(f"/api/visitor/items/{item.id}").json()
-        assert body["summaries"] == [{"language": "en", "text": "Unreviewed AI draft.", "label": "Reviewed summary"}]
+        assert body["summaries"] == [{"language": "en", "text": "Unreviewed AI draft.", "label": "Reviewed summary",
+                                      "quote_verified": False}]
         assert calls == []
 
     def test_staff_draft_from_approved_text_is_hidden_until_approved(self, db, client):
@@ -130,6 +131,72 @@ class TestReviewedSummaries:
         h = _login(client, db, ["archivist"])
         r = client.post(f"/api/staff/items/{item.id}/summary", json={"text": "Interview summary."}, headers=h)
         assert r.status_code == 200
+
+
+class _FakeSummaryLLM:
+    model = "fake-summary-model"
+
+    def __init__(self, summary: str) -> None:
+        self.summary, self.calls = summary, []
+
+    def complete(self, system, user, max_tokens):
+        from archive.ask.llm import LLMResult
+
+        self.calls.append((system, user))
+        return LLMResult(content=f'{{"summary": "{self.summary}"}}', tokens_in=10, tokens_out=5, cached_tokens=0,
+                         model=self.model, latency_ms=1)
+
+
+class TestAgentDraftedSummaries:
+    def test_published_item_shows_ai_summary_labelled_not_quote_verified(self, db, client):
+        from archive.models import ReviewDecision
+        from archive.services import summaries
+
+        item = make_item(db, make_rights(db), ["Synthetic paper on reading rooms for mill workers.",
+                                               "Synthetic second page on lamp oil costs."])
+        publish_item(db, item)
+        llm = _FakeSummaryLLM("A synthetic paper about reading rooms and their lamp costs.")
+        d = summaries.draft_from_published_text(db, item, llm, "summary-agent")
+        db.commit()
+        assert len(llm.calls) == 1
+        assert "reading rooms for mill workers" in llm.calls[0][1] and "lamp oil costs" in llm.calls[0][1]
+        assert client.get(f"/api/visitor/items/{item.id}").json()["summaries"] == []
+
+        summaries.approve_as_agent(db, d, "summary-agent")
+        db.commit()
+        body = client.get(f"/api/visitor/items/{item.id}").json()
+        assert body["summaries"] == [{"language": "en", "text": "A synthetic paper about reading rooms and their "
+                                      "lamp costs.", "label": "AI summary — not a quotation", "quote_verified": False}]
+        assert all(p["quote_verified"] is False for pg in body["pages"] for p in pg["passages"])
+        rd = db.execute(select(ReviewDecision).where(ReviewDecision.target_type == "derivative",
+                                                     ReviewDecision.target_id == d.id)).scalar_one()
+        assert rd.role == "agent" and rd.reviewer == "summary-agent"
+        assert rd.reason == "agent-drafted summary from the item's published text, not archivist review"
+
+    def test_debate_sitting_label_and_guards(self, db):
+        from archive.services import summaries
+
+        rights = make_rights(db)
+        debate = make_item(db, rights, ["Synthetic sitting: the chair opens the session."], title="Synthetic debate",
+                           collection="debates")
+        publish_item(db, debate)
+        unpublished = make_item(db, rights, ["Synthetic draft only."], title="Synthetic unpublished")
+        llm = _FakeSummaryLLM("The synthetic sitting opens.")
+
+        d = summaries.draft_from_published_text(db, debate, llm, "summary-agent")
+        assert d.label_shown == "AI summary of the debate sitting — not a quotation"
+        assert "debate sitting" in llm.calls[0][0]
+        with pytest.raises(summaries.SummaryError, match="already has"):
+            summaries.draft_from_published_text(db, debate, llm, "summary-agent")
+        with pytest.raises(summaries.SummaryError, match="not published"):
+            summaries.draft_from_published_text(db, unpublished, llm, "summary-agent")
+        assert len(llm.calls) == 1
+
+        summaries.approve_as_agent(db, d, "summary-agent", corrected_text="The chair opens the synthetic sitting.")
+        assert (d.status, d.content) == ("approved", "The chair opens the synthetic sitting.")
+        assert d.label_shown == "AI summary of the debate sitting — not a quotation"
+        with pytest.raises(summaries.SummaryError, match="not a summary draft"):
+            summaries.approve_as_agent(db, d, "summary-agent")
 
 
 # ------------------------------------------------------------------ 2. video with timestamped transcripts

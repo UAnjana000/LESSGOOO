@@ -83,6 +83,8 @@ describe("derivative labels sent by the API", () => {
     "Reviewed caption",
     "Reviewed translation",
     "Reviewed summary",
+    "AI summary — not a quotation",
+    "AI summary of the debate sitting — not a quotation",
     "Synthetic narration",
     "Machine translation — not reviewed",
     "AI-generated answer from archive sources",

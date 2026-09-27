@@ -11,10 +11,10 @@ test.describe("Ask the archive", () => {
   test("answerable question: labelled AI answer whose citations open the reader at the cited page", async ({ page, fx }) => {
     const lecture = fx.get(FX.lecture);
     await page.goto("/ask");
-    await expect(page.getByRole("heading", { level: 1, name: "Ask the archive" })).toBeVisible();
-    await page.getByRole("textbox", { name: "Ask a question about the archive" }).fill(ANSWERABLE);
+    await expect(page.getByRole("heading", { level: 1, name: "Ask the archive with AI" })).toBeVisible();
+    await page.getByRole("textbox", { name: "Ask the AI a question about the archive" }).fill(ANSWERABLE);
     const response = page.waitForResponse((r) => r.url().endsWith("/api/visitor/ask") && r.request().method() === "POST", { timeout: 120_000 });
-    await page.getByRole("button", { name: "Ask", exact: true }).click();
+    await page.getByRole("button", { name: "Ask with AI", exact: true }).click();
     const body = await (await response).json();
     expect(body.outcome, `Ask outcome (message: ${body.message ?? "none"})`).toBe("answered");
 
@@ -45,9 +45,9 @@ test.describe("Ask the archive", () => {
 
   test("off-topic question abstains instead of answering", async ({ page }) => {
     await page.goto("/ask");
-    await page.getByRole("textbox", { name: "Ask a question about the archive" }).fill(OFF_TOPIC);
+    await page.getByRole("textbox", { name: "Ask the AI a question about the archive" }).fill(OFF_TOPIC);
     const response = page.waitForResponse((r) => r.url().endsWith("/api/visitor/ask") && r.request().method() === "POST", { timeout: 120_000 });
-    await page.getByRole("button", { name: "Ask", exact: true }).click();
+    await page.getByRole("button", { name: "Ask with AI", exact: true }).click();
     const body = await (await response).json();
     expect(["insufficient", "refused", "rejected_input"]).toContain(body.outcome);
 

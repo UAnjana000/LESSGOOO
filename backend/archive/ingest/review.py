@@ -287,7 +287,10 @@ def review_translation(db: Session, tr: Translation, action: str, reviewer: str,
 
 
 def review_derivative(db: Session, d: Derivative, action: str, reviewer: str, text: str | None = None,
-                      seeded: bool = False, role: str = "archivist") -> Derivative:
+                      seeded: bool = False, role: str = "archivist", reason: str | None = None,
+                      label: str | None = None) -> Derivative:
+    """`label` replaces "Reviewed summary" on approval when the approver is not an archivist
+    (an agent-drafted summary must not claim human review)."""
     if action not in REVIEW_ACTIONS:
         raise ReviewError(f"unknown action '{action}'")
     before = d.content
@@ -298,8 +301,9 @@ def review_derivative(db: Session, d: Derivative, action: str, reviewer: str, te
     d.status = "approved" if action in {"approve", "correct"} else "rejected"
     d.reviewed_by = reviewer
     if d.kind == "summary" and d.status == "approved":
-        d.label_shown = "Reviewed summary"
-    _decision(db, "derivative", d.id, action, reviewer, role, before=before, after=d.content, seeded=seeded)
+        d.label_shown = label or "Reviewed summary"
+    _decision(db, "derivative", d.id, action, reviewer, role, before=before, after=d.content, reason=reason,
+              seeded=seeded)
     return d
 
 

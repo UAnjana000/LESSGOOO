@@ -6,7 +6,7 @@ import { formatMs, useApi } from "../hooks";
 import { useSession } from "../state";
 import { AddToList, ArticleLinks, ContentText, ErrorState, FacetLinks, FixtureChip, KindChip, Loading, useDocumentTitle, VerifiedChip } from "../components/Bits";
 import { ScanViewer } from "../components/ScanViewer";
-import { IconPlay } from "../components/Icons";
+import { IconChevronLeft, IconChevronRight, IconPlay } from "../components/Icons";
 
 type Tab = "original" | "reviewed";
 
@@ -174,6 +174,41 @@ export function Item() {
   useEffect(() => setTab(hasReviewed && targetIsTranslation ? "reviewed" : "original"), [hasReviewed, targetIsTranslation]);
   useDocumentTitle(d?.title);
 
+  const pageIndex = d && page ? d.pages.indexOf(page) : -1;
+  const prevPage = pageIndex > 0 ? d!.pages[pageIndex - 1] : undefined;
+  const nextPage = d && pageIndex >= 0 ? d.pages[pageIndex + 1] : undefined;
+  const prevBtn = useRef<HTMLButtonElement>(null);
+  const nextBtn = useRef<HTMLButtonElement>(null);
+  const pendingFocus = useRef<HTMLButtonElement | null>(null);
+  const goToPage = (seq: number) => setParams({ page: String(seq) }, { replace: true });
+  // A focused button that becomes disabled drops focus to <body>, so hand it to the other arrow.
+  const step = (dir: -1 | 1) => {
+    const to = dir < 0 ? prevPage : nextPage;
+    if (!to) return false;
+    goToPage(to.sequence);
+    const atEnd = dir < 0 ? d!.pages[0] === to : d!.pages[d!.pages.length - 1] === to;
+    if (atEnd && document.activeElement === (dir < 0 ? prevBtn.current : nextBtn.current)) pendingFocus.current = (dir < 0 ? nextBtn : prevBtn).current;
+    return true;
+  };
+  useEffect(() => {
+    pendingFocus.current?.focus();
+    pendingFocus.current = null;
+  }, [page]);
+  const stepRef = useRef(step);
+  stepRef.current = step;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      const el = e.target instanceof Element ? e.target : null;
+      // Fields, tabs, media and the zoomable scan use the arrow keys themselves.
+      if (el?.closest("input, textarea, select, [contenteditable]:not([contenteditable=false]), [role=tablist], audio, video, .osd, dialog")) return;
+      if (stepRef.current(e.key === "ArrowLeft" ? -1 : 1)) e.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   if (item.loading && !d) return <div className="page"><Loading /></div>;
   if (item.error) return <div className="page"><ErrorState error={item.error} retry={item.reload} /><Link className="link-target" to="/search">{t("back")}</Link></div>;
   if (!d) return null;
@@ -209,19 +244,28 @@ export function Item() {
             <KindChip label={summary.label} />
           </div>
           <p style={{ margin: 0 }} lang={summary.language}>{summary.text}</p>
+          {summary.label.startsWith("AI summary") && <p className="muted" style={{ margin: "8px 0 0", fontSize: "var(--step--1)" }}>{t("summaryAiNote")}</p>}
         </section>
       )}
 
       {page && (
         <>
           {d.pages.length > 1 && (
-            <nav className="pager" aria-label={t("pages")} style={{ marginBottom: 14 }}>
-              {d.pages.map((p) => (
-                <button key={p.id} type="button" className="btn secondary small" aria-current={p.sequence === page.sequence ? "true" : undefined}
-                  onClick={() => setParams({ page: String(p.sequence) }, { replace: true })}>
-                  {t("page", { n: p.label })}
-                </button>
-              ))}
+            <nav className="pager-step" aria-label={t("pages")} style={{ marginBottom: 14 }}>
+              <button ref={prevBtn} type="button" className="btn secondary step-btn prev" disabled={!prevPage} onClick={() => step(-1)}>
+                <IconChevronLeft /><span>{t("prevPage")}</span>
+              </button>
+              <div className="pager">
+                {d.pages.map((p) => (
+                  <button key={p.id} type="button" className="btn secondary small" aria-current={p.sequence === page.sequence ? "true" : undefined}
+                    onClick={() => goToPage(p.sequence)}>
+                    {t("page", { n: p.label })}
+                  </button>
+                ))}
+              </div>
+              <button ref={nextBtn} type="button" className="btn secondary step-btn next" disabled={!nextPage} onClick={() => step(1)}>
+                <span>{t("nextPage")}</span><IconChevronRight />
+              </button>
             </nav>
           )}
           <div className="reader">

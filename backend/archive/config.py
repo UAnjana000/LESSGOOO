@@ -82,6 +82,13 @@ class Settings(BaseSettings):
     llm_output_cost_per_mtok: float = 0.0
     daily_cost_alert_usd: float = 5.0
 
+    # Voice questions on Ask: the visitor's recording goes to {llm_base_url}/audio/transcriptions with
+    # llm_api_key, and only the text comes back to the question box. The audio is never stored.
+    ask_voice_enabled: bool = True
+    ask_voice_model: str = "whisper-1"
+    ask_voice_max_seconds: int = Field(default=120, ge=5)
+    ask_voice_max_bytes: int = Field(default=10 * 1024 * 1024, ge=1024)
+
     # Retrieval
     embedding_backend: Literal["fastembed", "hash"] = "fastembed"
     embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
@@ -126,6 +133,10 @@ class Settings(BaseSettings):
     @property
     def llm_available(self) -> bool:
         return self.llm_provider != "none" and bool(self.llm_api_key and self.llm_model)
+
+    @property
+    def ask_voice_available(self) -> bool:
+        return self.ask_voice_enabled and self.llm_provider == "openai_compatible" and bool(self.llm_api_key)
 
 
 @lru_cache

@@ -515,6 +515,27 @@ label { font-weight: 500; }
 }
 .tabs button[aria-selected="true"] { color: var(--indigo); border-bottom-color: var(--indigo); font-weight: 700; }
 .pager { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pager-step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "prev chips next";
+  gap: 12px;
+  align-items: center;
+}
+.pager-step .pager { grid-area: chips; }
+.step-btn {
+  gap: 6px;
+  min-width: 56px;
+  min-height: 56px;
+  padding: 0 1em;
+  font-weight: 700;
+  touch-action: manipulation;
+}
+.step-btn.prev { grid-area: prev; }
+.step-btn.next { grid-area: next; }
+@media (max-width: 640px) {
+  .pager-step { grid-template-columns: 1fr 1fr; grid-template-areas: "prev next" "chips chips"; }
+}
 .pager .btn[aria-current="true"] { background: var(--indigo); color: #fff; }
 .segments { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
 .segment {
@@ -544,6 +565,10 @@ dl.facts dd { margin: 0; }
 /* ---------- ask ---------- */
 .ask-form { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
 .ask-form textarea { min-height: 72px; resize: vertical; font-size: var(--step-1); }
+.voice-question { margin-top: 8px; }
+.voice-note { font-size: var(--step--1); max-width: 70ch; margin: 6px 0 0; }
+.voice-clock { font-variant-numeric: tabular-nums; font-size: var(--step--1); }
+.voice-clock::before { content: ""; display: inline-block; width: 0.6em; height: 0.6em; margin-right: 0.4em; border-radius: 50%; background: var(--danger); }
 .answer { margin-top: 20px; }
 .answer .label-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
 .answer .sentence { font-family: var(--read); font-size: calc(1.15rem * var(--scale)); line-height: 1.75; }

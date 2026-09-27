@@ -3,6 +3,8 @@ import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError, type AskResult } from "../api";
 import { useSession } from "../state";
 import { AddToList, CitationLink, ContentText, FixtureChip, KindChip, useDocumentTitle, VerifiedChip } from "../components/Bits";
+import { VoiceQuestion } from "../components/VoiceQuestion";
+import { mergeTranscript } from "../voice";
 
 export function Ask() {
   const s = useSession();
@@ -74,6 +76,13 @@ export function Ask() {
         />
         <button type="submit" className="btn" disabled={busy || !question.trim()}>{t("askButton")}</button>
       </form>
+      <VoiceQuestion
+        disabled={busy}
+        onText={(text) => {
+          setQuestion((q) => mergeTranscript(q, text, 500));
+          input.current?.focus();
+        }}
+      />
 
       <p role="status" className="muted" style={{ marginTop: busy ? 16 : 0 }}>{busy ? t("askThinking") : ""}</p>
       <div aria-live="polite" aria-busy={busy}>

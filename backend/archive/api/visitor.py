@@ -1,4 +1,5 @@
-"""Visitor API: anonymous, read-only, published + rights-cleared only. Zero LLM calls except /ask."""
+"""Visitor API: anonymous, read-only, published + rights-cleared only. Zero LLM calls except /ask
+and /ask/transcribe (the visitor's spoken question, transcribed by the answer provider's Whisper)."""
 
 from __future__ import annotations
 
@@ -9,13 +10,14 @@ from typing import Annotated, Any
 
 import qrcode
 import qrcode.image.svg
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import any_, func, literal, select
 from sqlalchemy.orm import Session
 
 from archive import constitution, exhibit, storage
+from archive.ask import voice
 from archive.ask.service import ask as run_ask
 from archive.config import get_settings
 from archive.db import get_db
@@ -120,6 +122,7 @@ def config(db: DB) -> dict[str, Any]:
     fixtures = db.execute(select(func.count()).select_from(ArchivalItem).join(RightsRecord)
                           .where(item_visible(), ArchivalItem.is_fixture.is_(True))).scalar()
     return {"languages": list(LANGS), "ask_model_connected": s.llm_available,
+            "ask_voice_available": s.ask_voice_available, "ask_voice_max_seconds": s.ask_voice_max_seconds,
             "machine_translation": {"available": s.sarvam_available and s.sarvam_translate_enabled, "collections": mt},
             "narration_live_available": s.sarvam_available and s.sarvam_tts_enabled,
             "fixture_items_visible": int(fixtures or 0), "index_version": current_index_version(db),
@@ -234,7 +237,8 @@ def item_detail(item_id: int, db: DB, lang: str = "en") -> dict[str, Any]:
                    "photographer": photo.photographer, "source_reference": photo.source_reference,
                    "credit": photo_credit(photo), "label": "Reviewed caption"}
                   if photo and photo.review_status == "approved" else None),
-        "summaries": [{"language": d.language, "text": d.content, "label": d.label_shown} for d in summaries],
+        "summaries": [{"language": d.language, "text": d.content, "label": d.label_shown, "quote_verified": False}
+                      for d in summaries],
         "narrations": [{"language": d.language, "file_id": d.file_id, "source_ids": d.source_ids,
                         "label": d.label_shown} for d in narrations],
         "related": related,
@@ -304,6 +308,19 @@ class AskBody(BaseModel):
 def ask(body: AskBody, db: DB) -> dict[str, Any]:
     return run_ask(db, body.question, body.history, body.language if body.language in LANGS else "en",
                    body.session_id)
+
+
+@router.post("/ask/transcribe")
+def ask_transcribe(file: UploadFile, language: Annotated[str, Form()] = "en") -> dict[str, Any]:
+    """Speech to text for the question box only: nothing is asked, stored or indexed here."""
+    data = file.file.read(get_settings().ask_voice_max_bytes + 1)
+    try:
+        result = voice.transcribe(data, file.filename or "", file.content_type or "", language)
+    except voice.VoiceError as exc:
+        raise HTTPException(exc.status, {"code": exc.code, "message": exc.message}) from None
+    return {"text": result.text, "model": result.model, "language": result.language,
+            "duration_ms": result.duration_ms, "label": "AI transcription — check before asking",
+            "stored": False}
 
 
 @router.get("/translate/{passage_id}")

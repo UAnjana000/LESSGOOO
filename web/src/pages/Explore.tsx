@@ -14,7 +14,8 @@ export function Timeline() {
     <Page title={t("timelineTitle")}>
       {tl.loading && <Loading />}
       {tl.error && <ErrorState error={tl.error} retry={tl.reload} />}
-      {tl.data && (
+      {tl.data?.length === 0 && <p className="empty-state">{t("timelineEmpty")}</p>}
+      {!!tl.data?.length && (
         <ol className="timeline">
           {tl.data.map((e) => (
             <li key={e.id} className={e.date_certainty !== "exact" ? "approx" : undefined}>
@@ -44,7 +45,8 @@ export function Stories() {
     <Page title={t("storiesTitle")}>
       {st.loading && <Loading />}
       {st.error && <ErrorState error={st.error} retry={st.reload} />}
-      {st.data && (
+      {st.data?.length === 0 && <p className="empty-state">{t("storiesEmpty")}</p>}
+      {!!st.data?.length && (
         <div className="story-strip">
           {st.data.map((s) => (
             <Link key={s.slug} to={`/stories/${s.slug}`} className="story-card">
@@ -157,7 +159,8 @@ export function KnowledgeMap() {
     <Page title={t("mapTitle")} lead={t("mapLead")}>
       {m.loading && <Loading />}
       {m.error && <ErrorState error={m.error} retry={m.reload} />}
-      {m.data && layout && (
+      {m.data?.nodes.length === 0 && <p className="empty-state">{t("mapEmpty")}</p>}
+      {!!m.data?.nodes.length && layout && (
         <div className="reader">
           <div className="stack">
             {/* The drawing is a pointer shortcut; the name list below is the keyboard, screen-reader and 48 px equivalent. */}

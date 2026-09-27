@@ -140,8 +140,8 @@ export interface ItemDetail extends Omit<ItemCard, "photo"> {
   /** `format` is a MIME type: video/* gets a video player with captions, audio/* an audio player. */
   media: { file_id: number; format: string; captions: string; segments: Segment[]; label: string } | null;
   photo: PhotoDetail | null;
-  /** Reviewed summaries only; drafts never reach visitors. */
-  summaries: { language: string; text: string; label: string }[];
+  /** Approved summaries only; drafts never reach visitors. A summary is never a quotation. */
+  summaries: { language: string; text: string; label: string; quote_verified: false }[];
   narrations: { language: string; file_id: number; source_ids: number[]; label: string }[];
   related: ItemCard[];
   machine_translation_enabled: boolean;
@@ -231,6 +231,9 @@ export interface AskResult {
 export interface VisitorConfig {
   languages: string[];
   ask_model_connected: boolean;
+  /** Spoken questions: transcribed by the answer provider's Whisper through the API, never in the browser. */
+  ask_voice_available: boolean;
+  ask_voice_max_seconds: number;
   machine_translation: { available: boolean; collections: Record<string, boolean> };
   narration_live_available: boolean;
   fixture_items_visible: number;

@@ -54,6 +54,16 @@ export const IconList = () => (
     <path d="M6 3h12v18l-6-4-6 4z" />
   </svg>
 );
+export const IconChevronLeft = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true" width="22" height="22" {...base} strokeWidth={2.4}>
+    <path d="m15 5-7 7 7 7" />
+  </svg>
+);
+export const IconChevronRight = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true" width="22" height="22" {...base} strokeWidth={2.4}>
+    <path d="m9 5 7 7-7 7" />
+  </svg>
+);
 export const IconPlay = () => (
   <svg viewBox="0 0 24 24" aria-hidden="true" width="18" height="18" {...base}>
     <path d="M7 4.5v15l12-7.5z" />

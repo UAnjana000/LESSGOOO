@@ -91,6 +91,7 @@ async function mount(path: string, ready: string, opts: { lang?: Lang; basket?: 
   await act(async () => root!.render(<SessionProvider><RouterProvider router={router} /></SessionProvider>));
   await until(() => document.querySelector(ready) !== null, `${ready} on ${path}`);
   await flush(3);
+  return router;
 }
 
 async function axeViolations(): Promise<string[]> {
@@ -200,6 +201,27 @@ describe("phone list and signage pass axe", () => {
   });
 });
 
+describe("explore views with nothing curated yet", () => {
+  const EMPTY: Record<string, unknown> = { "/api/visitor/timeline": [], "/api/visitor/stories": [], "/api/visitor/map": { nodes: [], edges: [] } };
+  const emptyFetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.pathname + input.search : input.url;
+    const path = url.replace(/^https?:\/\/[^/]+/, "").split("?")[0];
+    if (path in EMPTY) return Promise.resolve(new Response(JSON.stringify(EMPTY[path]), { status: 200, headers: { "Content-Type": "application/json" } }));
+    return fakeFetch(input, init);
+  };
+  it.each([
+    ["/timeline", "No timeline events"],
+    ["/stories", "No stories"],
+    ["/map", "No connections"],
+  ] as const)("%s says so instead of rendering a blank page", async (path, text) => {
+    vi.stubGlobal("fetch", vi.fn(emptyFetch));
+    await mount(path, ".empty-state");
+    expect(document.querySelector(".empty-state")?.textContent).toContain(text);
+    expect(document.querySelector(".map-wrap")).toBeNull();
+    expect(await axeViolations()).toEqual([]);
+  });
+});
+
 describe.each(LANGS_UNDER_TEST)("kiosk touch targets in %s are at least 48 × 48 px", (lang) => {
   it.each(inLang(lang))("%s", async (path, ready, opts) => {
     await mount(path, ready, opts);
@@ -256,6 +278,62 @@ describe("language of parts", () => {
     expect(rev.getAttribute("aria-selected")).toBe("true");
     expect(document.activeElement).toBe(rev);
     expect(document.getElementById("text-panel")?.getAttribute("aria-labelledby")).toBe("tab-reviewed");
+  });
+});
+
+describe("item reader previous and next page arrows", () => {
+  const prev = () => document.querySelector<HTMLButtonElement>(".step-btn.prev")!;
+  const next = () => document.querySelector<HTMLButtonElement>(".step-btn.next")!;
+  const current = () => document.querySelector(".pager [aria-current=true]")?.textContent;
+  const press = (key: string, target: EventTarget = document.body) =>
+    act(async () => { target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true })); });
+
+  it("steps between the first and last page the item has, updating the page query", async () => {
+    const router = await mount("/item/1", ".step-btn");
+    expect(current()).toBe("Page 3");
+    expect(prev().disabled).toBe(true);
+    expect(next().disabled).toBe(false);
+    expect(prev().textContent).toBe("Previous page");
+    expect(next().textContent).toBe("Next page");
+
+    next().focus();
+    await act(async () => next().click());
+    expect(current()).toBe("Page 4");
+    expect(router.state.location.search).toBe("?page=2");
+    expect(next().disabled).toBe(true);
+    expect(prev().disabled).toBe(false);
+    expect(document.activeElement).toBe(prev());
+
+    await act(async () => prev().click());
+    expect(current()).toBe("Page 3");
+    expect(prev().disabled).toBe(true);
+    expect(document.activeElement).toBe(next());
+  });
+
+  it("follows the left and right arrow keys unless focus is in a field or the text tabs", async () => {
+    const router = await mount("/item/1", ".step-btn", { lang: "hi" });
+    await press("ArrowRight", document.getElementById("tab-original")!);
+    expect(router.state.location.search).toBe("");
+
+    await press("ArrowRight");
+    expect(router.state.location.search).toBe("?page=2");
+    await press("ArrowRight");
+    expect(router.state.location.search).toBe("?page=2");
+
+    const field = document.createElement("input");
+    document.body.append(field);
+    await press("ArrowLeft", field);
+    expect(router.state.location.search).toBe("?page=2");
+    field.remove();
+
+    await press("ArrowLeft");
+    expect(router.state.location.search).toBe("?page=1");
+  });
+
+  it.each([["hi", "पिछला पृष्ठ", "अगला पृष्ठ"], ["mr", "मागील पान", "पुढील पान"]] as const)("names the arrows in %s", async (lang, p, n) => {
+    await mount("/item/1", ".step-btn", { lang });
+    expect(prev().textContent).toBe(p);
+    expect(next().textContent).toBe(n);
   });
 });
 

@@ -4,6 +4,8 @@ import type { AskResult, ConstitutionArticle, ConstitutionDetail, Facets, Hit, I
 export const config: VisitorConfig = {
   languages: ["en", "hi", "mr"],
   ask_model_connected: true,
+  ask_voice_available: true,
+  ask_voice_max_seconds: 120,
   machine_translation: { available: true, collections: { writings: true } },
   narration_live_available: false,
   fixture_items_visible: 0,
@@ -121,7 +123,7 @@ const item: ItemDetail = {
     ],
   },
   photo: null,
-  summaries: [{ language: "en", text: "A speech prepared for the Jat-Pat-Todak Mandal.", label: "Reviewed summary" }],
+  summaries: [{ language: "en", text: "A speech prepared for the Jat-Pat-Todak Mandal.", label: "Reviewed summary", quote_verified: false }],
   narrations: [{ language: "en", file_id: 9, source_ids: [11], label: "Synthetic narration" }],
   related: [card(2, "जाति का विनाश", { languages: ["hi"] })],
   machine_translation_enabled: true,
