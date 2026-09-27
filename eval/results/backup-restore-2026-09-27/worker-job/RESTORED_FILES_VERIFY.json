@@ -1,0 +1,15 @@
+{
+    "backup":  "C:\\Users\\cvbal\\AppData\\Local\\Temp\\archive-demo-restore\\drill-20260927T073701Z\\files",
+    "manifest_created_at":  "20260927T072419Z",
+    "database_dump_checksum_ok":  true,
+    "files_checked":  604,
+    "missing":  [
+
+                ],
+    "mismatched":  [
+
+                   ],
+    "success":  true,
+    "seconds":  21.4,
+    "verified_at":  "2026-09-27T07:37:37.5741179Z"
+}

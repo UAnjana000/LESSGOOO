@@ -2,12 +2,13 @@ import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { fileUrl, type Hit, type ItemCard, type TimelineEvent } from "../api";
 import type { Key } from "../i18n";
-import { useApi } from "../hooks";
+import { basketLink } from "../basket";
+import { formatMs, useApi } from "../hooks";
 import { useSession } from "../state";
-import { ErrorState, FixtureChip, KindChip, Loading, Page, pickText, VerifiedChip } from "../components/Bits";
+import { ContentText, ErrorState, FixtureChip, KindChip, LangText, LanguageSwitch, Loading, Page, pickText, useDocumentTitle, VerifiedChip } from "../components/Bits";
 
 export function Timeline() {
-  const { t, lang } = useSession();
+  const { t } = useSession();
   const tl = useApi<TimelineEvent[]>("/api/visitor/timeline");
   return (
     <Page title={t("timelineTitle")}>
@@ -21,11 +22,11 @@ export function Timeline() {
                 {e.date_text}
                 {e.date_certainty !== "exact" && <span className="muted" style={{ font: "400 var(--step--1) var(--ui)", marginLeft: 10 }}>{t("dateApprox")}</span>}
               </div>
-              <h2 style={{ fontSize: "var(--step-1)", margin: "4px 0" }}>{pickText(e.titles, lang)}</h2>
-              <p className="muted">{pickText(e.descriptions, lang)}</p>
+              <h2 style={{ fontSize: "var(--step-1)", margin: "4px 0" }}><LangText map={e.titles} /></h2>
+              <p className="muted"><LangText map={e.descriptions} /></p>
               <div className="row">
                 {e.items.map((it) => (
-                  <Link key={it.id} className="btn secondary small" to={`/item/${it.id}`}>{it.title}</Link>
+                  <Link key={it.id} className="btn secondary small" to={`/item/${it.id}`}><ContentText text={it.title} /></Link>
                 ))}
               </div>
             </li>
@@ -37,7 +38,7 @@ export function Timeline() {
 }
 
 export function Stories() {
-  const { t, lang } = useSession();
+  const { t } = useSession();
   const st = useApi<{ slug: string; titles: Record<string, string>; blocks: number }[]>("/api/visitor/stories");
   return (
     <Page title={t("storiesTitle")}>
@@ -47,7 +48,7 @@ export function Stories() {
         <div className="story-strip">
           {st.data.map((s) => (
             <Link key={s.slug} to={`/stories/${s.slug}`} className="story-card">
-              {pickText(s.titles, lang)}
+              <LangText map={s.titles} />
               <span>{t("itemsCount", { n: s.blocks })}</span>
             </Link>
           ))}
@@ -71,26 +72,27 @@ export function Story() {
   const st = useApi<StoryData>(`/api/visitor/stories/${slug}`);
   const d = st.data;
   const narration = d?.narration_file_ids[lang] ?? d?.narration_file_ids.en;
+  useDocumentTitle(d ? pickText(d.titles, lang) : t("storiesTitle"));
   return (
     <div className="page">
       {st.loading && <Loading />}
       {st.error && <ErrorState error={st.error} retry={st.reload} />}
       {d && (
         <>
-          <h1>{pickText(d.titles, lang)}</h1>
+          <h1><LangText map={d.titles} /></h1>
           {narration && (
             <div className="stack" style={{ gap: 4, maxWidth: 560 }}>
               <span className="muted">{t("listen")}: {t("synthNarration")}</span>
-              <audio controls preload="none" src={fileUrl(narration)} />
+              <audio controls preload="none" src={fileUrl(narration)} aria-label={`${t("listen")}: ${t("synthNarration")}`} />
             </div>
           )}
           {d.blocks.map((b, i) => (
             <section key={i} className="story-block">
               <div>
-                {b.image_file_id ? <img src={fileUrl(b.image_file_id)} alt={`${t("scan")}: ${b.item.title}`} loading="lazy" /> : null}
+                {b.image_file_id ? <img src={fileUrl(b.image_file_id)} alt={t("imageOf", { title: b.item.title })} loading="lazy" /> : null}
               </div>
               <div className="stack">
-                <p style={{ fontSize: "var(--step-1)", fontFamily: "var(--read)" }}>{pickText(b.captions, lang)}</p>
+                <p style={{ fontSize: "var(--step-1)", fontFamily: "var(--read)" }}><LangText map={b.captions} /></p>
                 {b.passage && (
                   <>
                     <div className="chips"><KindChip label={b.passage.kind_label} /><VerifiedChip verified={b.passage.quote_verified} /></div>
@@ -145,6 +147,11 @@ export function KnowledgeMap() {
   }, [m.data]);
   const selected = m.data?.nodes.find((n) => n.id === sel) ?? null;
   const neighbours = new Set(m.data?.edges.flatMap((e) => (e.from === sel ? [e.to] : e.to === sel ? [e.from] : [])) ?? []);
+  const byType = useMemo(() => {
+    const out = new Map<string, MapData["nodes"]>();
+    for (const n of m.data?.nodes ?? []) out.set(n.type, [...(out.get(n.type) ?? []), n]);
+    return [...out.entries()].sort(([a], [b]) => TYPE_ORDER.indexOf(a) - TYPE_ORDER.indexOf(b));
+  }, [m.data]);
 
   return (
     <Page title={t("mapTitle")} lead={t("mapLead")}>
@@ -152,49 +159,66 @@ export function KnowledgeMap() {
       {m.error && <ErrorState error={m.error} retry={m.reload} />}
       {m.data && layout && (
         <div className="reader">
-          <div className="map-wrap">
-            <svg viewBox={`0 0 ${layout.W} ${layout.H}`} role="group" aria-label={t("mapTitle")}>
-              {m.data.edges.map((e) => {
-                const a = layout.pos.get(e.from)!, b = layout.pos.get(e.to)!;
-                return <line key={e.id} className={`map-edge${e.from === sel || e.to === sel ? " sel" : ""}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} />;
-              })}
-              {m.data.nodes.map((n) => {
-                const p = layout.pos.get(n.id)!;
-                const dim = sel !== null && n.id !== sel && !neighbours.has(n.id);
-                return (
-                  <g key={n.id} className={`map-node${n.id === sel ? " sel" : ""}`} transform={`translate(${p.x},${p.y})`} opacity={dim ? 0.35 : 1}
-                    role="button" tabIndex={0} aria-pressed={n.id === sel} aria-label={pickText(n.labels, lang)}
-                    onClick={() => setSel(n.id === sel ? null : n.id)}
-                    onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), setSel(n.id === sel ? null : n.id))}>
-                    <circle r={n.type === "person" ? 13 : 10} />
-                    <text x={16} y={5}>{pickText(n.labels, lang)}</text>
-                  </g>
-                );
-              })}
-            </svg>
+          <div className="stack">
+            {/* The drawing is a pointer shortcut; the name list below is the keyboard, screen-reader and 48 px equivalent. */}
+            <div className="map-wrap" aria-hidden="true">
+              <svg viewBox={`0 0 ${layout.W} ${layout.H}`} focusable="false">
+                {m.data.edges.map((e) => {
+                  const a = layout.pos.get(e.from)!, b = layout.pos.get(e.to)!;
+                  return <line key={e.id} className={`map-edge${e.from === sel || e.to === sel ? " sel" : ""}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} />;
+                })}
+                {m.data.nodes.map((n) => {
+                  const p = layout.pos.get(n.id)!;
+                  const dim = sel !== null && n.id !== sel && !neighbours.has(n.id);
+                  return (
+                    <g key={n.id} className={`map-node${n.id === sel ? " sel" : ""}${dim ? " dim" : ""}`} transform={`translate(${p.x},${p.y})`}
+                      onClick={() => setSel(n.id === sel ? null : n.id)}>
+                      <circle className="hit" r={24} />
+                      <circle r={n.type === "person" ? 13 : 10} />
+                      <text x={18} y={6}>{pickText(n.labels, lang)}</text>
+                    </g>
+                  );
+                })}
+              </svg>
+            </div>
+            <section aria-labelledby="map-names-h">
+              <h2 id="map-names-h" style={{ fontSize: "var(--step-1)" }}>{t("mapAllNames")}</h2>
+              {byType.map(([type, nodes]) => (
+                <div key={type} role="group" aria-label={t(`node_${type}` as Key)} className="stack" style={{ gap: 6, marginBottom: 12 }}>
+                  <span className="muted" style={{ fontSize: "var(--step--1)" }} aria-hidden="true">{t(`node_${type}` as Key)}</span>
+                  <div className="chips">
+                    {nodes.map((n) => (
+                      <button key={n.id} type="button" className="chip-link" aria-pressed={n.id === sel} onClick={() => setSel(n.id === sel ? null : n.id)}>
+                        <LangText map={n.labels} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </section>
           </div>
           <aside className="sheet" aria-live="polite">
             {!selected && <p className="muted">{t("mapPick")}</p>}
             {selected && (
               <div className="stack">
-                <h2 style={{ fontSize: "var(--step-2)" }}>{pickText(selected.labels, lang)}</h2>
+                <h2 style={{ fontSize: "var(--step-2)" }}><LangText map={selected.labels} /></h2>
                 <span className="chip">{t(`node_${selected.type}` as Key)}</span>
-                {selected.description && <p>{selected.description}</p>}
+                {selected.description && <p><ContentText text={selected.description} /></p>}
                 <h3>{t("connectedTo")}</h3>
                 <ul>
                   {m.data.edges.filter((e) => e.from === selected.id || e.to === selected.id).map((e) => {
                     const other = m.data!.nodes.find((n) => n.id === (e.from === selected.id ? e.to : e.from));
                     return (
                       <li key={e.id}>
-                        <button type="button" className="btn quiet small" onClick={() => setSel(other!.id)}>{pickText(other!.labels, lang)}</button>
-                        <span className="muted"> ({e.relation.replace(/_/g, " ")})</span>
+                        <button type="button" className="btn quiet small" onClick={() => setSel(other!.id)}><LangText map={other!.labels} /></button>
+                        <span className="muted"> (<ContentText text={e.relation.replace(/_/g, " ")} />)</span>
                       </li>
                     );
                   })}
                 </ul>
                 <h3>{t("evidence")}</h3>
                 <div className="row">
-                  {selected.item_ids.map((id) => <Link key={id} className="btn secondary small" to={`/item/${id}`}>{titles.get(id) ?? t("openItem")}</Link>)}
+                  {selected.item_ids.map((id) => <Link key={id} className="btn secondary small" to={`/item/${id}`}>{titles.has(id) ? <ContentText text={titles.get(id)} /> : t("openItem")}</Link>)}
                 </div>
               </div>
             )}
@@ -218,9 +242,11 @@ export function Basket() {
   const { t } = s;
   const [qr, setQr] = useState<CollectionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [making, setMaking] = useState(false);
   const hours = qr ? Math.round((Date.parse(qr.expires_at) - Date.now()) / 3_600_000) : 0;
   const make = async () => {
     setError(null);
+    setMaking(true);
     try {
       const res = await fetch("/api/visitor/collections", {
         method: "POST",
@@ -231,6 +257,8 @@ export function Basket() {
       setQr(await res.json());
     } catch {
       setError(s.online ? t("errorGeneric") : t("qrOffline"));
+    } finally {
+      setMaking(false);
     }
   };
   return (
@@ -242,26 +270,30 @@ export function Basket() {
             {s.basket.map((b) => (
               <li key={`${b.item_id}-${b.passage_id}-${b.page}-${b.start_ms}`} className="result">
                 <div>
-                  <h3><Link to={b.passage_id ? `/item/${b.item_id}?${b.page ? `page=${b.page}&` : ""}${b.start_ms !== undefined ? `t=${b.start_ms}&` : ""}passage=${b.passage_id}` : `/item/${b.item_id}`}>{b.title}</Link></h3>
+                  <h2 style={{ fontSize: "var(--step-1)", margin: 0 }}><Link to={basketLink(b)}><ContentText text={b.title} /></Link></h2>
                   <span className="cite" style={{ marginTop: 6 }}>{b.citation}</span>
                 </div>
-                <button type="button" className="btn secondary small" onClick={() => s.removeFromBasket(b)}>{t("remove")}</button>
+                <button type="button" className="btn secondary small" onClick={() => s.removeFromBasket(b)}>
+                  {t("remove")}<span className="visually-hidden">: {b.title}</span>
+                </button>
               </li>
             ))}
           </ul>
           <div className="row" style={{ marginTop: 20 }}>
-            <button type="button" className="btn" onClick={make}>{t("basketMakeQr")}</button>
+            <button type="button" className="btn" onClick={make} disabled={making}>{making ? t("qrMaking") : t("basketMakeQr")}</button>
           </div>
-          {error && <p className="notice bad">{error}</p>}
-          {qr && (
-            <div className="qr-panel">
-              <div className="qr" dangerouslySetInnerHTML={{ __html: qr.qr_svg }} role="img" aria-label={t("basketMakeQr")} />
-              <div>
-                <p style={{ fontSize: "var(--step-1)" }}>{t("basketQrLead", { h: hours })}</p>
-                <p className="muted">{t("expires")}: {new Date(qr.expires_at).toLocaleString(`${s.lang}-IN`)}</p>
+          <div role="status">
+            {qr && (
+              <div className="qr-panel">
+                <div className="qr" dangerouslySetInnerHTML={{ __html: qr.qr_svg }} role="img" aria-label={t("qrAlt")} />
+                <div>
+                  <p style={{ fontSize: "var(--step-1)" }}>{t("basketQrLead", { h: hours })}</p>
+                  <p className="muted">{t("expires")}: {new Date(qr.expires_at).toLocaleString(`${s.lang}-IN`)}</p>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
+          {error && <p className="notice bad" role="alert">{error}</p>}
         </>
       )}
     </Page>
@@ -276,10 +308,14 @@ interface SharedCollection {
 
 export function SharedList() {
   const { token } = useParams();
-  const { t } = useSession();
+  const { t, lang } = useSession();
   const c = useApi<SharedCollection>(`/api/visitor/collections/${token}`);
+  useDocumentTitle(t("collectionTitle"));
   return (
-    <div className="phone">
+    <main className="phone" id="main">
+      <div className="phone-head">
+        <LanguageSwitch className="langs phone-langs" />
+      </div>
       <h1>{t("collectionTitle")}</h1>
       <p className="muted">{t("archiveName")}</p>
       {c.loading && <Loading />}
@@ -290,7 +326,8 @@ export function SharedList() {
           <ul className="results">
             {c.data.entries.map((e, i) => (
               <li key={i} className="result" style={{ gridTemplateColumns: "1fr" }}>
-                <h2 style={{ fontSize: "var(--step-1)", margin: 0 }}><Link to={e.deep_link}>{e.item.title}</Link></h2>
+                <h2 style={{ fontSize: "var(--step-1)", margin: 0 }}><Link to={e.deep_link}><ContentText text={e.item.title} /></Link></h2>
+                {e.start_ms != null && <span className="meta">{t("atTime", { time: formatMs(e.start_ms) })}</span>}
                 {e.passage && <blockquote lang={e.passage.language}>{e.passage.text}</blockquote>}
                 <span className="cite">{t("citation")}: {e.citation}</span>
                 <span className="muted" style={{ fontSize: "var(--step--1)" }}>{t("rights")}: {e.rights_line}</span>
@@ -298,9 +335,9 @@ export function SharedList() {
               </li>
             ))}
           </ul>
-          <p className="muted" style={{ marginTop: 16 }}>{t("expires")}: {new Date(c.data.expires_at).toLocaleString()}</p>
+          <p className="muted" style={{ marginTop: 16 }}>{t("expires")}: {new Date(c.data.expires_at).toLocaleString(`${lang}-IN`)}</p>
         </>
       )}
-    </div>
+    </main>
   );
 }

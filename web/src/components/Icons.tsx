@@ -42,6 +42,13 @@ export const IconMap = () => (
     <path d="m8.2 7 7.4.8M7 8.3l2.2 7.4M16.5 10l-4.8 6.3" />
   </svg>
 );
+export const IconConstitution = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true" {...base}>
+    <path d="M3 9 12 4l9 5" />
+    <path d="M4 9h16M3 20h18" />
+    <path d="M6.5 9v11M10.5 9v11M13.5 9v11M17.5 9v11" />
+  </svg>
+);
 export const IconList = () => (
   <svg viewBox="0 0 24 24" aria-hidden="true" {...base}>
     <path d="M6 3h12v18l-6-4-6 4z" />

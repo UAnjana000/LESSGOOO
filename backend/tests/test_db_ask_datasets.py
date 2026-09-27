@@ -26,8 +26,9 @@ LAMP_TEXT = "The committee bought a single lamp and three newspapers for the rea
 class FakeLLM:
     model = "fake-llm-test-double"
 
-    def __init__(self, script: list[str]):
+    def __init__(self, script: list[str], cite: int | None = None):
         self.script = script
+        self.cite = cite
         self.calls = 0
         self.prompts: list[str] = []
 
@@ -47,6 +48,8 @@ class FakeLLM:
         elif mode == "verbatim_quote":
             body = {"sentences": [{"text": 'The source says "charged no fee for reading within the rooms".',
                                    "citations": [first]}]}
+        elif mode == "cite_given_id":  # a model naming a passage number it was never shown
+            body = {"sentences": [{"text": "The committee bought a lamp.", "citations": [self.cite]}]}
         elif mode == "empty":
             body = {"sentences": []}
         else:
@@ -161,6 +164,250 @@ class TestAskGraph:
         res = ask(db, "Why was that?", [{"q": "Did the reading room charge a fee for reading?", "a": "No."}],
                   "en", "session-0015", llm=llm)
         assert res["rewritten_query"] and "reading" in res["rewritten_query"]
+
+    def test_weak_long_follow_up_retries_once_with_history_context(self, db, archive):
+        # 8 tokens, no pronoun: the first-pass rewrite does not fire and retrieval is weak on its own.
+        llm = FakeLLM(["valid"])
+        res = ask(db, "Why was no charge made, and so on?",
+                  [{"q": "Did the reading room charge a fee for reading?", "a": "No."}], "en", "session-0016", llm=llm)
+        assert res["retried_retrieval"] and res["outcome"] == "answered" and llm.calls == 1
+
+
+def _passage_of(db, item):
+    return db.execute(select(Passage.id).where(Passage.item_id == item.id,
+                                               Passage.item_version_id == item.published_version_id)).scalar_one()
+
+
+@pytest.fixture
+def mixed_rights_archive(db):
+    open_rights = make_rights(db, key="ext-ok")
+    local_rights = make_rights(db, key="ext-no", external="not_allowed")
+    fee = make_item(db, open_rights, [FEE_TEXT], title="Reading room rules", item_key="fx-rules")
+    lamp = make_item(db, local_rights, [LAMP_TEXT], title="Committee purchases", item_key="fx-purchases")
+    publish_item(db, fee)
+    publish_item(db, lamp)
+    db.commit()
+    return {"fee": fee, "lamp": lamp, "lamp_pid": _passage_of(db, lamp), "fee_pid": _passage_of(db, fee)}
+
+
+class TestAskRightsAndCitations:
+    def test_local_only_passage_never_reaches_external_model(self, db, mixed_rights_archive):
+        llm = FakeLLM(["valid"])
+        res = ask(db, "What did the committee buy for the reading room in 1921?", [], "en", "session-0100", llm=llm)
+        assert LAMP_TEXT not in "".join(llm.prompts)
+        assert f"[{mixed_rights_archive['lamp_pid']}]" not in "".join(llm.prompts)
+        assert mixed_rights_archive["lamp_pid"] not in [c["passage_id"] for c in res["citations"]
+                                                        if res["outcome"] == "answered"]
+
+    def test_only_local_only_evidence_gives_readable_passages_without_a_model_call(self, db):
+        rights = make_rights(db, key="ext-no-only", external="not_allowed")
+        lamp = make_item(db, rights, [LAMP_TEXT], title="Committee purchases", item_key="fx-purchases")
+        publish_item(db, lamp)
+        db.commit()
+        llm = FakeLLM(["valid"])
+        res = ask(db, "What did the committee buy for the reading room in 1921?", [], "en", "session-0101", llm=llm)
+        assert llm.calls == 0 and res["outcome"] == "extractive" and res["sentences"] == []
+        assert "rights terms" in res["message"] and res["citations"][0]["item_id"] == lamp.id
+
+    def test_no_support_after_withholding_says_so_and_shows_the_withheld_passage(self, db, mixed_rights_archive):
+        llm = FakeLLM(["empty"])
+        res = ask(db, "What did the committee buy for the reading room in 1921?", [], "en", "session-0104", llm=llm)
+        assert llm.calls == 1 and LAMP_TEXT not in llm.prompts[0]
+        assert res["outcome"] == "extractive" and res["sentences"] == [] and "rights terms" in res["message"]
+        assert mixed_rights_archive["lamp_pid"] in [c["passage_id"] for c in res["citations"]]
+
+    def test_local_model_may_read_local_only_passages(self, db, monkeypatch):
+        from archive.config import get_settings
+
+        monkeypatch.setattr(get_settings(), "llm_external", False)
+        rights = make_rights(db, key="ext-no-local", external="not_allowed")
+        lamp = make_item(db, rights, [LAMP_TEXT], title="Committee purchases", item_key="fx-purchases")
+        publish_item(db, lamp)
+        db.commit()
+        llm = FakeLLM(["valid"])
+        ask(db, "What did the committee buy for the reading room in 1921?", [], "en", "session-0102", llm=llm)
+        assert llm.calls == 1 and LAMP_TEXT in llm.prompts[0]
+
+    def test_citing_a_retrieved_passage_that_was_not_in_the_prompt_is_rejected(self, db, mixed_rights_archive):
+        # The lamp passage is retrieved (visible to visitors) but withheld from the external model.
+        lamp_pid = mixed_rights_archive["lamp_pid"]
+        llm = FakeLLM(["cite_given_id", "cite_given_id"], cite=lamp_pid)
+        res = ask(db, Q, [], "en", "session-0103", llm=llm)
+        assert all(f"[{lamp_pid}]" not in p for p in llm.prompts)
+        assert res["outcome"] == "insufficient" and res["sentences"] == [] and llm.calls == 2
+        log = db.get(AnswerLog, res["answer_id"])
+        assert lamp_pid in log.passages_retrieved  # it was retrieved, so the old check would have accepted it
+
+
+VILLAGE_Q = ("When introducing the Draft Constitution on 4 November 1948, what did Dr. Ambedkar say about "
+             "the Indian village?")
+VILLAGE_TEXT = "What is the village but a sink of localism, a den of ignorance, narrow-mindedness and communalism?"
+DRAFT_TEXTS = [f"Dr. Ambedkar introduced the Draft Constitution; Indian members debated the Draft Constitution, "
+               f"clause {n}." for n in range(1, 6)]
+
+
+class TestAskKeywordLeg:
+    """Real-data run r2_village_1948: every question word ANDed in the keyword query matched no passage, so Ask
+    fell back to the embedding leg alone and missed the passage search ranks first for 'village'."""
+
+    @pytest.fixture
+    def village_archive(self, db, monkeypatch):
+        from archive.config import get_settings
+
+        monkeypatch.setattr(get_settings(), "retrieval_candidate_k", 3)  # the embedding leg sees only the top 3
+        rights = make_rights(db, key="village-open")
+        items = [make_item(db, rights, [t], title=f"Debate {i}", item_key=f"fx-draft-{i}")
+                 for i, t in enumerate(DRAFT_TEXTS)]
+        village = make_item(db, rights, [VILLAGE_TEXT], title="Debate on the village", item_key="fx-village")
+        for it in [*items, village]:
+            publish_item(db, it)
+        db.commit()
+        return _passage_of(db, village)
+
+    def test_long_question_still_reaches_the_passage_holding_its_rare_term(self, db, village_archive):
+        from archive.ask.graph import retrieve_passages
+
+        hits, _best, info = retrieve_passages(db, VILLAGE_Q)
+        assert village_archive in [h["passage_id"] for h in hits]
+        assert info["keyword_candidates"] == 0 and info["keyword_relaxed_candidates"] >= 1
+
+    def test_a_matching_keyword_query_is_not_relaxed(self, db, village_archive):
+        from archive.ask.graph import retrieve_passages
+
+        hits, _best, info = retrieve_passages(db, "village localism ignorance")
+        assert hits[0]["passage_id"] == village_archive
+        assert info["keyword_candidates"] >= 1 and "keyword_relaxed_candidates" not in info
+
+
+HI_BHAKTI_Q = "डॉ. आंबेडकर ने राजनीति में भक्ति या नायक-पूजा के बारे में क्या चेतावनी दी?"
+BHAKTI_TEXT = "But in politics, Bhakti or hero-worship is a sure road to degradation and to eventual dictatorship."
+# Hindi passages made of the question's framing words (about, what, said ...) on unrelated topics.
+HI_FRAMING_TEXTS = [f"क्या के बारे में ने दी या में क्या के बारे में ने दी {topic}"
+                    for topic in ("शिक्षा", "पानी", "रेल", "कपड़ा")]
+GLOSSARY = {"राजनीति": "politics", "भक्ति": "bhakti", "नायक": "hero", "पूजा": "worship"}
+_DEVA_TOK = re.compile(r"[\w\u0900-\u0963\u0966-\u097F]+")
+
+
+def _glossed(text: str) -> list[str]:
+    return [GLOSSARY.get(t, t) for t in _DEVA_TOK.findall(text.lower())]
+
+
+class GlossaryEmbedder:
+    """Test double for a multilingual embedder: bag of hashed tokens after mapping four Hindi words to English.
+    Framing words stay in the vector, so a long question's embedding is diluted by them."""
+
+    is_test_double = True
+    name = "glossary-hash-embedder"
+
+    def __init__(self):
+        from archive.search.models import HashEmbedder
+
+        self._hash = HashEmbedder(384)
+
+    def embed_query(self, text: str) -> list[float]:
+        return self._hash.embed_query(" ".join(_glossed(text)))
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return [self.embed_query(t) for t in texts]
+
+
+class GlossaryReranker:
+    """Test double for a multilingual cross-encoder: share of the question's content words found in the passage."""
+
+    is_test_double = True
+    name = "glossary-overlap-reranker"
+
+    def score(self, query: str, docs: list[str]) -> list[float]:
+        from archive.ask.graph import STOP
+
+        q = {t for t in _glossed(query) if t not in STOP and len(t) > 2}
+        return [round(len(q & set(_glossed(d))) / (len(q) or 1), 4) for d in docs]
+
+
+class TestAskLanguage:
+    def test_explicit_hindi_ui_is_kept_when_question_spelling_looks_marathi(self, db, archive):
+        # Lingua reads the Marathi-style spelling आंबेडकर as Marathi; the visitor chose Hindi.
+        res = ask(db, HI_BHAKTI_Q, [], "hi", "session-0300", llm=FakeLLM(["valid"]))
+        assert res["language"] == "hi"
+        assert db.get(AnswerLog, res["answer_id"]).language == "hi"
+
+    def test_english_ui_answers_in_the_detected_question_language(self, db, archive):
+        res = ask(db, "डॉ. अंबेडकर ने शिक्षा के बारे में क्या कहा?", [], "en", "session-0301", llm=FakeLLM(["valid"]))
+        assert res["language"] == "hi"
+
+    def test_keywordise_keeps_whole_devanagari_words(self):
+        from archive.ask.graph import keywordise
+
+        assert keywordise(HI_BHAKTI_Q).split() == ["आंबेडकर", "राजनीति", "भक्ति", "नायक", "पूजा", "चेतावनी"]
+
+
+class TestAskCrossLanguage:
+    """Live answer log 37: a Hindi question over English-only passages. The keyword leg matched nothing, and the
+    embedding of the whole question (dominated by its framing) ranked the answering passage outside the reranked
+    pool, although the reranker scores it highest against the full question."""
+
+    @pytest.fixture
+    def bhakti_archive(self, db, monkeypatch):
+        from archive.ask import graph
+        from archive.config import get_settings
+        from archive.search import hybrid
+
+        emb = GlossaryEmbedder()
+        monkeypatch.setattr(hybrid, "get_embedder", lambda: emb)
+        monkeypatch.setattr(publish, "get_embedder", lambda: emb)
+        monkeypatch.setattr(graph, "get_reranker", lambda: GlossaryReranker())
+        monkeypatch.setattr(get_settings(), "retrieval_candidate_k", 3)
+        monkeypatch.setattr(get_settings(), "rerank_candidate_k", 4)
+        rights = make_rights(db, key="bhakti-open")
+        framing = [make_item(db, rights, [t], title=f"Hindi note {i}", item_key=f"fx-hi-{i}", language="hi")
+                   for i, t in enumerate(HI_FRAMING_TEXTS)]
+        bhakti = make_item(db, rights, [BHAKTI_TEXT], title="Reply to the debate", item_key="fx-bhakti")
+        for it in [*framing, bhakti]:
+            publish_item(db, it)
+        db.commit()
+        return _passage_of(db, bhakti)
+
+    def test_hindi_question_reaches_the_english_passage_that_answers_it(self, db, bhakti_archive):
+        from archive.ask.graph import retrieve_passages
+
+        hits, best, info = retrieve_passages(db, HI_BHAKTI_Q)
+        assert info["keyword_candidates"] == 0
+        assert hits[0]["passage_id"] == bhakti_archive and best >= 0.5
+
+    def test_hindi_question_is_answered_from_the_english_passage_in_hindi(self, db, bhakti_archive):
+        llm = FakeLLM(["valid"])
+        res = ask(db, HI_BHAKTI_Q, [], "hi", "session-0310", llm=llm)
+        assert res["outcome"] == "answered" and res["language"] == "hi"
+        assert res["citations"][0]["passage_id"] == bhakti_archive
+        assert "Answer language: Hindi" in llm.prompts[0]
+
+    def test_unanswerable_hindi_question_still_abstains_without_a_model_call(self, db, bhakti_archive):
+        llm = FakeLLM(["valid"])
+        res = ask(db, "टंगस्टन धातु का गलनांक क्या है?", [], "hi", "session-0311", llm=llm)
+        assert res["outcome"] == "insufficient" and llm.calls == 0 and res["sentences"] == []
+
+
+class TestAskNodeFailures:
+    def test_retrieval_failure_returns_error_outcome_not_an_exception(self, db, archive, monkeypatch):
+        import archive.ask.graph as graph
+
+        def broken(*_a, **_k):
+            raise RuntimeError("reranker model failed to load")
+
+        monkeypatch.setattr(graph, "hybrid_search", broken)
+        llm = FakeLLM(["valid"])
+        res = ask(db, Q, [], "en", "session-0200", llm=llm)
+        assert res["outcome"] == "error" and llm.calls == 0 and res["sentences"] == [] and res["message"]
+
+    def test_malformed_provider_response_returns_error_outcome(self, db, archive):
+        class MalformedLLM:
+            model = "malformed-llm-test-double"
+
+            def complete(self, system: str, user: str, max_tokens: int) -> LLMResult:
+                raise KeyError("choices")
+
+        res = ask(db, Q, [], "en", "session-0201", llm=MalformedLLM())
+        assert res["outcome"] == "error" and res["label"] is None and res["citations"]
 
 
 class TestDatasets:

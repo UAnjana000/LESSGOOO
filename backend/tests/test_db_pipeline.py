@@ -183,6 +183,69 @@ class TestOcrRouting:
         assert out.route == "text_layer" and pages[0].status == "in_batch_review"
         assert "reading rooms" in review.candidate_text(pages[0])
 
+    def test_ingest_graph_parses_a_multi_page_pdf_once_per_item(self, db, monkeypatch):
+        import pypdfium2
+        from langgraph.checkpoint.memory import InMemorySaver
+
+        from archive.ingest.graph import build_ingest_graph, thread_config
+
+        spec = importlib.util.spec_from_file_location("genfx", FIXTURES / "generate_fixtures.py")
+        genfx = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(genfx)
+        pdf = genfx.make_pdf([f"Synthetic born digital page {i} about reading rooms and night schools. " * 2
+                              for i in range(8)])
+        pages, res = _intake_printed(db, make_rights(db), doc_class="born_digital", name="multi.pdf", data=pdf)
+        db.commit()
+        calls = {"opens": 0, "renders": 0}
+        doc_init, render = pypdfium2.PdfDocument.__init__, pypdfium2.PdfPage.render
+
+        def count_open(*a, **k):
+            calls["opens"] += 1
+            return doc_init(*a, **k)
+
+        def count_render(*a, **k):
+            calls["renders"] += 1
+            return render(*a, **k)
+
+        monkeypatch.setattr(pypdfium2.PdfDocument, "__init__", count_open)
+        monkeypatch.setattr(pypdfium2.PdfPage, "render", count_render)
+        graph = build_ingest_graph(fallback_factory=lambda: None, checkpointer=InMemorySaver())
+        state = graph.invoke({"item_id": res.item_id, "actor": "tester"}, thread_config(res.item_id))
+        assert len(pages) == 8 and len(state["page_outcomes"]) == 8
+        assert all(o["route"] == "text_layer" for o in state["page_outcomes"])
+        assert calls == {"opens": 1, "renders": 8}
+
+    def test_one_failing_page_is_audited_and_does_not_abort_the_item(self, db, monkeypatch):
+        from langgraph.checkpoint.memory import InMemorySaver
+
+        from archive.ingest.graph import build_ingest_graph, thread_config
+        from archive.models import AuditEvent
+
+        spec = importlib.util.spec_from_file_location("genfx", FIXTURES / "generate_fixtures.py")
+        genfx = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(genfx)
+        pdf = genfx.make_pdf([f"Synthetic born digital page {i} about reading rooms and night schools. " * 2
+                              for i in range(3)])
+        pages, res = _intake_printed(db, make_rights(db), doc_class="born_digital", name="three.pdf", data=pdf)
+        db.commit()
+        real = processing.process_page
+
+        def flaky(session, page, fallback, *a, **k):
+            if page.preprocessing_params.get("pdf_page_index") == 1:
+                raise RuntimeError("corrupt page stream")
+            return real(session, page, fallback, *a, **k)
+
+        monkeypatch.setattr(processing, "process_page", flaky)
+        graph = build_ingest_graph(fallback_factory=lambda: None, checkpointer=InMemorySaver())
+        state = graph.invoke({"item_id": res.item_id, "actor": "tester"}, thread_config(res.item_id))
+        routes = [o["route"] for o in state["page_outcomes"]]
+        assert routes == ["text_layer", "error", "text_layer"] and "__interrupt__" in state
+        db.expire_all()
+        assert [p.status for p in sorted(pages, key=lambda p: p.sequence)] == \
+            ["in_batch_review", "pending", "in_batch_review"]
+        failed = db.execute(select(AuditEvent).where(AuditEvent.action == "page.process_failed")).scalars().all()
+        assert len(failed) == 1 and "corrupt page stream" in failed[0].detail["error"]
+
 
 class TestIntakeGovernance:
     def test_exact_duplicate_detected_and_checksum_mismatch_quarantined(self, db):
@@ -312,7 +375,9 @@ class TestRightsFiltering:
                 "date_checked": "2026-09-26", "checked_by": "a@test"}
         r = client.post("/api/staff/rights", json=body, headers={"Authorization": f"Bearer {token}"})
         assert r.status_code == 200 and r.json()["effects"]["withdrawn_items"] == [item.id]
-        assert client.get(f"/api/visitor/items/{item.id}").status_code == 404
+        gone = client.get(f"/api/visitor/items/{item.id}")
+        assert gone.status_code == 410
+        assert gone.json()["detail"]["reason_category"] == "rights"
 
     def test_staff_endpoints_require_auth(self, client):
         assert client.get("/api/staff/items").status_code == 401
@@ -330,8 +395,8 @@ class TestWithdrawal:
 
         publish.withdraw(db, item, "archivist", "rights holder request")
         db.commit()
-        assert client.get(f"/api/visitor/items/{item.id}").status_code == 404
-        assert client.get(f"/api/visitor/files/{file_id}").status_code == 404
+        assert client.get(f"/api/visitor/items/{item.id}").status_code == 410
+        assert client.get(f"/api/visitor/files/{file_id}").status_code == 410
         assert client.get("/api/visitor/search", params={"q": "lamps oil"}).json()["results"] == []
         assert item.id in client.get("/api/visitor/withdrawals").json()["withdrawn_item_ids"]
         assert item.id in exhibit.build_manifest(db)["payload"]["withdrawn_item_ids"]

@@ -22,7 +22,10 @@ class Settings(BaseSettings):
     derivative_root: Path = Path("./data/derivatives")
     quarantine_root: Path = Path("./data/quarantine")
     trace_root: Path = Path("./data/traces")
-    backup_root: Path = Path("./data/backups")
+    backup_root: Path = Path("./data/backups")  # prototype: a second disk mounted here
+    nightly_backup_enabled: bool = True
+    nightly_backup_hour_utc: int = Field(default=20, ge=0, le=23)  # 20:00 UTC = 01:30 IST
+    backup_keep: int = Field(default=14, ge=1)  # complete backups kept in backup_root after each backup job
     model_cache: Path = Path("./data/models")
 
     # Staff auth (prototype: passwords; PROD: SSO/MFA).
@@ -43,14 +46,24 @@ class Settings(BaseSettings):
     # OCR
     tesseract_cmd: str = "tesseract"
     ocr_languages: str = "eng+hin+mar"
+    # Page segmentation: "3" automatic layout, "6" one uniform block, "auto" = 6 unless the page has a column
+    # gutter, then 3 (docs/OCR_ENGINE_EVAL.md).
+    ocr_tesseract_psm: Literal["3", "6", "auto"] = "3"
+    # Tesseract language string per page language. "Devanagari" (the script model) also reads Latin letters
+    # and ASCII digits inside Hindi text; it needs Devanagari.traineddata in the tessdata directory.
+    ocr_tesseract_lang_en: str = "eng"
+    ocr_tesseract_lang_hi: str = "hin"
+    ocr_tesseract_lang_mr: str = "mar"
     gate_config_path: Path = Path(__file__).parent / "ingest" / "gate_thresholds.json"
 
-    # Sarvam (OCR fallback, translation, TTS are separate switches).
+    # Sarvam (OCR fallback, translation, TTS, speech-to-text drafts are separate switches).
     sarvam_api_key: str = ""
     sarvam_base_url: str = "https://api.sarvam.ai"
     sarvam_ocr_enabled: bool = True
     sarvam_translate_enabled: bool = True
     sarvam_tts_enabled: bool = True
+    sarvam_stt_enabled: bool = True
+    sarvam_stt_max_seconds: int = Field(default=3 * 3600, ge=30)  # longest recording one job may send
     sarvam_max_retries: int = 3
     sarvam_poll_seconds: float = 3.0
     sarvam_poll_timeout_seconds: float = 180.0
@@ -62,6 +75,9 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_model: str = ""
     llm_max_output_tokens: int = 350
+    # True when the answer model runs off the premises (hosted API): passages whose rights register entry
+    # does not allow external processing are then never put in its prompt.
+    llm_external: bool = True
     llm_input_cost_per_mtok: float = 0.0
     llm_output_cost_per_mtok: float = 0.0
     daily_cost_alert_usd: float = 5.0
@@ -73,6 +89,10 @@ class Settings(BaseSettings):
     reranker_backend: Literal["fastembed", "lexical"] = "fastembed"
     reranker_model: str = "jinaai/jina-reranker-v2-base-multilingual"
     retrieval_candidate_k: int = 30
+    # Ask only: how many fused candidates the cross-encoder scores, and how much of each it reads.
+    # Re-check first-stage Recall@rerank_candidate_k on the reviewed question set (spec §10.1) before lowering it.
+    rerank_candidate_k: int = 15
+    rerank_max_chars: int = 900
     retrieval_top_k: int = 5
     passage_max_chars: int = 900
     sufficiency_threshold: float = 0.35

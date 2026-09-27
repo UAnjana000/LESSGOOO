@@ -62,7 +62,10 @@ def parse_answer(raw: str) -> list[Sentence]:
 
 
 def extract_quotes(text: str) -> list[str]:
-    return [q.strip() for q in QUOTE_RE.findall(text) if len(q.strip()) >= MIN_QUOTE_CHARS]
+    """Quoted spans that must be verbatim. A single quoted word is a term mention, not a quotation; any
+    multi-word span is checked however short (a short quote attributed to Dr. Ambedkar still needs a source)."""
+    return [q.strip() for q in QUOTE_RE.findall(text)
+            if len(q.strip()) >= MIN_QUOTE_CHARS or len(q.split()) >= 2]
 
 
 def validate(raw: str, retrieved: dict[int, dict[str, Any]]) -> ValidationResult:

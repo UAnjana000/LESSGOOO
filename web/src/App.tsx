@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ComponentType } from "react";
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { createBrowserRouter, RouterProvider, type RouteObject } from "react-router-dom";
 import { SessionProvider } from "./state";
 import { Shell } from "./components/Shell";
 import { Loading } from "./components/Bits";
@@ -21,6 +21,8 @@ function named<M>(load: () => Promise<M>, name: keyof M): ComponentType {
   };
 }
 const Item = named(() => import("./pages/Item"), "Item");
+const Constitution = named(() => import("./pages/Constitution"), "Constitution");
+const ConstitutionArticlePage = named(() => import("./pages/Constitution"), "ConstitutionArticlePage");
 const StaffRoot = named(staff, "StaffRoot");
 const StaffLogin = named(staff, "StaffLogin");
 const StaffLayout = named(staff, "StaffLayout");
@@ -35,7 +37,7 @@ const StaffRights = named(staff, "StaffRights");
 const StaffJobs = named(staff, "StaffJobs");
 const StaffAudit = named(staff, "StaffAudit");
 
-const router = createBrowserRouter([
+export const routes: RouteObject[] = [
   {
     path: "/",
     element: <Shell />,
@@ -48,6 +50,8 @@ const router = createBrowserRouter([
       { path: "stories", element: <Stories /> },
       { path: "stories/:slug", element: <Story /> },
       { path: "map", element: <KnowledgeMap /> },
+      { path: "constitution", element: <Constitution /> },
+      { path: "constitution/:number", element: <ConstitutionArticlePage /> },
       { path: "list", element: <Basket /> },
     ],
   },
@@ -75,9 +79,12 @@ const router = createBrowserRouter([
       },
     ],
   },
-]);
+];
+
+let router: ReturnType<typeof createBrowserRouter> | null = null;
 
 export function App() {
+  router ??= createBrowserRouter(routes);
   return (
     <SessionProvider>
       <RouterProvider router={router} />

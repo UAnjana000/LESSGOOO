@@ -3,6 +3,7 @@ integration), exhibit signing, manifest governance and dataset splitting."""
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import zipfile
@@ -157,6 +158,16 @@ class TestManifestGovernance:
         if not path.exists():
             pytest.skip("fixtures not generated yet")
         assert validate_manifest(json.loads(path.read_text("utf-8"))) == []
+
+    def test_fixture_files_match_manifest_checksums(self):
+        path = FIXTURES / "manifests" / "fixture_manifest.json"
+        if not path.exists():
+            pytest.skip("fixtures not generated yet")
+        manifest = json.loads(path.read_text("utf-8"))
+        files = [f for it in manifest["items"] for f in it.get("files", [])]
+        mismatched = [f["path"] for f in files
+                      if hashlib.sha256((path.parent / f["path"]).read_bytes()).hexdigest() != f["sha256"]]
+        assert files and mismatched == []
 
     def test_missing_rights_fields_rejected(self):
         manifest = {"rights": [{"source_key": "x", "display_permission": "maybe"}], "items": []}

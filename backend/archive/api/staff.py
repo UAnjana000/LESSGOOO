@@ -5,15 +5,15 @@ from __future__ import annotations
 import datetime as dt
 import difflib
 import json
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from archive import audit, storage
+from archive import audit, constitution, metadata, storage
 from archive.ask.llm import LLMUnavailable, get_llm
 from archive.config import get_settings
 from archive.db import get_db
@@ -24,12 +24,16 @@ from archive.models import (
     ArchivalItem,
     AuditEvent,
     CollectionSetting,
+    ConstitutionArticle,
+    ConstitutionLink,
     DatasetVersion,
     Derivative,
     FileVersion,
     Job,
+    KnowledgeEdge,
     KnowledgeNode,
     MediaSegment,
+    MetadataRevision,
     ModelVersion,
     Page,
     Passage,
@@ -41,13 +45,26 @@ from archive.models import (
     SystemState,
     TimelineEvent,
     Translation,
+    utcnow,
 )
 from archive.rights import external_processing_allowed
-from archive.security import Admin, Archivist, Curator, Staff, TranslationReviewer, authenticate, create_token
-from archive.services import narration, sarvam_text
+from archive.search.hybrid import load_hits
+from archive.security import (
+    Admin,
+    Archivist,
+    Curator,
+    IngestOrReview,
+    Staff,
+    TranslationReviewer,
+    authenticate,
+    create_token,
+    staff_acting_role,
+)
+from archive.services import narration, sarvam_text, speech_to_text
 
 router = APIRouter(prefix="/api/staff", tags=["staff"])
 DB = Annotated[Session, Depends(get_db)]
+BROWSER_IMAGE_FORMATS = frozenset({"image/jpeg", "image/png", "image/webp", "image/gif"})
 
 
 class LoginBody(BaseModel):
@@ -192,6 +209,13 @@ def staff_item(item_id: int, db: DB, user: Staff) -> dict[str, Any]:
     photo = db.get(PhotoMetadata, item_id)
     derivs = db.execute(select(Derivative).where(Derivative.item_id == item_id)).scalars().all()
     batches = db.execute(select(ReviewBatch).where(ReviewBatch.item_id == item_id)).scalars().all()
+    published = db.execute(
+        select(Passage, Page.sequence, MediaSegment.start_ms)
+        .outerjoin(Page, Passage.page_id == Page.id).outerjoin(MediaSegment, Passage.media_segment_id == MediaSegment.id)
+        .where(Passage.item_version_id == item.published_version_id, Passage.translation_of_id.is_(None))
+        .order_by(Passage.id)).all() if item.published_version_id else []
+    links = constitution.active_links(db, item_ids=[item_id], visible_only=False)
+    arts = {a.number: a for a in db.execute(select(ConstitutionArticle)).scalars()} if links else {}
     return {
         "id": item.id, "title": item.title, "state": item.publication_state, "version": item.version,
         "published_version_id": item.published_version_id, "collection": item.collection,
@@ -202,7 +226,8 @@ def staff_item(item_id: int, db: DB, user: Staff) -> dict[str, Any]:
         "files": [{"id": f.id, "role": f.role, "kind": f.kind, "format": f.format, "bytes": f.byte_size,
                    "sha256": f.sha256, "generator": f.generator, "deleted": f.deleted_at is not None} for f in files],
         "segments": [{"id": s.id, "start_ms": s.start_ms, "end_ms": s.end_ms, "speaker": s.speaker,
-                      "text": s.transcript_text, "status": s.review_status, "quote_verified": s.quote_verified}
+                      "text": s.transcript_text, "status": s.review_status, "quote_verified": s.quote_verified,
+                      "language": s.language, "draft_engine": s.draft_engine, "source_file_id": s.source_file_id}
                      for s in segs],
         "photo": ({"caption": photo.caption, "people": photo.people, "place": photo.place, "event": photo.event,
                    "date_text": photo.date_text, "photographer": photo.photographer,
@@ -210,7 +235,171 @@ def staff_item(item_id: int, db: DB, user: Staff) -> dict[str, Any]:
         "derivatives": [{"id": d.id, "kind": d.kind, "language": d.language, "status": d.status,
                          "content": d.content, "label": d.label_shown, "generator": d.generator} for d in derivs],
         "batches": [{"id": b.id, "status": b.status, "pages": b.page_ids, "sample": b.sample_page_ids} for b in batches],
+        "metadata": metadata.snapshot(item), "metadata_version": item.metadata_version,
+        "published_passages": [{"id": p.id, "page_sequence": seq, "start_ms": start, "kind": p.kind,
+                                "text": p.text[:200]} for p, seq, start in published],
+        "constitution_links": [{"id": lk.id, "article_number": lk.article_number,
+                                "article_title": constitution.article_title(arts[lk.article_number]),
+                                "passage_id": lk.passage_id, "note": lk.note, "created_by": lk.created_by,
+                                "created_at": lk.created_at.isoformat()} for lk in links],
     }
+
+
+# ---------------------------------------------------------------- descriptive metadata (versioned)
+
+Tag = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
+LangCode = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^[a-z]{2,3}$")]
+ShortText = Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)]
+
+
+def _dedupe(values: list[str]) -> list[str]:
+    return list(dict.fromkeys(values))
+
+
+class MetadataBody(BaseModel):
+    """Partial update: only fields present in the request change. `reason` is kept with the revision."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=3, max_length=500)]
+    subjects: list[Tag] | None = Field(default=None, max_length=50)
+    people: list[Tag] | None = Field(default=None, max_length=50)
+    places: list[Tag] | None = Field(default=None, max_length=50)
+    date_text: ShortText | None = None
+    date_start: dt.date | None = None
+    date_end: dt.date | None = None
+    date_certainty: Literal["exact", "approximate", "unknown"] | None = None
+    languages: list[LangCode] | None = Field(default=None, min_length=1, max_length=10)
+    edition: ShortText | None = None
+    volume: ShortText | None = None
+    publisher: ShortText | None = None
+    creator: ShortText | None = None
+
+
+@router.put("/items/{item_id}/metadata")
+def update_metadata(item_id: int, body: MetadataBody, db: DB, user: Archivist) -> dict[str, Any]:
+    item = db.get(ArchivalItem, item_id)
+    if item is None:
+        raise HTTPException(404, "item not found")
+    before = metadata.snapshot(item)
+    changes = {k: getattr(body, k) for k in body.model_fields_set if k in metadata.FIELDS}
+    for k in ("subjects", "people", "places", "languages"):
+        if changes.get(k) is not None:
+            changes[k] = _dedupe(changes[k])
+    start = changes.get("date_start", item.date_start)
+    end = changes.get("date_end", item.date_end)
+    if start and end and end < start:
+        raise HTTPException(422, "date_end is before date_start")
+    for k, v in changes.items():
+        if k in ("subjects", "people", "places"):
+            setattr(item, k, v or [])
+        elif k == "languages":
+            if v:
+                item.original_languages = v
+        elif k == "date_certainty":
+            item.date_certainty = v or "unknown"
+        else:
+            setattr(item, k, v or None)
+    changed = metadata.record_revision(db, item, before, user.email, body.reason) is not None
+    db.commit()
+    return {"metadata_version": item.metadata_version, "metadata": metadata.snapshot(item), "changed": changed}
+
+
+@router.get("/items/{item_id}/metadata/history")
+def metadata_history(item_id: int, db: DB, user: Staff) -> list[dict[str, Any]]:
+    rows = db.execute(select(MetadataRevision).where(MetadataRevision.item_id == item_id)
+                      .order_by(MetadataRevision.version.desc())).scalars()
+    return [{"version": r.version, "before": r.before, "after": r.after, "actor": r.actor, "reason": r.reason,
+             "at": r.created_at.isoformat()} for r in rows]
+
+
+# ---------------------------------------------------------------- Constitution article links (curated)
+
+class ArticleBody(BaseModel):
+    number: Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^\d{1,3}[A-Z]{0,2}(\(\d{1,2}\))?$")]
+    titles: dict[Literal["en", "hi", "mr"], Annotated[str, StringConstraints(strip_whitespace=True, min_length=1,
+                                                                             max_length=200)]]
+    part: Annotated[str, StringConstraints(strip_whitespace=True, max_length=20)] | None = None
+
+
+@router.get("/constitution/articles")
+def list_articles(db: DB, user: Staff) -> list[dict[str, Any]]:
+    counts = dict(db.execute(select(ConstitutionLink.article_number, func.count())
+                             .where(ConstitutionLink.removed_at.is_(None))
+                             .group_by(ConstitutionLink.article_number)).all())
+    arts = db.execute(select(ConstitutionArticle)).scalars().all()
+    return [{"number": a.number, "titles": a.titles, "part": a.part, "links": counts.get(a.number, 0)}
+            for a in sorted(arts, key=lambda a: constitution.article_sort_key(a.number))]
+
+
+@router.post("/constitution/articles")
+def upsert_article(body: ArticleBody, db: DB, user: Curator) -> dict[str, Any]:
+    if "en" not in body.titles:
+        raise HTTPException(422, "an English title is required")
+    art = db.get(ConstitutionArticle, body.number)
+    created = art is None
+    if created:
+        art = ConstitutionArticle(number=body.number, titles=dict(body.titles), part=body.part, created_by=user.email)
+        db.add(art)
+    else:
+        art.titles, art.part = dict(body.titles), body.part
+    db.flush()
+    audit.record(db, user.email, "constitution.article.create" if created else "constitution.article.update",
+                 "constitution_article", art.number, detail={"titles": art.titles, "part": art.part})
+    db.commit()
+    return {"number": art.number, "titles": art.titles, "part": art.part}
+
+
+class LinkBody(BaseModel):
+    passage_id: int
+    article_number: str = Field(max_length=20)
+    note: Annotated[str, StringConstraints(strip_whitespace=True, max_length=500)] | None = None
+
+
+@router.post("/constitution/links")
+def create_link(body: LinkBody, db: DB, user: Curator) -> dict[str, Any]:
+    if db.get(ConstitutionArticle, body.article_number) is None:
+        raise HTTPException(422, "unknown article; add it to the curated article list first")
+    if body.passage_id not in load_hits(db, [body.passage_id]):
+        raise HTTPException(422, "links can only be made on approved passages of published items")
+    p = db.get(Passage, body.passage_id)
+    if p.translation_of_id is not None:
+        raise HTTPException(422, "link the source passage, not a translation")
+    dup = db.execute(select(ConstitutionLink.id).where(
+        ConstitutionLink.removed_at.is_(None), ConstitutionLink.article_number == body.article_number,
+        ConstitutionLink.item_id == p.item_id, ConstitutionLink.page_id.is_not_distinct_from(p.page_id),
+        ConstitutionLink.media_segment_id.is_not_distinct_from(p.media_segment_id),
+        ConstitutionLink.text_hash == p.text_hash)).scalar()
+    if dup:
+        raise HTTPException(409, "this passage is already linked to that article")
+    lk = ConstitutionLink(article_number=body.article_number, item_id=p.item_id, page_id=p.page_id,
+                          media_segment_id=p.media_segment_id, passage_id=p.id, text_hash=p.text_hash,
+                          note=body.note or None, created_by=user.email)
+    db.add(lk)
+    db.flush()
+    audit.record(db, user.email, "constitution.link.add", "constitution_link", lk.id,
+                 detail={"article": lk.article_number, "item_id": lk.item_id, "passage_id": p.id},
+                 checksum_after=p.text_hash)
+    db.commit()
+    return {"id": lk.id}
+
+
+class RemoveLinkBody(BaseModel):
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=3, max_length=500)]
+
+
+@router.post("/constitution/links/{link_id}/remove")
+def remove_link(link_id: int, body: RemoveLinkBody, db: DB, user: Curator) -> dict[str, Any]:
+    lk = db.get(ConstitutionLink, link_id)
+    if lk is None:
+        raise HTTPException(404, "link not found")
+    if lk.removed_at is not None:
+        raise HTTPException(409, "link already removed")
+    lk.removed_at, lk.removed_by, lk.removal_reason = utcnow(), user.email, body.reason
+    audit.record(db, user.email, "constitution.link.remove", "constitution_link", lk.id,
+                 detail={"article": lk.article_number, "item_id": lk.item_id, "reason": body.reason})
+    db.commit()
+    return {"id": lk.id, "removed": True}
 
 
 @router.get("/files/{file_id}")
@@ -237,8 +426,8 @@ def review_queue(db: DB, user: Staff) -> dict[str, Any]:
         "pages": [{**_page_summary(p), "item_id": p.item_id, "item_title": p.item.title} for p in pages],
         "batches": [{"id": b.id, "item_id": b.item_id, "pages": len(b.page_ids), "sample": b.sample_page_ids}
                     for b in batches],
-        "segments": [{"id": s.id, "item_id": s.item_id, "start_ms": s.start_ms, "text": s.transcript_text}
-                     for s in segs],
+        "segments": [{"id": s.id, "item_id": s.item_id, "start_ms": s.start_ms, "text": s.transcript_text,
+                      "language": s.language, "draft_engine": s.draft_engine} for s in segs],
         "photos": [{"item_id": p.item_id, "caption": p.caption} for p in photos],
         "translations": [{"id": t.id, "target_language": t.target_language, "text": t.text,
                           "source_passage_id": t.source_passage_id, "method": t.method} for t in trs],
@@ -265,8 +454,14 @@ def page_detail(page_id: int, db: DB, user: Staff) -> dict[str, Any]:
     decisions = db.execute(select(ReviewDecision).where(ReviewDecision.target_type == "page",
                                                         ReviewDecision.target_id == page_id)
                            .order_by(ReviewDecision.id)).scalars().all()
+    # PDF and TIFF masters cannot be shown in an <img> (a PDF master is the whole document); the per-page
+    # delivery JPEG can.
+    master = db.get(FileVersion, page.image_file_id) if page.image_file_id else None
+    master_viewable = master is not None and master.deleted_at is None and master.format in BROWSER_IMAGE_FORMATS
+    preview_file_id = page.delivery_file_id or (page.image_file_id if master_viewable else None)
     return {**_page_summary(page), "item_id": page.item_id, "item_title": page.item.title,
-            "master_file_id": page.image_file_id, "approved_text": page.approved_text,
+            "master_file_id": page.image_file_id, "preview_file_id": preview_file_id,
+            "approved_text": page.approved_text,
             "approved_text_version": page.approved_text_version, "results": results, "local": local,
             "sarvam": sarvam, "diff": diff, "preprocessing": page.preprocessing_params,
             "external_processing_allowed": external_processing_allowed(page.item),
@@ -288,8 +483,8 @@ def page_review(page_id: int, body: PageReviewBody, db: DB, user: Archivist) -> 
     if page is None:
         raise HTTPException(404, "page not found")
     try:
-        review.review_page(db, page, body.action, user.email, "archivist", text=body.text, reason=body.reason,
-                           source_result_id=body.source_result_id)
+        review.review_page(db, page, body.action, user.email, staff_acting_role(user), text=body.text,
+                           reason=body.reason, source_result_id=body.source_result_id)
     except review.ReviewError as exc:
         raise HTTPException(409, str(exc)) from exc
     db.commit()
@@ -299,7 +494,7 @@ def page_review(page_id: int, body: PageReviewBody, db: DB, user: Archivist) -> 
 @router.post("/pages/{page_id}/reopen")
 def page_reopen(page_id: int, db: DB, user: Archivist, reason: Annotated[str, Form()] = "correction") -> dict[str, Any]:
     page = db.get(Page, page_id)
-    review.reopen_page(db, page, user.email, reason)
+    review.reopen_page(db, page, user.email, reason, staff_acting_role(user))
     db.commit()
     return _page_summary(page)
 
@@ -312,7 +507,7 @@ class ConfirmBody(BaseModel):
 def page_verify_quotes(page_id: int, body: ConfirmBody, db: DB, user: Archivist) -> dict[str, Any]:
     page = db.get(Page, page_id)
     try:
-        review.verify_page_quotes(db, page, user.email, body.confirm)
+        review.verify_page_quotes(db, page, user.email, body.confirm, role=staff_acting_role(user))
     except review.ReviewError as exc:
         raise HTTPException(409, str(exc)) from exc
     db.commit()
@@ -352,7 +547,8 @@ def batch_decide(batch_id: int, body: BatchBody, db: DB, user: Archivist) -> dic
     b = db.get(ReviewBatch, batch_id)
     try:
         review.decide_batch(db, b, body.passed, user.email, body.reason,
-                            {int(k): v for k, v in body.sample_checks.items()})
+                            {int(k): v for k, v in body.sample_checks.items()},
+                            role=staff_acting_role(user))
     except review.ReviewError as exc:
         raise HTTPException(409, str(exc)) from exc
     db.commit()
@@ -369,7 +565,8 @@ class SegmentReviewBody(BaseModel):
 def segment_review(seg_id: int, body: SegmentReviewBody, db: DB, user: Archivist) -> dict[str, Any]:
     seg = db.get(MediaSegment, seg_id)
     try:
-        review.review_segment(db, seg, body.action, user.email, body.text, body.reason)
+        review.review_segment(db, seg, body.action, user.email, body.text, body.reason,
+                             role=staff_acting_role(user))
         review._update_item_state(db, db.get(ArchivalItem, seg.item_id))
     except review.ReviewError as exc:
         raise HTTPException(409, str(exc)) from exc
@@ -381,11 +578,57 @@ def segment_review(seg_id: int, body: SegmentReviewBody, db: DB, user: Archivist
 def segment_verify(seg_id: int, body: ConfirmBody, db: DB, user: Archivist) -> dict[str, Any]:
     seg = db.get(MediaSegment, seg_id)
     try:
-        review.verify_segment_quotes(db, seg, user.email, body.confirm)
+        review.verify_segment_quotes(db, seg, user.email, body.confirm, role=staff_acting_role(user))
     except review.ReviewError as exc:
         raise HTTPException(409, str(exc)) from exc
     db.commit()
     return {"id": seg.id, "quote_verified": seg.quote_verified}
+
+
+@router.post("/items/{item_id}/speech-to-text")
+async def item_speech_to_text(item_id: int, db: DB, user: IngestOrReview, language: Annotated[str, Form()] = "",
+                              file: Annotated[UploadFile | None, File()] = None) -> dict[str, Any]:
+    """Queue a Sarvam draft transcript of an uploaded recording (stored first as a preservation master) or,
+    with no file, of the item's latest stored recording. The draft always goes to full staff review."""
+    item = db.get(ArchivalItem, item_id)
+    if item is None:
+        raise HTTPException(404, "item not found")
+    if item.item_type not in ("audio", "video"):
+        raise HTTPException(409, "speech-to-text drafts belong to audio or video items")
+    if language and language not in speech_to_text.LANG:
+        raise HTTPException(422, "language must be en, hi or mr (or empty to use the item language)")
+    if not external_processing_allowed(item):
+        raise HTTPException(409, speech_to_text.REFUSAL)
+    if not speech_to_text.configured():
+        raise HTTPException(503, "Sarvam speech-to-text is not configured on this installation")
+    if file is not None:
+        data = await file.read()
+        try:
+            mime = intake.sniff_format(data)[0] if data else None
+        except intake.IntakeRejected:
+            mime = None
+        if mime not in speech_to_text.AUDIO_FORMATS:
+            raise HTTPException(422, "upload a WAV, MP3, M4A, FLAC or OGG audio recording")
+        stored = intake.store_original(db, item, data, file.filename or "recording", user.email)
+        recording = db.get(FileVersion, stored.file_id)
+        if recording.item_id != item.id:
+            raise HTTPException(409, f"this recording is already stored with item {recording.item_id}")
+    else:
+        recording = db.execute(select(FileVersion).where(
+            FileVersion.item_id == item.id, FileVersion.role == "preservation_master",
+            FileVersion.deleted_at.is_(None), FileVersion.format.in_(list(speech_to_text.STORED_MEDIA_FORMATS)))
+            .order_by(FileVersion.id.desc())).scalars().first()
+        if recording is None:
+            raise HTTPException(409, "this item has no stored recording; upload one")
+    lang = language or next((code for code in item.original_languages if code in speech_to_text.LANG), None)
+    job = enqueue(db, "speech_to_text", {"item_id": item.id, "file_id": recording.id, "language": lang,
+                                         "actor": user.email}, priority=30)
+    job.max_attempts = 1  # a rejected recording would be rejected again; staff re-run it after checking
+    audit.record(db, user.email, "media.stt_requested", "archival_item", item.id,
+                 detail={"file_id": recording.id, "language": lang or "unknown", "job_id": job.id})
+    db.commit()
+    return {"job_id": job.id, "file_id": recording.id, "language": lang, "status": "queued",
+            "label": speech_to_text.DRAFT_LABEL}
 
 
 class PhotoBody(BaseModel):
@@ -398,7 +641,10 @@ def photo_review(item_id: int, body: PhotoBody, db: DB, user: Archivist) -> dict
     photo = db.get(PhotoMetadata, item_id)
     if photo is None:
         raise HTTPException(404, "no photo metadata")
-    review.review_photo(db, photo, body.action, user.email, body.updates)
+    try:
+        review.review_photo(db, photo, body.action, user.email, body.updates, role=staff_acting_role(user))
+    except review.ReviewError as exc:
+        raise HTTPException(409, str(exc)) from exc
     db.commit()
     return {"item_id": item_id, "status": photo.review_status}
 
@@ -428,6 +674,24 @@ def withdraw_item(item_id: int, body: WithdrawBody, db: DB, user: Archivist) -> 
     idx = publish.withdraw(db, item, user.email, body.reason)
     db.commit()
     return {"item_id": item_id, "state": item.publication_state, "index_version": idx}
+
+
+class RestoreBody(BaseModel):
+    reason: str = Field(min_length=3)
+
+
+@router.post("/items/{item_id}/restore")
+def restore_item(item_id: int, body: RestoreBody, db: DB, user: Archivist) -> dict[str, Any]:
+    item = db.get(ArchivalItem, item_id)
+    if item is None:
+        raise HTTPException(404, "item not found")
+    try:
+        idx = publish.restore(db, item, user.email, body.reason)
+    except publish.PublicationError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    db.commit()
+    return {"item_id": item_id, "state": item.publication_state, "index_version": idx,
+            "version": item.version}
 
 
 # ---------------------------------------------------------------- translations, summaries, narration
@@ -486,7 +750,12 @@ class SummaryBody(BaseModel):
 @router.post("/items/{item_id}/summary")
 def draft_summary(item_id: int, body: SummaryBody, db: DB, user: Archivist) -> dict[str, Any]:
     item = db.get(ArchivalItem, item_id)
+    if item is None:
+        raise HTTPException(404, "item not found")
     approved = [p.approved_text for p in item.pages if p.status == "approved" and p.approved_text]
+    approved += list(db.execute(select(MediaSegment.transcript_text).where(
+        MediaSegment.item_id == item_id, MediaSegment.review_status == "approved").order_by(MediaSegment.start_ms)
+    ).scalars())
     if not approved:
         raise HTTPException(409, "summaries are drafted from approved text only")
     if body.text:
@@ -515,7 +784,12 @@ def draft_summary(item_id: int, body: SummaryBody, db: DB, user: Archivist) -> d
 @router.post("/derivatives/{d_id}/review")
 def derivative_review(d_id: int, body: ReviewTextBody, db: DB, user: Archivist) -> dict[str, Any]:
     d = db.get(Derivative, d_id)
-    review.review_derivative(db, d, body.action, user.email, body.text)
+    if d is None:
+        raise HTTPException(404, "derivative not found")
+    try:
+        review.review_derivative(db, d, body.action, user.email, body.text, role=staff_acting_role(user))
+    except review.ReviewError as exc:
+        raise HTTPException(409, str(exc)) from exc
     db.commit()
     return {"id": d.id, "status": d.status, "label": d.label_shown}
 
@@ -532,11 +806,13 @@ def make_narration(body: NarrationBody, db: DB, user: Archivist) -> dict[str, An
     if p is None:
         raise HTTPException(404, "passage not found")
     try:
-        d = narration.narrate_passage(db, p, body.language, user.email, prefer_local=body.prefer_local)
+        d, cached = narration.narrate(db, p, body.language, user.email, prefer_local=body.prefer_local)
+    except narration.NarrationUnavailable as exc:
+        raise HTTPException(503, f"narration unavailable: {exc}") from exc
     except narration.NarrationError as exc:
         raise HTTPException(409, str(exc)) from exc
     db.commit()
-    return {"id": d.id, "file_id": d.file_id, "generator": d.generator, "label": d.label_shown}
+    return {"id": d.id, "file_id": d.file_id, "generator": d.generator, "label": d.label_shown, "cached": cached}
 
 
 # ---------------------------------------------------------------- curation
@@ -624,6 +900,38 @@ def approve_node(node_id: int, db: DB, user: Curator) -> dict[str, Any]:
     audit.record(db, user.email, "map.node.approve", "knowledge_node", n.id)
     db.commit()
     return {"id": n.id, "status": n.status}
+
+
+class EdgeBody(BaseModel):
+    from_node: int
+    to_node: int
+    relation: Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=40)]
+    evidence_item_ids: list[int] = Field(min_length=1)
+
+
+@router.post("/map/edges")
+def create_edge(body: EdgeBody, db: DB, user: Curator) -> dict[str, Any]:
+    if body.from_node == body.to_node or db.get(KnowledgeNode, body.from_node) is None \
+            or db.get(KnowledgeNode, body.to_node) is None:
+        raise HTTPException(422, "an edge joins two different existing nodes")
+    _check_items_exist(db, body.evidence_item_ids)
+    e = KnowledgeEdge(**body.model_dump(), proposed_by=user.email, status="proposed")
+    db.add(e)
+    db.flush()
+    audit.record(db, user.email, "map.edge.propose", "knowledge_edge", e.id)
+    db.commit()
+    return {"id": e.id}
+
+
+@router.post("/map/edges/{edge_id}/approve")
+def approve_edge(edge_id: int, db: DB, user: Curator) -> dict[str, Any]:
+    e = db.get(KnowledgeEdge, edge_id)
+    if e is None:
+        raise HTTPException(404, "edge not found")
+    e.status, e.approved_by = "approved", user.email
+    audit.record(db, user.email, "map.edge.approve", "knowledge_edge", e.id)
+    db.commit()
+    return {"id": e.id, "status": e.status}
 
 
 def _check_items_exist(db: Session, ids: list[int]) -> None:

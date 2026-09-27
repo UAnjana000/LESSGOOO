@@ -1,0 +1,8 @@
+# Third compose file for the answer-model-failure test only (stack.ps1 llm-down, then
+# `npm run test:e2e:model-down`, then stack.ps1 llm-up).
+# Points the answer model at a closed local port so every generation call fails fast; retrieval,
+# the sufficiency gate and the closest-passages fallback still run for real.
+services:
+  api:
+    environment:
+      ARCHIVE_LLM_BASE_URL: http://127.0.0.1:9/v1

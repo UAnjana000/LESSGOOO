@@ -17,6 +17,9 @@ import io
 import logging
 import subprocess
 import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -31,7 +34,7 @@ from archive.config import get_settings
 from archive.ingest import ocr_local, preprocess
 from archive.ingest.quality import apply_gate, compute_signals, review_priority
 from archive.ingest.sarvam_ocr import OcrFallback, SarvamRejected, SarvamUnavailable
-from archive.ingest.textlayer import extract_pdf
+from archive.ingest.textlayer import PdfPages, text_layer_reliable
 from archive.models import (
     ArchivalItem,
     DocClass,
@@ -55,14 +58,43 @@ class PageOutcome:
     detail: dict[str, Any]
 
 
+_open_pdfs: ContextVar[dict[int, PdfPages] | None] = ContextVar("open_pdfs", default=None)
+
+
+@contextmanager
+def pdf_documents() -> Iterator[None]:
+    """While active, each PDF master is read and parsed once and shared by all its pages; all are closed on
+    exit. Without it every page call opens its own document (still one page rendered, not all)."""
+    cache: dict[int, PdfPages] = {}
+    token = _open_pdfs.set(cache)
+    try:
+        yield
+    finally:
+        _open_pdfs.reset(token)
+        for doc in cache.values():
+            doc.close()
+
+
+@contextmanager
+def _pdf(master: FileVersion) -> Iterator[PdfPages]:
+    cache = _open_pdfs.get()
+    if cache is None:
+        with PdfPages(storage.read_bytes(master.storage_uri)) as doc:
+            yield doc
+        return
+    if master.id not in cache:
+        cache[master.id] = PdfPages(storage.read_bytes(master.storage_uri))
+    yield cache[master.id]
+
+
 def _page_image(db: Session, page: Page) -> tuple[bytes, np.ndarray]:
     """Return (original-looking image bytes for delivery, grayscale array for OCR input)."""
     master = db.get(FileVersion, page.image_file_id)
-    data = storage.read_bytes(master.storage_uri)
     if master.format == "application/pdf":
-        idx = page.preprocessing_params.get("pdf_page_index", 0)
-        rendered = extract_pdf(data)[idx]
-        return rendered.image_png, preprocess.load_gray(rendered.image_png)
+        with _pdf(master) as doc:
+            png = doc.render_png(page.preprocessing_params.get("pdf_page_index", 0))
+        return png, preprocess.load_gray(png)
+    data = storage.read_bytes(master.storage_uri)
     gray = preprocess.load_gray(data)
     half = page.preprocessing_params.get("spread_half")
     if half is not None:
@@ -136,10 +168,10 @@ def process_page(db: Session, page: Page, fallback: OcrFallback | None, actor: s
     if page.doc_class == DocClass.born_digital.value:
         master = db.get(FileVersion, page.image_file_id)
         if master.format == "application/pdf":
-            tl = extract_pdf(storage.read_bytes(master.storage_uri), language=page.language)[
-                page.preprocessing_params.get("pdf_page_index", 0)]
-            if tl.reliable:
-                db.add(OcrResult(page_id=page.id, engine="text_layer", engine_version="pypdf", text=tl.text,
+            with _pdf(master) as doc:
+                text = doc.text(page.preprocessing_params.get("pdf_page_index", 0))
+            if text_layer_reliable(text, page.language):
+                db.add(OcrResult(page_id=page.id, engine="text_layer", engine_version="pypdf", text=text,
                                  selected=True))
                 page.ocr_route = OcrRoute.text_layer.value
                 page.status = PageStatus.in_batch_review.value

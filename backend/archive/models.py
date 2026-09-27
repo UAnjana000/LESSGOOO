@@ -166,6 +166,9 @@ class ArchivalItem(Base):
         _enum_check("collection", Collection),
         _enum_check("access_level", AccessLevel),
         _enum_check("publication_state", PublicationState),
+        Index("ix_archival_item_subjects", "subjects", postgresql_using="gin"),
+        Index("ix_archival_item_people", "people", postgresql_using="gin"),
+        Index("ix_archival_item_places", "places", postgresql_using="gin"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -192,6 +195,10 @@ class ArchivalItem(Base):
     version: Mapped[int] = mapped_column(Integer, default=1)
     capture_details: Mapped[dict[str, Any]] = mapped_column(default=dict)
     ndli_links: Mapped[list[Any]] = mapped_column(default=list)
+    subjects: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, server_default="{}")
+    people: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, server_default="{}")
+    places: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, server_default="{}")
+    metadata_version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     is_fixture: Mapped[bool] = mapped_column(Boolean, default=False)
     created_by: Mapped[str] = mapped_column(Text)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -203,6 +210,22 @@ class ArchivalItem(Base):
     pages: Mapped[list[Page]] = relationship(
         back_populates="item", order_by="Page.sequence", foreign_keys="Page.item_id"
     )
+
+
+class MetadataRevision(Base):
+    """One row per descriptive-metadata edit; before/after snapshots make every version recoverable."""
+
+    __tablename__ = "metadata_revision"
+    __table_args__ = (UniqueConstraint("item_id", "version"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    item_id: Mapped[int] = mapped_column(ForeignKey("archival_item.id", ondelete="CASCADE"))
+    version: Mapped[int] = mapped_column(Integer)
+    before: Mapped[dict[str, Any]] = mapped_column()
+    after: Mapped[dict[str, Any]] = mapped_column()
+    actor: Mapped[str] = mapped_column(Text)
+    reason: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class ItemVersion(Base):
@@ -336,6 +359,8 @@ class MediaSegment(Base):
     quote_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     quote_verified_by: Mapped[str | None] = mapped_column(Text)
     quote_verified_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    draft_engine: Mapped[str | None] = mapped_column(Text)  # machine speech-to-text that drafted it; None = person
+    source_file_id: Mapped[int | None] = mapped_column(ForeignKey("file_version.id", ondelete="SET NULL"))
 
 
 class PhotoMetadata(Base):
@@ -549,6 +574,45 @@ class Story(Base):
     status: Mapped[str] = mapped_column(String(20), default="draft")
 
 
+class ConstitutionArticle(Base):
+    """Curated list of Constitution articles that debate passages can be linked to."""
+
+    __tablename__ = "constitution_article"
+
+    number: Mapped[str] = mapped_column(String(20), primary_key=True)  # e.g. "17", "15(4)", "21A"
+    titles: Mapped[dict[str, Any]] = mapped_column(default=dict)  # {"en": .., "hi": .., "mr": ..}
+    part: Mapped[str | None] = mapped_column(String(20))
+    created_by: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ConstitutionLink(Base):
+    """Curator-made link from an approved passage to a Constitution article. Anchored to the page or media
+    segment (plus the passage's text hash) so it survives republication, which creates new passage ids.
+    Removal is a soft delete so the curation history stays auditable."""
+
+    __tablename__ = "constitution_link"
+    __table_args__ = (
+        CheckConstraint("(page_id IS NOT NULL) OR (media_segment_id IS NOT NULL)", name="ck_constitution_link_anchor"),
+        Index("ix_constitution_link_article", "article_number"),
+        Index("ix_constitution_link_item", "item_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    article_number: Mapped[str] = mapped_column(ForeignKey("constitution_article.number"))
+    item_id: Mapped[int] = mapped_column(ForeignKey("archival_item.id", ondelete="CASCADE"))
+    page_id: Mapped[int | None] = mapped_column(ForeignKey("page.id", ondelete="CASCADE"))
+    media_segment_id: Mapped[int | None] = mapped_column(ForeignKey("media_segment.id", ondelete="CASCADE"))
+    passage_id: Mapped[int | None] = mapped_column(ForeignKey("passage.id", ondelete="SET NULL"))
+    text_hash: Mapped[str | None] = mapped_column(String(64))
+    note: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    removed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    removed_by: Mapped[str | None] = mapped_column(Text)
+    removal_reason: Mapped[str | None] = mapped_column(Text)
+
+
 class CollectionSetting(Base):
     __tablename__ = "collection_setting"
 
@@ -608,6 +672,35 @@ class TrainingExample(Base):
     group_key: Mapped[str] = mapped_column(Text)
     reviewed_by: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class HardNegativeCandidate(Base):
+    """A passage the base retriever ranked high for a labelled question but that is not labelled relevant.
+    It becomes a hard negative only after a person confirms it (spec 7.3 step 2)."""
+
+    __tablename__ = "hard_negative_candidate"
+    __table_args__ = (
+        UniqueConstraint("training_example_id", "passage_id"),
+        CheckConstraint("status IN ('candidate', 'confirmed', 'false_negative', 'rejected')",
+                        name="ck_hard_negative_status"),
+        Index("ix_hard_negative_candidate_status", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    training_example_id: Mapped[int] = mapped_column(ForeignKey("training_example.id", ondelete="CASCADE"))
+    passage_id: Mapped[int] = mapped_column(ForeignKey("passage.id", ondelete="CASCADE"))
+    text_sha256: Mapped[str] = mapped_column(String(64))
+    relation: Mapped[str] = mapped_column(String(20))  # same_item | same_work | other_work
+    retriever: Mapped[str] = mapped_column(Text)
+    rank: Mapped[int | None] = mapped_column(Integer)
+    score: Mapped[float | None] = mapped_column(Float)
+    provenance: Mapped[dict[str, Any]] = mapped_column(default=dict)
+    status: Mapped[str] = mapped_column(String(20), default="candidate")
+    mined_by: Mapped[str] = mapped_column(Text)
+    mined_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    reviewed_by: Mapped[str | None] = mapped_column(Text)
+    reviewed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    review_note: Mapped[str | None] = mapped_column(Text)
 
 
 class ModelVersion(Base):

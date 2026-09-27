@@ -1,0 +1,40 @@
+# Throwaway stack for the Playwright suite. Always used together with the root docker-compose.yml and
+# project name ambedkar-e2e (see stack.ps1), so every volume, network and container is separate from the
+# demo stack (project ambedkar-archive).
+#
+# Host ports and the database password come from shell variables set by stack.ps1
+# (HTTP_PORT=9088, HTTPS_PORT=9443, DB_HOST_PORT=56432, POSTGRES_PASSWORD=e2e-throwaway-db), because
+# `ports:` lists in an override file are appended to the base list rather than replacing it.
+
+name: ambedkar-e2e
+
+x-e2e-env: &e2e-env
+  ARCHIVE_ENVIRONMENT: demo
+  ARCHIVE_PUBLIC_BASE_URL: https://localhost:9443
+  # Fixed, throwaway staff credentials for this stack only; the demo stack's .env passwords are not used.
+  ARCHIVE_BOOTSTRAP_ADMIN_EMAIL: admin@archive.local
+  ARCHIVE_BOOTSTRAP_ADMIN_PASSWORD: e2e-admin-password
+  ARCHIVE_DEMO_STAFF_PASSWORD: e2e-demo-password
+  # No live Sarvam calls from tests: OCR fallback, translation and speech stay off.
+  ARCHIVE_SARVAM_API_KEY: ""
+  # No trace export to the shared Langfuse project; traces go to the stack's own volume.
+  ARCHIVE_LANGFUSE_PUBLIC_KEY: ""
+  ARCHIVE_LANGFUSE_SECRET_KEY: ""
+  ARCHIVE_LANGFUSE_HOST: ""
+  ARCHIVE_NIGHTLY_BACKUP_ENABLED: "false"
+
+services:
+  api:
+    image: ambedkar-e2e/api:local
+    environment:
+      <<: *e2e-env
+
+  worker:
+    image: ambedkar-e2e/api:local
+    environment:
+      <<: *e2e-env
+
+  proxy:
+    image: ambedkar-e2e/proxy:local
+    environment:
+      PUBLIC_HTTPS_PORT: "9443"

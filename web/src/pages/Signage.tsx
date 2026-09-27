@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { fileUrl, type Hit, type ItemCard, type TimelineEvent } from "../api";
+import { pick, textLang, type Lang } from "../i18n";
 import { useApi } from "../hooks";
 import { useSession } from "../state";
-import { pickText } from "../components/Bits";
+import { useDocumentTitle } from "../components/Bits";
 
 interface SignageData {
   timeline: TimelineEvent[];
@@ -10,10 +11,12 @@ interface SignageData {
   slide_seconds: number;
 }
 
+type Text = { text: string; lang?: Lang };
+
 interface Slide {
-  kicker: string;
-  title: string;
-  body: string;
+  kicker: Text;
+  title: Text;
+  body: Text;
   image: number | null;
   citation: string;
 }
@@ -23,11 +26,17 @@ export function Signage() {
   const { t, lang } = useSession();
   const sig = useApi<SignageData>("/api/visitor/signage");
   const [i, setI] = useState(0);
+  useDocumentTitle(null);
   const slides = useMemo<Slide[]>(() => {
     const d = sig.data;
     if (!d) return [];
-    const tl = d.timeline.map((e) => ({ kicker: e.date_text, title: pickText(e.titles, lang), body: pickText(e.descriptions, lang), image: null, citation: e.items.map((x) => x.title).join("; ") }));
-    const st = (d.story?.blocks ?? []).map((b) => ({ kicker: pickText(d.story!.titles, lang), title: b.item.title, body: pickText(b.captions, lang), image: b.image_file_id, citation: b.citation }));
+    const loc = (map: Record<string, string> | undefined): Text => {
+      const p = pick(map, lang);
+      return { text: p.text, lang: p.fallback ? "en" : undefined };
+    };
+    const raw = (text: string): Text => ({ text, lang: textLang(text, lang) });
+    const tl = d.timeline.map((e) => ({ kicker: raw(e.date_text), title: loc(e.titles), body: loc(e.descriptions), image: null, citation: e.items.map((x) => x.title).join("; ") }));
+    const st = (d.story?.blocks ?? []).map((b) => ({ kicker: loc(d.story!.titles), title: raw(b.item.title), body: loc(b.captions), image: b.image_file_id, citation: b.citation }));
     return [...st, ...tl];
   }, [sig.data, lang]);
 
@@ -45,17 +54,17 @@ export function Signage() {
 
   const s = slides[i % Math.max(1, slides.length)];
   return (
-    <div className="signage">
+    <main className="signage">
       <h1>{t("archiveName")}</h1>
       {s ? (
         <div className="slide" key={i}>
           <div>
-            <div className="date">{s.kicker}</div>
-            <h2 style={{ color: "#fff", fontSize: "2.6vw", marginTop: "2vh" }}>{s.title}</h2>
-            <p>{s.body}</p>
+            <div className="date" lang={s.kicker.lang}>{s.kicker.text}</div>
+            <h2 style={{ color: "#fff", fontSize: "2.6vw", marginTop: "2vh" }} lang={s.title.lang}>{s.title.text}</h2>
+            <p lang={s.body.lang}>{s.body.text}</p>
             <p style={{ color: "#c9a24a", fontSize: "1.2vw" }}>{t("citation")}: {s.citation}</p>
           </div>
-          <div>{s.image && <img src={fileUrl(s.image)} alt="" />}</div>
+          <div>{s.image && <img src={fileUrl(s.image)} alt={t("imageOf", { title: s.title.text })} />}</div>
         </div>
       ) : (
         <div />
@@ -64,6 +73,6 @@ export function Signage() {
         <span>{(sig.data?.timeline.some((e) => e.items.some((x) => x.is_fixture)) ?? false) ? t("fixtureBanner") : ""}</span>
         <span>{slides.length ? `${(i % slides.length) + 1} / ${slides.length}` : ""}</span>
       </footer>
-    </div>
+    </main>
   );
 }

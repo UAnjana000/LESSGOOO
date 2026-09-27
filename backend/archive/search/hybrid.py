@@ -7,14 +7,16 @@ Merge: reciprocal rank fusion. Optional local cross-encoder rerank for the Ask w
 
 from __future__ import annotations
 
+import datetime as dt
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from sqlalchemy import and_, func, literal, select
+from sqlalchemy import and_, any_, func, literal, select
 from sqlalchemy.orm import Session
 
 from archive.config import get_settings
-from archive.models import ArchivalItem, MediaSegment, Page, Passage, RightsRecord
+from archive.constitution import articles_by_passage
+from archive.models import ArchivalItem, MediaSegment, Page, Passage, PhotoMetadata, RightsRecord
 from archive.rights import passage_visible
 from archive.search.models import get_embedder, get_reranker
 
@@ -34,8 +36,11 @@ class SearchFilters:
     item_type: str | None = None
     collection: str | None = None
     language: str | None = None
-    date_from: str | None = None
-    date_to: str | None = None
+    date_from: dt.date | None = None
+    date_to: dt.date | None = None
+    subject: str | None = None
+    person: str | None = None
+    place: str | None = None
 
 
 @dataclass
@@ -81,6 +86,13 @@ def citation_label(item: ArchivalItem, page: Page | None, seg: MediaSegment | No
     return ", ".join(parts)
 
 
+def photo_credit(photo: PhotoMetadata | None) -> str | None:
+    """Credit line from reviewed photograph metadata only; draft captions and credits are never shown."""
+    if photo is None or photo.review_status != "approved":
+        return None
+    return "; ".join(x for x in (photo.photographer, photo.source_reference) if x) or None
+
+
 def deep_link(item: ArchivalItem, page: Page | None, seg: MediaSegment | None, passage_id: int) -> str:
     if seg is not None:
         return f"/item/{item.id}?t={seg.start_ms}&passage={passage_id}"
@@ -101,6 +113,12 @@ def _filtered(stmt, filters: SearchFilters):
         conds.append(func.coalesce(ArchivalItem.date_end, ArchivalItem.date_start) >= filters.date_from)
     if filters.date_to:
         conds.append(func.coalesce(ArchivalItem.date_start, ArchivalItem.date_end) <= filters.date_to)
+    if filters.subject:
+        conds.append(literal(filters.subject) == any_(ArchivalItem.subjects))
+    if filters.person:
+        conds.append(literal(filters.person) == any_(ArchivalItem.people))
+    if filters.place:
+        conds.append(literal(filters.place) == any_(ArchivalItem.places))
     return stmt.where(and_(*conds)) if conds else stmt
 
 
@@ -137,15 +155,17 @@ def load_hits(db: Session, ids: list[int]) -> dict[int, Hit]:
     if not ids:
         return {}
     rows = db.execute(
-        select(Passage, ArchivalItem, Page, MediaSegment)
+        select(Passage, ArchivalItem, Page, MediaSegment, PhotoMetadata)
         .join(ArchivalItem, Passage.item_id == ArchivalItem.id)
         .join(RightsRecord, ArchivalItem.rights_record_id == RightsRecord.id)
         .outerjoin(Page, Passage.page_id == Page.id)
         .outerjoin(MediaSegment, Passage.media_segment_id == MediaSegment.id)
+        .outerjoin(PhotoMetadata, PhotoMetadata.item_id == ArchivalItem.id)
         .where(Passage.id.in_(ids), passage_visible())
     ).all()
+    articles = articles_by_passage(db, [r[0] for r in rows])
     out = {}
-    for p, item, page, seg in rows:
+    for p, item, page, seg, photo in rows:
         out[p.id] = Hit(
             passage_id=p.id, item_id=item.id, text=p.text, language=p.language, kind=p.kind,
             kind_label=KIND_LABELS.get(p.kind, p.kind), quote_verified=p.quote_verified, title=item.title,
@@ -153,7 +173,11 @@ def load_hits(db: Session, ids: list[int]) -> dict[int, Hit]:
             deep_link=deep_link(item, page, seg, p.id),
             page_sequence=page.sequence if page else None, start_ms=seg.start_ms if seg else None,
             extra={"edition": item.edition, "volume": item.volume, "is_fixture": item.is_fixture,
-                   "translation_of_id": p.translation_of_id},
+                   "translation_of_id": p.translation_of_id, "item_type": item.item_type,
+                   "rights_line": item.rights.attribution, "credit": photo_credit(photo),
+                   "image_file_id": page.delivery_file_id if page is not None and page.doc_class == "photograph"
+                   else None,
+                   "articles": articles.get(p.id, [])},
         )
     return out
 

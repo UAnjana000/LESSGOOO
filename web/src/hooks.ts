@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError } from "./api";
+import { api, ApiError, apiErrorFromBody } from "./api";
 
 export interface Loaded<T> {
   data: T | null;
@@ -25,14 +25,12 @@ export function useApi<T>(path: string | null, token?: string | null): Loaded<T>
       .then(async (res) => {
         const fromCache = res.headers.get("x-archive-offline") === "1";
         if (!res.ok) {
-          let detail = res.statusText;
           try {
-            const b = await res.json();
-            detail = typeof b.detail === "string" ? b.detail : detail;
-          } catch {
-            /* ignore */
+            throw apiErrorFromBody(res.status, await res.json(), fromCache);
+          } catch (e) {
+            if (e instanceof ApiError) throw e;
+            throw new ApiError(res.status, res.statusText, fromCache);
           }
-          throw new ApiError(res.status, detail, fromCache);
         }
         const body = (await res.json()) as T;
         if (live) {

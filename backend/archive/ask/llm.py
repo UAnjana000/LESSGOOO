@@ -6,6 +6,7 @@ most hosted providers, so the institution can choose a provider without code cha
 
 from __future__ import annotations
 
+import threading
 import time
 from dataclasses import dataclass, field
 from typing import Protocol
@@ -36,6 +37,21 @@ class AnswerLLM(Protocol):
     def complete(self, system: str, user: str, max_tokens: int) -> LLMResult: ...
 
 
+_shared: httpx.Client | None = None
+_shared_lock = threading.Lock()
+
+
+def shared_client() -> httpx.Client:
+    """One keep-alive connection pool per process; httpx.Client is safe to share across threads."""
+    global _shared
+    if _shared is None:
+        with _shared_lock:
+            if _shared is None:
+                _shared = httpx.Client(timeout=httpx.Timeout(45, connect=10),
+                                       limits=httpx.Limits(max_connections=20, max_keepalive_connections=10))
+    return _shared
+
+
 class OpenAICompatibleLLM:
     def __init__(self, base_url: str | None = None, api_key: str | None = None, model: str | None = None,
                  client: httpx.Client | None = None) -> None:
@@ -43,7 +59,7 @@ class OpenAICompatibleLLM:
         self.base_url = (base_url or s.llm_base_url).rstrip("/")
         self.api_key = api_key or s.llm_api_key
         self.model = model or s.llm_model
-        self._client = client or httpx.Client(timeout=45)
+        self._client = client or shared_client()
 
     def complete(self, system: str, user: str, max_tokens: int) -> LLMResult:
         body = {

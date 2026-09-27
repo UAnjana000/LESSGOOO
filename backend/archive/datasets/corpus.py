@@ -15,6 +15,7 @@ from archive import audit
 from archive.models import (
     ArchivalItem,
     DatasetVersion,
+    HardNegativeCandidate,
     MediaSegment,
     ModelVersion,
     Page,
@@ -101,7 +102,8 @@ def gate_report(works_by_split: dict[str, set[str]], pairs_by_split: dict[str, i
             "note": "CI separation is checked at comparison time; trained-model results are shown only if met."}
 
 
-def freeze_dataset(db: Session, name: str, actor: str) -> DatasetVersion:
+def _build(db: Session) -> dict[str, Any]:
+    """Everything a dataset version would contain, without writing anything."""
     pairs = eligible_passages(db)
     groups = sorted({work_key(i) for _, i in pairs})
     entries = []
@@ -118,28 +120,101 @@ def freeze_dataset(db: Session, name: str, actor: str) -> DatasetVersion:
             "approved_at": p.approved_at.isoformat(), "review_basis": p.review_basis,
             "group_key": work_key(item), "split": assign_split(work_key(item), groups),
         })
-    manifest = {"name": name, "rules": "spec 4.10: training permission allowed; approved text from fully reviewed "
-                                        "page or passed sample batch; source text or reviewed transcript only",
-                "entries": entries}
-    digest = hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest()
-    examples = db.execute(select(TrainingExample).where(TrainingExample.dataset_version_id.is_(None))).scalars().all()
+    examples = db.execute(select(TrainingExample).where(TrainingExample.dataset_version_id.is_(None))
+                          .order_by(TrainingExample.id)).scalars().all()
     pid_split = {e["passage_id"]: e["split"] for e in entries}
     works_by_split: dict[str, set[str]] = defaultdict(set)
     for e in entries:
         works_by_split[e["split"]].add(e["group_key"])
+    reviewed: dict[int, list[HardNegativeCandidate]] = defaultdict(list)
+    if examples:
+        for c in db.execute(select(HardNegativeCandidate).where(
+                HardNegativeCandidate.training_example_id.in_([ex.id for ex in examples]))
+                .order_by(HardNegativeCandidate.rank.nulls_last(), HardNegativeCandidate.id)).scalars():
+            reviewed[c.training_example_id].append(c)
+    hn: Counter[str] = Counter({"confirmed_included": 0, "cross_split_excluded": 0, "ineligible_excluded": 0,
+                                "unreviewed_excluded": 0, "rejected_or_relevant": 0})
     pairs_by_split: Counter[str] = Counter()
     test_by_lang: Counter[str] = Counter()
+    rows, excluded_examples = [], []
     for ex in examples:
         splits = {pid_split.get(pid) for pid in ex.positive_passage_ids}
         splits.discard(None)
-        if len(splits) == 1:
-            ex.split = splits.pop()
-            pairs_by_split[ex.split] += len(ex.positive_passage_ids)
-            if ex.split == "test":
-                test_by_lang[ex.language] += 1
-        else:
-            ex.split = None  # positives missing or span splits: excluded from training/eval
-    report = gate_report(works_by_split, dict(pairs_by_split), dict(test_by_lang))
+        split = splits.pop() if len(splits) == 1 else None  # positives missing or span splits: excluded
+        negs = []
+        for c in reviewed.get(ex.id, []):
+            if c.status == "candidate":
+                hn["unreviewed_excluded"] += 1
+            elif c.status != "confirmed":
+                hn["rejected_or_relevant"] += 1
+            elif split is None:
+                continue
+            elif c.passage_id not in pid_split:
+                hn["ineligible_excluded"] += 1
+            elif pid_split[c.passage_id] != split:
+                hn["cross_split_excluded"] += 1  # its work sits in another split: would leak across splits
+            else:
+                hn["confirmed_included"] += 1
+                negs.append({"passage_id": c.passage_id, "reviewed_by": c.reviewed_by,
+                             "reviewed_at": c.reviewed_at.isoformat(), "retriever": c.retriever, "rank": c.rank,
+                             "score": c.score, "relation": c.relation})
+        if split is None:
+            excluded_examples.append(ex.id)
+            continue
+        pairs_by_split[split] += len(ex.positive_passage_ids)
+        if split == "test":
+            test_by_lang[ex.language] += 1
+        rows.append({"example_id": ex.id, "question": ex.question, "language": ex.language, "origin": ex.origin,
+                     "reviewed_by": ex.reviewed_by, "split": split, "group_key": ex.group_key,
+                     "positive_passage_ids": list(ex.positive_passage_ids),
+                     "hard_negative_passage_ids": [n["passage_id"] for n in negs], "hard_negatives": negs})
+    return {"entries": entries, "examples": rows, "excluded_examples": excluded_examples,
+            "works_by_split": works_by_split, "hard_negatives": dict(hn),
+            "gate": gate_report(works_by_split, dict(pairs_by_split), dict(test_by_lang)),
+            "pairs_by_split": dict(pairs_by_split), "_example_rows": examples}
+
+
+def manifest_leakage(manifest: dict[str, Any]) -> list[str]:
+    """Work-level split check: a work in one split only, and every positive and hard negative of an example in the
+    example's split."""
+    problems = []
+    work_splits: dict[str, set[str]] = defaultdict(set)
+    for e in manifest.get("entries", []):
+        work_splits[e["group_key"]].add(e["split"])
+    problems += [f"work {w} is in splits {sorted(s)}" for w, s in work_splits.items() if len(s) > 1]
+    pid_split = {e["passage_id"]: e["split"] for e in manifest.get("entries", [])}
+    for ex in manifest.get("examples", []):
+        for kind in ("positive_passage_ids", "hard_negative_passage_ids"):
+            for pid in ex.get(kind, []):
+                if pid_split.get(pid) != ex["split"]:
+                    problems.append(f"example {ex['example_id']} ({ex['split']}) has {kind[:-4]} {pid} in "
+                                    f"split {pid_split.get(pid)}")
+    return problems
+
+
+def preview_dataset(db: Session) -> dict[str, Any]:
+    """Read-only: what the next dataset version and its gate report would be."""
+    b = _build(db)
+    return {"passages": len(b["entries"]), "items": len({e["item_id"] for e in b["entries"]}),
+            "works_by_split": {k: len(v) for k, v in b["works_by_split"].items()},
+            "examples_by_split": dict(Counter(r["split"] for r in b["examples"])),
+            "pairs_by_split": b["pairs_by_split"], "excluded_examples": b["excluded_examples"],
+            "hard_negatives": b["hard_negatives"], "gate": b["gate"], "entries": b["entries"],
+            "leakage": manifest_leakage({"entries": b["entries"], "examples": b["examples"]})}
+
+
+def freeze_dataset(db: Session, name: str, actor: str) -> DatasetVersion:
+    b = _build(db)
+    entries, report, works_by_split = b["entries"], b["gate"], b["works_by_split"]
+    manifest = {"name": name, "rules": "spec 4.10: training permission allowed; approved text from fully reviewed "
+                                        "page or passed sample batch; source text or reviewed transcript only",
+                "hard_negative_policy": "spec 7.3 step 2: person-confirmed candidates only, training-eligible, "
+                                        "and in the same work-level split as the example",
+                "entries": entries, "examples": b["examples"], "hard_negatives": b["hard_negatives"]}
+    problems = manifest_leakage(manifest)
+    if problems:
+        raise RuntimeError(f"split leakage, not freezing: {problems[:5]}")
+    digest = hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest()
     dv = DatasetVersion(
         name=name, manifest=manifest, manifest_sha256=digest,
         languages=sorted({e["language"] for e in entries}), item_count=len({e["item_id"] for e in entries}),
@@ -150,11 +225,16 @@ def freeze_dataset(db: Session, name: str, actor: str) -> DatasetVersion:
         gate_report=report, created_by=actor)
     db.add(dv)
     db.flush()
-    for ex in examples:
-        if ex.split:
+    rows = {r["example_id"]: r for r in b["examples"]}
+    for ex in b["_example_rows"]:
+        row = rows.get(ex.id)
+        ex.split = row["split"] if row else None
+        if row:
             ex.dataset_version_id = dv.id
+            ex.hard_negative_passage_ids = row["hard_negative_passage_ids"]
     audit.record(db, actor, "dataset.freeze", "dataset_version", dv.id,
-                 detail={"passages": len(entries), "sha256": digest, "gate_met": report["met"]})
+                 detail={"passages": len(entries), "examples": len(rows), "sha256": digest, "gate_met": report["met"],
+                         "hard_negatives": b["hard_negatives"]})
     return dv
 
 
@@ -175,9 +255,21 @@ def flag_datasets_for_rights(db: Session, rights_record_id: int, actor: str) -> 
     return {"datasets": flagged_ds, "models": flagged_models}
 
 
+def resolve_anchor(db: Session, item_key: str, anchor: str) -> tuple[Passage, ArchivalItem] | None:
+    """Locate a published passage by item_key + a verbatim anchor snippet (passage IDs change between databases)."""
+    item = db.execute(select(ArchivalItem).where(ArchivalItem.capture_details["item_key"].astext == item_key)).scalar()
+    if item is None or item.published_version_id is None or not anchor:
+        return None
+    hit = db.execute(select(Passage).where(Passage.item_version_id == item.published_version_id,
+                                           Passage.text.contains(anchor)).order_by(Passage.id)).scalars().first()
+    return (hit, item) if hit else None
+
+
 def load_labels(db: Session, labels: list[dict[str, Any]], reviewer: str) -> tuple[int, list[str]]:
-    """Import reviewed question-passage labels. Positives are located by item_key + a verbatim anchor
-    snippet (passage IDs change between databases). Unreviewed or unresolved labels are rejected."""
+    """Import reviewed question-passage labels. Unreviewed or unresolved labels are rejected. Hard negatives in
+    the file are imported only when a person is named in confirmed_by (spec 7.3 step 2)."""
+    from archive.datasets.hard_negatives import import_label_negatives
+
     added, problems = 0, []
     for lab in labels:
         if not lab.get("reviewed_by"):
@@ -186,23 +278,16 @@ def load_labels(db: Session, labels: list[dict[str, Any]], reviewer: str) -> tup
         if lab.get("origin") not in ("human", "synthetic_reviewed"):
             problems.append(f"{lab.get('id')}: origin must be human or synthetic_reviewed")
             continue
-        pids = []
-        for pos in lab.get("positives", []):
-            item = db.execute(select(ArchivalItem).where(
-                ArchivalItem.capture_details["item_key"].astext == pos["item_key"])).scalar()
-            if item is None or item.published_version_id is None:
-                continue
-            hit = db.execute(select(Passage.id).where(Passage.item_version_id == item.published_version_id,
-                                                      Passage.text.contains(pos["anchor"]))).scalars().first()
-            if hit:
-                pids.append(hit)
-        if not pids:
+        hits = [r for r in (resolve_anchor(db, pos["item_key"], pos["anchor"]) for pos in lab.get("positives", [])) if r]
+        if not hits:
             problems.append(f"{lab.get('id')}: positives not found among published passages")
             continue
-        item0 = db.execute(select(ArchivalItem).join(Passage, Passage.item_id == ArchivalItem.id)
-                           .where(Passage.id == pids[0])).scalar()
-        db.add(TrainingExample(question=lab["question"], language=lab["language"], origin=lab["origin"],
-                               positive_passage_ids=pids, group_key=work_key(item0), reviewed_by=lab["reviewed_by"]))
+        ex = TrainingExample(question=lab["question"], language=lab["language"], origin=lab["origin"],
+                             positive_passage_ids=[p.id for p, _ in hits], group_key=work_key(hits[0][1]),
+                             reviewed_by=lab["reviewed_by"])
+        db.add(ex)
+        db.flush()
+        problems += import_label_negatives(db, ex, lab, reviewer)
         added += 1
     db.flush()
     return added, problems

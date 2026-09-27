@@ -1,5 +1,43 @@
 # Build log — Ambedkar Digital Heritage Archive
 
+## Docker recovery and rebuild — 2026-09-27, about 11:09–11:30 IST
+
+Full record: `docs/LIVE_TEST.md`, "Docker recovery and rebuild — 2026-09-27".
+
+**Results**
+
+- **Docker is healthy.** `docker ps -a` answered in about 8 s, and `docker info` reports 29.1.5. The engine had already been restarted before this run. This run did not restart Docker Desktop.
+- **Leftover containers were already gone.** The one-offs `api-run-23e4307f5c70`, `-9bf33807883c`, `-790be2b0087a` and the hung item-14 ingest `-b5f59bd37081` no longer existed, so nothing needed removing.
+- **No stuck database session.** There were no `idle in transaction` sessions, so nothing needed terminating. Item 14 is still `draft` with 92 pages and was not resumed.
+- **Images rebuilt and services recreated.**
+  - `docker compose build api` and `docker compose build proxy` both succeeded.
+  - `docker compose up -d --force-recreate --no-deps api worker proxy` recreated all three. The proxy needed `HTTP_PORT=8088` because host port 8080 is taken.
+  - api, worker and db are healthy. The worker healthcheck is now applied. The proxy has no healthcheck defined.
+- **Migrations and readiness.** Alembic is at `0001 (head)`, and `https://localhost:8443/api/health/ready` returns 200.
+- **Backend tests: 103 passed, 0 skipped**, in 23 s. The Ask failure-path test now runs and passes, and a red-green check confirmed it catches the bug.
+- **Web checks.** `tsc` is clean, and `vitest` passed 5 files with 33 tests.
+- **Live Ask works.** Answers 8 and 9 came back `answered` with the AI-generated label, citing passage 7. That passage is published and `quote_verified` (a fixture-seed record).
+  - Last night's failure was **DNS inside the degraded Docker VM**: the container trace shows `[Errno -3] Temporary failure in name resolution`. It was not the code or the key.
+  - TR-25 is marked verified, with those limits.
+- **`smoke_test.py --ask`: 33 passed, 0 failed.**
+
+**Still open**
+
+- No proxy healthcheck, and port 8080 is taken, so the proxy needs `HTTP_PORT=8088`.
+- Quote verification is fixture-seeded only. There is no Langfuse and no LLM cost pricing.
+- Another engineer's uncommitted `0002_visitor_features` migration and model and search changes appeared at 11:24–11:26. They are not in the image and not applied.
+
+**Skills loaded in this run**
+
+| Skill | Source | What it changed |
+|---|---|---|
+| `find-skills` | `~/.agents/skills` | Discovery only. The local skills covered this task, so nothing was installed. |
+| `docker-development` | `~/.claude/plugins/cache/claude-code-skills/engineering-advanced-skills` | Confirmed the worker healthcheck is applied, and flagged that the proxy has no healthcheck (recorded, not changed). |
+| `senior-devops` | `~/.claude/plugins/cache/claude-code-skills/engineering-skills` | Recreate behind a health gate (`--no-deps`, db left running), then check readiness through the proxy. |
+| `systematic-debugging` | `~/.claude/plugins/cache/claude-plugins-official/superpowers` | Read the container trace before changing anything. That found the DNS cause, so the code was left alone. |
+| `verification-before-completion` | same | Every claim is backed by a fresh command. Red-green check on the Ask failure test. Citations checked against the database. |
+| `python-testing-patterns` | `~/.claude/skills` | Ran the failing-model test in isolation by node, then the file, then the full suite. |
+
 ## Continuation note — 2026-09-26/27, about 23:40–00:45 IST
 
 **Finished**

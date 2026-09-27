@@ -1,2 +1,4 @@
 # Local smoke-test and live-check output (item ids, timings, logs)
 scripts/out/
+# Playwright traces, screenshots, reports and stack logs
+e2e/artifacts/

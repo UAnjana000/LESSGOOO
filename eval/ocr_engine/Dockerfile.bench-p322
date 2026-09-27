@@ -1,0 +1,4 @@
+# PaddlePaddle 3.3.x fails with oneDNN on (ConvertPirAttribute2RuntimeAttribute); 3.2.2 is the last
+# release before that regression. Derived from the bench image so the model caches are reused.
+FROM ambedkar-archive/ocr-eval:bench
+RUN pip install --no-cache-dir paddlepaddle==3.2.2

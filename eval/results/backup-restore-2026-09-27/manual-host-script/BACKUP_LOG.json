@@ -1,0 +1,37 @@
+{
+    "created_at":  "20260927T064651Z",
+    "host":  "JARVIS",
+    "source_project":  "ambedkar-archive",
+    "pg_client":  "pg_dump (PostgreSQL) 17.8 (Debian 17.8-1.pgdg12+1)",
+    "server_version":  "17.8 (Debian 17.8-1.pgdg12+1)",
+    "snapshot":  "0000001E-0000001F-1",
+    "row_counts":  {
+                       "rights_record":  10,
+                       "staff_user":  6,
+                       "archival_item":  21,
+                       "item_version":  16,
+                       "file_version":  563,
+                       "page":  363,
+                       "passage":  649,
+                       "review_decision":  179,
+                       "audit_event":  527,
+                       "translation":  2,
+                       "training_example":  0,
+                       "dataset_version":  0
+                   },
+    "lock_wait_timeout_seconds":  30,
+    "database_dump_bytes":  3528836,
+    "files":  565,
+    "file_bytes":  94835125,
+    "total_bytes":  98464094,
+    "seconds":  {
+                    "database_dump":  71.5,
+                    "snapshot_counts":  1.81,
+                    "pg_dump":  64.7,
+                    "file_copy":  202.4,
+                    "manifest_hash":  6.7,
+                    "verify_rehash":  6.9,
+                    "total":  287.4
+                },
+    "verified":  true
+}

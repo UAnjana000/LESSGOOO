@@ -42,6 +42,23 @@ def item_cacheable() -> ColumnElement[bool]:
     return and_(item_visible(), ArchivalItem.access_level == AccessLevel.public.value)
 
 
+def withdrawn_reason_category(item: ArchivalItem) -> str:
+    """Coarse category for visitor 410 bodies (not a free-text withdrawal reason)."""
+    reason = (item.withdrawal_reason or "").lower()
+    if item.rights.display_permission != Permission.allowed.value or item.rights.discovery_only:
+        return "rights"
+    if "takedown" in reason:
+        return "takedown"
+    return "withdrawn"
+
+
+def withdrawn_item(db: Session, item_id: int) -> ArchivalItem | None:
+    item = db.get(ArchivalItem, item_id)
+    if item is None or item.publication_state != PublicationState.withdrawn.value:
+        return None
+    return item
+
+
 def visible_item(db: Session, item_id: int) -> ArchivalItem | None:
     stmt = select(ArchivalItem).join(RightsRecord).where(ArchivalItem.id == item_id, item_visible())
     return db.execute(stmt).scalars().first()
@@ -51,6 +68,27 @@ def visible_item_ids(db: Session, item_ids: list[int]) -> set[int]:
     if not item_ids:
         return set()
     stmt = select(ArchivalItem.id).join(RightsRecord).where(ArchivalItem.id.in_(item_ids), item_visible())
+    return set(db.execute(stmt).scalars())
+
+
+def visible_passage_ids(db: Session, passage_ids: list[int]) -> set[int]:
+    """Delivery-time recheck: which of these passages a visitor may still see (ids only, one query)."""
+    if not passage_ids:
+        return set()
+    stmt = (select(Passage.id).join(ArchivalItem, Passage.item_id == ArchivalItem.id)
+            .join(RightsRecord, ArchivalItem.rights_record_id == RightsRecord.id)
+            .where(Passage.id.in_(passage_ids), passage_visible()))
+    return set(db.execute(stmt).scalars())
+
+
+def external_processing_item_ids(db: Session, item_ids: set[int] | list[int]) -> set[int]:
+    """Items whose text may be sent to an off-premises service (same rule as external_processing_allowed)."""
+    if not item_ids:
+        return set()
+    stmt = (select(ArchivalItem.id).join(RightsRecord, ArchivalItem.rights_record_id == RightsRecord.id)
+            .where(ArchivalItem.id.in_(list(item_ids)),
+                   RightsRecord.external_processing == Permission.allowed.value,
+                   ArchivalItem.access_level != AccessLevel.restricted.value))
     return set(db.execute(stmt).scalars())
 
 

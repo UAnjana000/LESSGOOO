@@ -416,6 +416,66 @@ def _seed_curation(db) -> dict[str, int]:
     return {"timeline": len(events), "stories": 1, "nodes": len(nodes), "edges": len(edges)}
 
 
+FIXTURE_TAGS = {  # key: (subjects, people, places) — all fictional
+    "fx-essay-reading-rooms": (["Reading rooms", "Workers' education"], ["A. N. Example (fictional)"],
+                               ["Samarpur (fictional)"]),
+    "fx-lecture-education": (["Education", "Night schools"], ["A. N. Example (fictional)"], []),
+    "fx-lecture-tank": (["Public water"], ["A. N. Example (fictional)"], ["Common tank (fictional)"]),
+    "fx-proceedings-1": (["Libraries", "Free access"], ["Member Rao (fictional)", "Member Desai (fictional)"],
+                         ["Samarpur (fictional)"]),
+    "fx-photo-reading-room": (["Reading rooms"], [], ["Samarpur (fictional)"]),
+    "fx-talk-audio": (["Reading rooms"], [], []),
+    "fx-talk-video": (["Reading rooms"], [], []),
+    "fx-manuscript-note": (["Libraries"], [], []),
+}
+FIXTURE_ARTICLES = [("41", {"en": "Right to work, to education and to public assistance in certain cases"}, "IV")]
+FIXTURE_LINKS = [("fx-proceedings-1", 1, "41",
+                  "Synthetic demonstration link on a fictional debate; not a historical claim.")]
+
+
+def _seed_tags_and_links(db) -> dict[str, Any]:
+    """Seeded fixture tags and one curated-link demonstration. Not human cataloguing."""
+    from archive import metadata
+    from archive.models import ConstitutionArticle, ConstitutionLink
+
+    items = _items_by_key(db)
+    tagged = []
+    for key, (subjects, people, places) in FIXTURE_TAGS.items():
+        item = items.get(key)
+        if item is None or item.subjects or item.people or item.places:
+            continue
+        before = metadata.snapshot(item)
+        item.subjects, item.people, item.places = subjects, people, places
+        if metadata.record_revision(db, item, before, SEED, "seeded fixture tags", seeded=True):
+            tagged.append(key)
+    for number, titles, part in FIXTURE_ARTICLES:
+        if db.get(ConstitutionArticle, number) is None:
+            db.add(ConstitutionArticle(number=number, titles=titles, part=part, created_by=SEED))
+    db.flush()
+    linked = []
+    for key, page_seq, number, note in FIXTURE_LINKS:
+        item = items.get(key)
+        if item is None or not item.published_version_id:
+            continue
+        page = next((p for p in item.pages if p.sequence == page_seq), None)
+        passage = db.execute(select(Passage).where(
+            Passage.item_version_id == item.published_version_id, Passage.page_id == page.id,
+            Passage.translation_of_id.is_(None)).order_by(Passage.char_start)).scalars().first() if page else None
+        if passage is None or db.execute(select(ConstitutionLink.id).where(
+                ConstitutionLink.item_id == item.id, ConstitutionLink.article_number == number,
+                ConstitutionLink.removed_at.is_(None))).first():
+            continue
+        lk = ConstitutionLink(article_number=number, item_id=item.id, page_id=page.id, passage_id=passage.id,
+                              text_hash=passage.text_hash, note=note, created_by=SEED)
+        db.add(lk)
+        db.flush()
+        audit.record(db, SEED, "constitution.link.add", "constitution_link", lk.id,
+                     detail={"article": number, "item_id": item.id, "passage_id": passage.id,
+                             "seeded_fixture": True}, checksum_after=passage.text_hash)
+        linked.append(f"{key} p{page_seq} -> Article {number}")
+    return {"tagged": tagged, "links": linked}
+
+
 def cmd_seed_fixtures(args: argparse.Namespace) -> None:
     from archive.ingest import graph as ingest_graph
     from archive.ingest import intake, publish
@@ -460,6 +520,8 @@ def cmd_seed_fixtures(args: argparse.Namespace) -> None:
         report["summaries_seeded"] = _seed_summaries(db)
     with session_scope() as db:
         report["narration"] = _seed_narration(db)
+    with session_scope() as db:
+        report["tags_and_constitution_links"] = _seed_tags_and_links(db)
     with session_scope() as db:
         report["curation"] = _seed_curation(db)
         for c, enabled in (("debates", False),):
@@ -536,6 +598,75 @@ def cmd_load_labels(args: argparse.Namespace) -> None:
     with session_scope() as db:
         added, problems = load_labels(db, labels, args.reviewer)
     _print({"added": added, "problems": problems})
+
+
+def cmd_dataset_preview(_: argparse.Namespace) -> None:
+    from sqlalchemy import text
+
+    from archive.datasets.corpus import preview_dataset
+
+    with session_scope() as db:
+        db.execute(text("SET TRANSACTION READ ONLY"))
+        report = preview_dataset(db)
+    report.pop("entries")
+    _print(report)
+
+
+def cmd_mine_hard_negatives(args: argparse.Namespace) -> None:
+    from archive.datasets.hard_negatives import mine
+
+    with session_scope() as db:
+        report = mine(db, per_question=args.per_question, candidate_k=args.candidate_k, actor=args.actor,
+                      example_ids=args.example_id)
+    _print(report)
+
+
+def cmd_list_hard_negatives(args: argparse.Namespace) -> None:
+    from archive.datasets.hard_negatives import list_candidates
+
+    with session_scope() as db:
+        rows = list_candidates(db, None if args.status == "all" else args.status, args.limit)
+    if args.out:
+        Path(args.out).write_text(json.dumps({
+            "_note": "Fill 'decision' (confirm | relevant | reject) and optionally 'note' per row, then run "
+                     "review-hard-negatives --file <this file> --reviewer <your name>. Same text in another edition "
+                     "or volume is relevant, not a negative (spec 7.3 step 2).",
+            "candidates": rows}, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+        _print({"written": args.out, "candidates": len(rows)})
+    else:
+        _print(rows)
+
+
+def cmd_review_hard_negative(args: argparse.Namespace) -> None:
+    from archive.datasets.hard_negatives import review
+
+    with session_scope() as db:
+        _print(review(db, args.candidate_id, args.decision, args.reviewer, args.note))
+
+
+def cmd_review_hard_negatives(args: argparse.Namespace) -> None:
+    from archive.datasets.hard_negatives import review
+
+    rows = json.loads(Path(args.file).read_text(encoding="utf-8"))["candidates"]
+    done, skipped = [], []
+    with session_scope() as db:
+        for r in rows:
+            if not r.get("decision"):
+                skipped.append(r["candidate_id"])
+                continue
+            done.append(review(db, int(r["candidate_id"]), r["decision"], args.reviewer, r.get("note")))
+    _print({"reviewed": len(done), "undecided": skipped, "warnings": [d["warning"] for d in done if d["warning"]]})
+
+
+def cmd_export_labels(args: argparse.Namespace) -> None:
+    from archive.datasets.hard_negatives import export_labels
+    from archive.models import DatasetVersion
+
+    with session_scope() as db:
+        dv = db.execute(select(DatasetVersion).where(DatasetVersion.name == args.name)).scalar_one()
+        data = export_labels(db, dv)
+    Path(args.out).write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    _print({"written": args.out, "labels": len(data["labels"])})
 
 
 # ------------------------------------------------------------------ evaluation
@@ -638,6 +769,27 @@ def cmd_restore(args: argparse.Namespace) -> None:
     _print(ops.restore(Path(args.backup), args.target_db, Path(args.target_root)))
 
 
+def cmd_snapshot_dump(args: argparse.Namespace) -> None:
+    cmd = args.dump_cmd[1:] if args.dump_cmd[:1] == ["--"] else args.dump_cmd
+    if not cmd:
+        sys.exit("snapshot-dump needs a dump command after --")
+    res = ops.snapshot_dump(cmd)
+    Path(args.counts_out).write_text(json.dumps(res, indent=1), encoding="utf-8")
+    _print(res)
+
+
+def cmd_verify_restore(args: argparse.Namespace) -> None:
+    expected = None
+    if args.expected_counts:  # bare counts (ops.backup) or the snapshot-dump result that wraps them
+        raw = json.loads(Path(args.expected_counts).read_text(encoding="utf-8"))
+        expected = raw["counts"] if isinstance(raw.get("counts"), dict) else raw
+    res = ops.verify_restore(args.target_db, Path(args.target_root), expected)
+    if args.out:
+        Path(args.out).write_text(json.dumps(res, indent=1), encoding="utf-8")
+    _print(res)
+    sys.exit(0 if res["success"] else 1)
+
+
 def cmd_fixity(_: argparse.Namespace) -> None:
     with session_scope() as db:
         r = ops.fixity(db)
@@ -687,6 +839,33 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("path")
     p.add_argument("--reviewer", required=True)
     p.set_defaults(fn=cmd_load_labels)
+    sub.add_parser("dataset-preview", help="read-only: next dataset version's splits and gate report"
+                   ).set_defaults(fn=cmd_dataset_preview)
+    p = sub.add_parser("mine-hard-negatives", help="base-retriever candidates for reviewed, unfrozen examples")
+    p.add_argument("--per-question", type=int, default=5)
+    p.add_argument("--candidate-k", type=int)
+    p.add_argument("--example-id", type=int, action="append")
+    p.add_argument("--actor", default="hard-negative-miner")
+    p.set_defaults(fn=cmd_mine_hard_negatives)
+    p = sub.add_parser("list-hard-negatives")
+    p.add_argument("--status", default="candidate", choices=["candidate", "confirmed", "false_negative", "rejected", "all"])
+    p.add_argument("--limit", type=int, default=200)
+    p.add_argument("--out", help="write a reviewer worksheet (JSON) instead of printing")
+    p.set_defaults(fn=cmd_list_hard_negatives)
+    p = sub.add_parser("review-hard-negative")
+    p.add_argument("candidate_id", type=int)
+    p.add_argument("--decision", required=True, choices=["confirm", "relevant", "reject"])
+    p.add_argument("--reviewer", required=True)
+    p.add_argument("--note")
+    p.set_defaults(fn=cmd_review_hard_negative)
+    p = sub.add_parser("review-hard-negatives", help="apply decisions from a list-hard-negatives --out worksheet")
+    p.add_argument("--file", required=True)
+    p.add_argument("--reviewer", required=True)
+    p.set_defaults(fn=cmd_review_hard_negatives)
+    p = sub.add_parser("export-labels", help="frozen dataset version as a labels file (for check_training_leakage.py)")
+    p.add_argument("name")
+    p.add_argument("--out", required=True)
+    p.set_defaults(fn=cmd_export_labels)
     p = sub.add_parser("eval-retrieval")
     p.add_argument("path")
     p.add_argument("--out", default="/eval/results")
@@ -709,6 +888,17 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--target-db", required=True)
     p.add_argument("--target-root", required=True)
     p.set_defaults(fn=cmd_restore)
+    p = sub.add_parser("snapshot-dump", help="count key tables in an exported snapshot, then run the given dump "
+                                              "command with --snapshot=<id> appended")
+    p.add_argument("--counts-out", required=True)
+    p.add_argument("dump_cmd", nargs=argparse.REMAINDER)
+    p.set_defaults(fn=cmd_snapshot_dump)
+    p = sub.add_parser("verify-restore", help="file rows, key-table counts and audit chain of a restored copy")
+    p.add_argument("--target-db", required=True)
+    p.add_argument("--target-root", required=True)
+    p.add_argument("--expected-counts", help="DB_COUNTS.json written by snapshot-dump")
+    p.add_argument("--out")
+    p.set_defaults(fn=cmd_verify_restore)
     sub.add_parser("fixity").set_defaults(fn=cmd_fixity)
     p = sub.add_parser("storage-report")
     p.add_argument("--out")

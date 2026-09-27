@@ -183,7 +183,7 @@ def main() -> int:
     # ---- withdrawal
     r = c.post(f"/api/staff/items/{item_id}/withdraw", headers=auth, json={"reason": "smoke test withdrawal"})
     s.check("withdraw accepted", r.status_code == 200, status=r.status_code)
-    s.check("withdrawn item 404 for visitors", c.get(f"/api/visitor/items/{item_id}").status_code == 404)
+    s.check("withdrawn item 410 for visitors", c.get(f"/api/visitor/items/{item_id}").status_code == 410)
     r = c.get("/api/visitor/search", params={"q": "notice board new books mill districts"})
     s.check("withdrawn item gone from search", all(h["item_id"] != item_id for h in r.json()["results"]))
     if col_token:

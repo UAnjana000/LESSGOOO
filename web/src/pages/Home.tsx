@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import type { Key } from "../i18n";
 import { useApi } from "../hooks";
 import { useSession } from "../state";
-import { ErrorState, Loading, pickText } from "../components/Bits";
+import { ErrorState, LangText, Loading, useDocumentTitle } from "../components/Bits";
 
 interface HomeData {
   collections: { key: string; count: number }[];
@@ -13,10 +13,11 @@ interface HomeData {
 const TAB_OFFSETS = ["-2px", "22%", "48%", "8%", "34%", "60%"];
 
 export function Home() {
-  const { t, lang } = useSession();
+  const { t } = useSession();
   const nav = useNavigate();
   const [q, setQ] = useState("");
   const home = useApi<HomeData>("/api/visitor/home");
+  useDocumentTitle(null);
 
   const go = (mode: "search" | "ask") => (e?: FormEvent) => {
     e?.preventDefault();
@@ -78,7 +79,7 @@ export function Home() {
           <div className="story-strip">
             {home.data.stories.map((st) => (
               <Link key={st.slug} to={`/stories/${st.slug}`} className="story-card">
-                {pickText(st.titles, lang)}
+                <LangText map={st.titles} />
                 <span>{t("navStories")}</span>
               </Link>
             ))}

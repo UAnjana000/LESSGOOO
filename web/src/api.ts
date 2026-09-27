@@ -1,7 +1,28 @@
 export class ApiError extends Error {
-  constructor(public status: number, message: string, public offline = false) {
+  constructor(
+    public status: number,
+    message: string,
+    public offline = false,
+    public reasonCategory?: string,
+  ) {
     super(message);
   }
+}
+
+export function apiErrorFromBody(status: number, body: unknown, offline: boolean): ApiError {
+  let detail = "";
+  let category: string | undefined;
+  if (body && typeof body === "object" && "detail" in body) {
+    const raw = (body as { detail: unknown }).detail;
+    if (typeof raw === "string") {
+      detail = raw;
+    } else if (raw && typeof raw === "object") {
+      const obj = raw as { message?: string; reason_category?: string };
+      detail = typeof obj.message === "string" ? obj.message : JSON.stringify(raw);
+      category = typeof obj.reason_category === "string" ? obj.reason_category : undefined;
+    }
+  }
+  return new ApiError(status, detail || "error", offline, category);
 }
 
 async function request<T>(path: string, init: RequestInit = {}, token?: string | null): Promise<T> {
@@ -15,14 +36,12 @@ async function request<T>(path: string, init: RequestInit = {}, token?: string |
     throw new ApiError(0, "offline", true);
   }
   if (!res.ok) {
-    let detail = res.statusText;
     try {
-      const body = await res.json();
-      detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail ?? body);
-    } catch {
-      /* non-JSON error body */
+      throw apiErrorFromBody(res.status, await res.json(), res.headers.get("x-archive-offline") === "1");
+    } catch (e) {
+      if (e instanceof ApiError) throw e;
+      throw new ApiError(res.status, res.statusText, res.headers.get("x-archive-offline") === "1");
     }
-    throw new ApiError(res.status, detail, res.headers.get("x-archive-offline") === "1");
   }
   const type = res.headers.get("content-type") ?? "";
   return (type.includes("json") ? res.json() : res.text()) as Promise<T>;
@@ -38,18 +57,29 @@ export const api = {
 
 export const fileUrl = (id: number) => `/api/visitor/files/${id}`;
 
+export interface ArticleRef {
+  number: string;
+  title: string;
+}
+
 export interface ItemCard {
   id: number;
   title: string;
   item_type: string;
   collection: string;
   date_text: string | null;
+  date_certainty: string;
   creator: string | null;
   languages: string[];
   edition: string | null;
   volume: string | null;
   is_fixture: boolean;
   online_only: boolean;
+  subjects: string[];
+  people: string[];
+  places: string[];
+  /** Only for photographs with an approved caption. */
+  photo: { caption: string; credit: string | null; image_file_id: number | null } | null;
 }
 
 export interface PassageView {
@@ -74,6 +104,7 @@ export interface PageView {
   quote_verified: boolean;
   citation: string;
   passages: PassageView[];
+  articles: ArticleRef[];
 }
 
 export interface Segment {
@@ -84,19 +115,32 @@ export interface Segment {
   text: string;
   quote_verified: boolean;
   passages: PassageView[];
+  articles: ArticleRef[];
 }
 
-export interface ItemDetail extends ItemCard {
+export interface PhotoDetail {
+  caption: string;
+  credit: string | null;
+  photographer: string | null;
+  source_reference: string | null;
+  place: string | null;
+  event: string | null;
+  date_text: string | null;
+  people: string[];
+}
+
+export interface ItemDetail extends Omit<ItemCard, "photo"> {
   source_institution: string;
   publisher: string | null;
-  date_certainty: string;
   rights_line: string;
   rights_holder: string;
   version: number;
   provenance: Record<string, unknown>;
   pages: PageView[];
+  /** `format` is a MIME type: video/* gets a video player with captions, audio/* an audio player. */
   media: { file_id: number; format: string; captions: string; segments: Segment[]; label: string } | null;
-  photo: { caption: string; place: string | null; event: string | null; date_text: string | null; photographer: string | null } | null;
+  photo: PhotoDetail | null;
+  /** Reviewed summaries only; drafts never reach visitors. */
   summaries: { language: string; text: string; label: string }[];
   narrations: { language: string; file_id: number; source_ids: number[]; label: string }[];
   related: ItemCard[];
@@ -119,7 +163,42 @@ export interface Hit {
   start_ms: number | null;
   keyword_rank: number | null;
   semantic_rank: number | null;
-  extra: { is_fixture?: boolean };
+  extra: {
+    is_fixture?: boolean;
+    edition?: string | null;
+    volume?: string | null;
+    rights_line?: string;
+    credit?: string | null;
+    item_type?: string;
+    articles?: ArticleRef[];
+  };
+}
+
+export interface Facets {
+  subjects: string[];
+  people: string[];
+  places: string[];
+}
+
+export interface ConstitutionArticle {
+  number: string;
+  titles: Record<string, string>;
+  part: string | null;
+  debates: number;
+}
+
+export interface ConstitutionEntry {
+  link_id: number;
+  note: string | null;
+  item: ItemCard;
+  passage: Hit | null;
+  citation: string;
+  deep_link: string;
+}
+
+export interface ConstitutionDetail extends Omit<ConstitutionArticle, "debates"> {
+  note: string;
+  entries: ConstitutionEntry[];
 }
 
 export interface AskCitation {

@@ -69,8 +69,17 @@ def require_roles(*roles: str):
     return dep
 
 
+def staff_acting_role(user: StaffUser) -> str:
+    """Role recorded on review/publication actions: the caller's identity, not a hardcoded archivist."""
+    for role in ("reviewer", "translation_reviewer", "archivist", "curator", "admin"):
+        if role in user.roles:
+            return role
+    return user.roles[0] if user.roles else "archivist"
+
+
 Staff = Annotated[StaffUser, Depends(current_staff)]
 Archivist = Annotated[StaffUser, Depends(require_roles("archivist"))]
 Curator = Annotated[StaffUser, Depends(require_roles("curator"))]
 Admin = Annotated[StaffUser, Depends(require_roles("admin"))]
 TranslationReviewer = Annotated[StaffUser, Depends(require_roles("translation_reviewer", "archivist"))]
+IngestOrReview = Annotated[StaffUser, Depends(require_roles("archivist", "reviewer"))]

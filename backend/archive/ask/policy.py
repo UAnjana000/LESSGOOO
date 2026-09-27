@@ -81,6 +81,14 @@ MESSAGES = {
         "hi": "इस प्रश्न का उत्तर यहाँ नहीं दिया जा सकता। कृपया संग्रह की सामग्री के बारे में पूछें।",
         "mr": "या प्रश्नाचे उत्तर येथे देता येत नाही. कृपया संग्रहातील साहित्याबद्दल विचारा.",
     },
+    "local_only": {
+        "en": "The rights terms of these passages do not allow sending them to the answer model, so no answer was "
+              "written. You can read the closest approved passages here.",
+        "hi": "इन अंशों की अधिकार-शर्तें इन्हें उत्तर मॉडल को भेजने की अनुमति नहीं देतीं, इसलिए उत्तर नहीं लिखा गया। "
+              "आप सबसे निकट के स्वीकृत अंश यहाँ पढ़ सकते हैं।",
+        "mr": "या उताऱ्यांच्या हक्क-अटी त्यांना उत्तर मॉडेलकडे पाठवण्याची परवानगी देत नाहीत, म्हणून उत्तर लिहिले "
+              "गेले नाही. सर्वात जवळचे मंजूर उतारे तुम्ही येथे वाचू शकता.",
+    },
     "extractive": {
         "en": "No answer model is connected on this server, so no answer was written. "
               "These approved passages match your question most closely.",

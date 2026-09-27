@@ -1,0 +1,15 @@
+{
+    "backup":  "C:\\Users\\cvbal\\Desktop\\lessgooo\\data\\backups\\worker\\backup-20260927T072419Z",
+    "manifest_created_at":  "20260927T072419Z",
+    "database_dump_checksum_ok":  true,
+    "files_checked":  604,
+    "missing":  [
+
+                ],
+    "mismatched":  [
+
+                   ],
+    "success":  true,
+    "seconds":  3.4,
+    "verified_at":  "2026-09-27T07:37:04.8687409Z"
+}

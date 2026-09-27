@@ -251,3 +251,92 @@ Effects:
 - `web/scripts/smoke_test.py` could not complete: its first request got a TLS connection reset.
 
 The database was not taken down, and Docker Desktop was not restarted, because a restart would stop the database and other engineers' running jobs. Next step: restart Docker Desktop at a moment agreed with the other engineers, then run `docker compose build api` and `docker compose up -d --force-recreate --no-deps api worker`, re-run the Ask, run `pytest tests/test_db_ask_datasets.py`, and run `smoke_test.py --ask`.
+
+## Docker recovery and rebuild — 2026-09-27
+
+Run from about 11:09 to 11:30 IST. The user authorised a Docker recovery; no other jobs were running. No volumes were deleted, `docker compose down -v` was not run, nothing was committed, no secrets were printed, and nothing new was ingested. `data/incoming/`, `intake/` and `docs/DATA_SOURCES.md` were not touched.
+
+### 1. Engine state
+
+- `docker ps -a` (wrapped in a 40 s job timeout) answered in about 8 s. `docker info` reported server 29.1.5.
+- Every container had been up for about 3 minutes, so the engine had already been restarted before this run started. Docker Desktop was **not** restarted by this run, and `wsl --shutdown` was not needed.
+
+### 2. Leftover containers and the stuck session
+
+- `docker ps -a --filter name=api-run` returned nothing. `api-run-23e4307f5c70`, `api-run-9bf33807883c`, `api-run-790be2b0087a` and the hung ingest container `api-run-b5f59bd37081` were already gone, most likely cleaned up by the engine restart because they were `--rm` one-offs. Nothing needed removing, and the item-14 ingest cannot resume.
+- `pg_stat_activity` on `archive` showed 3 sessions, all `idle`, none `idle in transaction`. Nothing needed terminating: the database restart had already rolled back the uncommitted item-14 transaction.
+- Items 12 and 13 are `in_review` with 62 and 96 pages. Item 14 is `draft` with 92 pages. All three are `restricted`, and they were left as they were.
+
+### 3. Rebuild and recreate
+
+| Command | Result |
+|---|---|
+| `docker compose build api` | Built in about 6.5 min, including a model prefetch of about 287 s. No build failure. |
+| `docker compose build proxy` | Built. The proxy image contains the web bundle, so this deploys the `Ask.tsx` change. |
+| `docker compose up -d --force-recreate --no-deps api worker proxy` | api and worker recreated. The proxy failed with `bind 0.0.0.0:8080: Only one usage of each socket address`, because host port 8080 is taken (known issue). |
+| `$env:HTTP_PORT="8088"; docker compose up -d --no-deps proxy` | Proxy up on `8088->80` and `8443->443`. |
+
+The database container was not recreated. The compose file has no separate `web` service.
+
+Health after the recreate:
+
+- `api`: healthy.
+- `worker`: **healthy**. The new check (`kill -0 1 && … db_healthy()`) is applied; before the recreate the old image check `curl localhost:8000` was failing.
+- `db`: healthy.
+- `proxy`: running. It has no healthcheck in `docker-compose.yml`; it was checked through the ready endpoint.
+
+### 4. Migrations and readiness
+
+- `alembic current` and `alembic heads` in the api container both report `0001 (head)`. The api command's `alembic upgrade head` had nothing to apply.
+- `curl -k https://localhost:8443/api/health/ready` returned **200** in 0.09 s: `status: ready`, database true, storage true, `llm_configured: true`, `sarvam_configured: true`, trace backend `local-jsonl`.
+
+### 5. Tests
+
+| Command | Result |
+|---|---|
+| `backend> .\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider -rs` (about 11:21 IST, tree at `6d88ffd`) | **103 passed**, 23 s, 0 skipped |
+| `pytest tests/test_db_ask_datasets.py` | 18 passed |
+| `pytest tests/test_db_ask_datasets.py -k model_failure_offers_closest -rA` | `TestAskGraph::test_answer_model_failure_offers_closest_passages_without_an_answer` **PASSED**. Red-green check: with `"error"` removed from the closest-passages branch in `archive/ask/service.py` it FAILED; with the line restored it passed. `service.py` is unchanged from the commit. |
+| `web> npx tsc -p . --noEmit` | clean (exit 0) |
+| `web> npx vitest run` | **5 files, 33 tests passed** |
+
+Parallel work: between 11:24 and 11:26 IST another engineer added, without committing, `backend/alembic/versions/0002_visitor_features.py`, `backend/archive/constitution.py`, `backend/tests/test_db_visitor_features.py`, three `web/src/**.test.ts` files and an `intake/` manifest. They also modified `backend/archive/models.py` and `backend/archive/search/hybrid.py`. These are not in the rebuilt image, and migration `0002` is not applied to the live database. The 103-test backend run happened before they appeared. The vitest count includes their three new test files; the earlier committed count was 2 files and 15 tests.
+
+### 6. Live visitor Ask
+
+Root cause of the earlier `outcome: error` (answers 6 and 7): the container trace `/data/traces/traces-2026-09-26.jsonl` has a `generate` span for both, with `error: "[Errno -3] Temporary failure in name resolution"`. The container could not resolve `api.openai.com` while the Docker VM was degraded. The key, `response_format` and httpx timeout were never reached. After the engine restart, the api container resolved `api.openai.com` in 0.09 s, and an unauthenticated `GET /v1/models` returned the expected 401. `get_settings()` in the container shows the provider `openai_compatible`, the base URL, the model `gpt-4o-mini`, and the key present. The client already turns any `httpx` error into `LLMUnavailable` and outcome `error`, so no code change was needed.
+
+The Asks were sent through `POST https://localhost:8443/api/visitor/ask` by a temporary script outside the repo:
+
+| | Answer 8 | Answer 9 |
+|---|---|---|
+| Question | "According to the lecture on education, why should mothers learn to read?" | "Quote the exact words the lecture on education uses about mothers learning to read." |
+| HTTP / outcome | 200 / `answered` | 200 / `answered` |
+| Label | "AI-generated answer from archive sources" | same |
+| Model | `gpt-4o-mini-2024-07-18` | same |
+| Tokens in / out | 368 / 45 | 369 / 37 |
+| Latency (total / provider) | 5537 / 2569 ms | 3747 / 1319 ms |
+| Citations | passage 7 (item 2, p. 1) | passage 7 |
+| Validation | ok, no errors, no quoted spans | ok, no errors, no quoted spans |
+
+- Passage 7 was checked in the database. It is in item 2's live published version (`item_version_id = published_version_id`, `published`), `quote_verified = true` (verifier `fixture-seed`), and `is_fixture = true`.
+- Answer 9 reproduces a sentence from passage 7 verbatim but without quotation marks, so the validator did not treat it as a quote. That text still comes from a `quote_verified` passage.
+- `cost_usd` is 0 because `ARCHIVE_LLM_*_COST_PER_MTOK` are not set.
+
+TR-25 was marked **verified** in `docs/REQUIREMENTS.md` (status and evidence cell only). Limits: the quote status is a seeded fixture record, and the live quote-rejection path was not triggered.
+
+### 7. Smoke test
+
+`backend\.venv\Scripts\python web\scripts\smoke_test.py --ask` returned **33 passed, 0 failed**, exit 0, smoke item 15.
+
+- Capture through intake, the worker (`local` route, gate passed), batch review, publish, reader, IIIF, hybrid search and QR list all passed.
+- The live Ask was `answered` with `gpt-4o-mini-2024-07-18`, citing passage 20, in 4.0 s. Every sentence cites a delivered passage.
+- The prompt injection got `rejected_input`.
+- After withdrawal, the item returns 404 and is gone from search, the QR list and the kiosk manifest. Audit actions were recorded.
+- The smoke item used the synthetic `fixtures/capture-demo-page.png` and ends withdrawn.
+
+### Still open
+
+- Proxy has no compose healthcheck, and host port 8080 is occupied, so the proxy needs `HTTP_PORT=8088` in the shell or in `.env`.
+- Quote verification is seeded fixture data. No human quote verification, Langfuse or cost pricing was set up.
+- The other engineer's uncommitted migration `0002` and model changes will need a rebuild and migration once they land.
