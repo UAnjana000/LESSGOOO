@@ -1,6 +1,9 @@
 .env
 .env.*
 !.env.example
+# Self-hosted Langfuse secrets (docker-compose.langfuse.yml); only the names-only example is tracked.
+.env.langfuse
+!.env.langfuse.example
 **/.venv/
 **/__pycache__/
 **/.pytest_cache/
@@ -15,3 +18,4 @@ deploy/production/secrets/*
 !deploy/production/secrets/README.md
 # Downloaded source bytes (PDFs, scans, images, audio, video): never commit
 /data/
+CHANGELOG.md

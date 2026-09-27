@@ -65,6 +65,15 @@ export function servable(p: ExhibitPayload, url: string, fileItem: Map<string, n
   return p.shared_urls.includes(path);
 }
 
+/**
+ * Offline navigations may reopen the precached app shell, which holds no archive content: item data still
+ * goes through `servable`, so withdrawn, online-only or expired items show the page's own offline notice.
+ * Staff pages are never served offline.
+ */
+export function offlineShellAllowed(pathname: string): boolean {
+  return !/^\/(staff|api|iiif)(\/|$)/.test(pathname);
+}
+
 export function fileItemIndex(p: ExhibitPayload): Map<string, number> {
   const m = new Map<string, number>();
   for (const it of p.items) for (const u of it.urls) m.set(u, it.item_id);

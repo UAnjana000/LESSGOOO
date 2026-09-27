@@ -12,12 +12,12 @@ from sqlalchemy.orm import Session
 
 from archive import tracing
 from archive.ask import policy
-from archive.ask.graph import build_ask_graph, cache_key, run_graph
+from archive.ask.graph import AskDeps, build_ask_graph, cache_key, run_graph
 from archive.ask.llm import AnswerLLM, get_llm
 from archive.config import get_settings
 from archive.ingest.publish import current_index_version
 from archive.models import AnswerCache, AnswerLog, Citation
-from archive.search.hybrid import load_hits
+from archive.rights import visible_passage_ids
 from archive.services import sarvam_text
 
 
@@ -27,7 +27,7 @@ def _translate_query(text: str, lang: str) -> str:
 
 def _deliverable(db: Session, passage_ids: list[int]) -> set[int]:
     """Re-check rights at delivery time (an item may have been withdrawn since retrieval/caching)."""
-    return set(load_hits(db, passage_ids).keys())
+    return visible_passage_ids(db, passage_ids)
 
 
 def _citation_payload(hit: dict[str, Any], quoted: list[str]) -> dict[str, Any]:
@@ -71,8 +71,8 @@ def ask(db: Session, question: str, history: list[dict[str, str]], ui_language: 
                 tr.update(outcome=payload["outcome"], cache_hit=True)
                 payload.update({"cache_hit": True, "answer_id": log.id, "trace_id": tr.id})
                 return payload
-        graph = build_ask_graph(db, llm, translate_query=_translate_query if s.sarvam_available else None)
-        state, latency = run_graph(graph, question, history, ui_language)
+        deps = AskDeps(db=db, llm=llm, translate_query=_translate_query if s.sarvam_available else None)
+        state, latency = run_graph(build_ask_graph(), question, history, ui_language, deps)
         for sp in state.get("trace_spans", []):
             tr.span(sp.pop("name"), **sp)
         outcome = state.get("outcome") or "error"
@@ -80,7 +80,7 @@ def ask(db: Session, question: str, history: list[dict[str, str]], ui_language: 
         hits = state.get("hits", [])
         ok_ids = _deliverable(db, [h["passage_id"] for h in hits])
         hits = [h for h in hits if h["passage_id"] in ok_ids]
-        by_id = {h["passage_id"]: h for h in hits}
+        by_id = {h["passage_id"]: h for h in hits if h["passage_id"] in state.get("prompt_ids", ())}
         sentences, citations = [], []
         if outcome == "answered":
             if not all(c in by_id for sent in state["sentences"] for c in sent["citations"]):
@@ -102,6 +102,8 @@ def ask(db: Session, question: str, history: list[dict[str, str]], ui_language: 
         if outcome in ("extractive", "insufficient", "refused", "error"):
             citations = [_citation_payload(h, []) for h in hits[:3]]
         msg_key = outcome if outcome in policy.MESSAGES else ("insufficient" if outcome == "error" else None)
+        if outcome == "extractive" and state.get("reason") == "local_only":
+            msg_key = "local_only"
         payload: dict[str, Any] = {
             "outcome": outcome,
             "language": lang,
@@ -135,9 +137,9 @@ def ask(db: Session, question: str, history: list[dict[str, str]], ui_language: 
         db.commit()
         tr.update(outcome=outcome, tokens_in=log.tokens_in, tokens_out=log.tokens_out, cost_usd=log.cost_usd,
                   latency_ms=latency, cache_hit=False, passage_ids=[h["passage_id"] for h in hits])
-        if daily_cost(db) > s.daily_cost_alert_usd:
+        if log.cost_usd and (spent := daily_cost(db)) > s.daily_cost_alert_usd:
             import logging
-            logging.getLogger(__name__).warning("daily answer cost alert", extra={"cost_usd": daily_cost(db)})
+            logging.getLogger(__name__).warning("daily answer cost alert", extra={"cost_usd": spent})
         payload.update({"cache_hit": False, "answer_id": log.id, "trace_id": tr.id, "latency_ms": latency,
                         "tokens_in": log.tokens_in, "tokens_out": log.tokens_out, "cost_usd": log.cost_usd,
                         "trace_backend": tracing.backend_name()})

@@ -1,0 +1,14 @@
+# syntax=docker/dockerfile:1.7
+# API/worker image with the OCR settings chosen in docs/OCR_ENGINE_EVAL.md: Hindi pages read with the
+# tessdata_best Devanagari script model, page segmentation "auto". A separate tag on top of api:local:
+#   docker build -f backend/Dockerfile.ocr-deva -t ambedkar-archive/api:ocr-deva backend
+ARG BASE_IMAGE=ambedkar-archive/api:local
+FROM ${BASE_IMAGE}
+
+ADD --chmod=644 \
+    --checksum=sha256:7ffe34c3cf6d512d2713a83c1f7ca580ae19e2e17d2b71c3f70e225652f907ce \
+    https://github.com/tesseract-ocr/tessdata_best/raw/main/script/Devanagari.traineddata \
+    /usr/share/tesseract-ocr/5/tessdata/Devanagari.traineddata
+
+ENV ARCHIVE_OCR_TESSERACT_LANG_HI=Devanagari \
+    ARCHIVE_OCR_TESSERACT_PSM=auto

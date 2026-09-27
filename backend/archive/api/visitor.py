@@ -12,10 +12,10 @@ import qrcode.image.svg
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import any_, func, literal, select
 from sqlalchemy.orm import Session
 
-from archive import exhibit, storage
+from archive import constitution, exhibit, storage
 from archive.ask.service import ask as run_ask
 from archive.config import get_settings
 from archive.db import get_db
@@ -23,6 +23,7 @@ from archive.ingest.publish import current_index_version, withdrawn_item_ids
 from archive.models import (
     ArchivalItem,
     CollectionSetting,
+    ConstitutionArticle,
     Derivative,
     FileVersion,
     KioskSync,
@@ -39,8 +40,18 @@ from archive.models import (
     TimelineEvent,
     utcnow,
 )
-from archive.rights import item_visible, passage_visible, visible_item, visible_item_ids
-from archive.search.hybrid import KIND_LABELS, SearchFilters, citation_label, deep_link, hybrid_search, load_hits
+from archive.rights import (
+    item_visible, passage_visible, visible_item, visible_item_ids, withdrawn_item,
+    withdrawn_reason_category,
+)
+from archive.search.hybrid import (
+    KIND_LABELS,
+    SearchFilters,
+    citation_label,
+    hybrid_search,
+    load_hits,
+    photo_credit,
+)
 from archive.services import sarvam_text
 
 router = APIRouter(prefix="/api/visitor", tags=["visitor"])
@@ -60,16 +71,42 @@ def _rights_line(item: ArchivalItem) -> str:
     return item.rights.attribution
 
 
-def _item_card(item: ArchivalItem) -> dict[str, Any]:
+def _photo_card(item: ArchivalItem, photo: PhotoMetadata | None) -> dict[str, Any] | None:
+    if photo is None or photo.review_status != "approved":
+        return None
+    first = item.pages[0] if item.pages else None
+    return {"caption": photo.caption, "credit": photo_credit(photo),
+            "image_file_id": first.delivery_file_id if first else None}
+
+
+def _item_card(item: ArchivalItem, photo: PhotoMetadata | None = None) -> dict[str, Any]:
     return {"id": item.id, "title": item.title, "item_type": item.item_type, "collection": item.collection,
-            "date_text": item.date_text, "creator": item.creator, "languages": item.original_languages,
-            "edition": item.edition, "volume": item.volume, "is_fixture": item.is_fixture,
-            "online_only": item.access_level == "public_online_only"}
+            "date_text": item.date_text, "date_certainty": item.date_certainty, "creator": item.creator,
+            "languages": item.original_languages, "edition": item.edition, "volume": item.volume,
+            "subjects": item.subjects or [], "people": item.people or [], "places": item.places or [],
+            "is_fixture": item.is_fixture, "online_only": item.access_level == "public_online_only",
+            "photo": _photo_card(item, photo)}
+
+
+def _withdrawn_detail(item: ArchivalItem) -> dict[str, str]:
+    return {"code": "item_withdrawn", "reason_category": withdrawn_reason_category(item),
+            "message": "This item has been withdrawn."}
+
+
+def _raise_if_withdrawn(db: Session, item_id: int | None) -> None:
+    if item_id is None:
+        return
+    item = withdrawn_item(db, item_id)
+    if item is not None:
+        raise HTTPException(410, _withdrawn_detail(item))
 
 
 def _file_visible(db: Session, file_id: int) -> FileVersion:
     fv = db.get(FileVersion, file_id)
-    if fv is None or fv.role != "delivery" or fv.deleted_at is not None or fv.item_id is None:
+    if fv is None or fv.role != "delivery" or fv.item_id is None:
+        raise HTTPException(404, "not available")
+    _raise_if_withdrawn(db, fv.item_id)
+    if fv.deleted_at is not None:
         raise HTTPException(404, "not available")
     if visible_item(db, fv.item_id) is None:
         raise HTTPException(404, "not available")
@@ -100,17 +137,39 @@ def home(db: DB) -> dict[str, Any]:
 
 
 @router.get("/items")
-def list_items(db: DB, collection: str | None = None, item_type: str | None = None) -> list[dict[str, Any]]:
+def list_items(db: DB, collection: str | None = None, item_type: str | None = None, subject: str | None = None,
+               person: str | None = None, place: str | None = None,
+               language: str | None = None) -> list[dict[str, Any]]:
     stmt = select(ArchivalItem).join(RightsRecord).where(item_visible()).order_by(ArchivalItem.date_start, ArchivalItem.id)
     if collection:
         stmt = stmt.where(ArchivalItem.collection == collection)
     if item_type:
         stmt = stmt.where(ArchivalItem.item_type == item_type)
-    return [_item_card(i) for i in db.execute(stmt).scalars()]
+    for value, column in ((subject, ArchivalItem.subjects), (person, ArchivalItem.people),
+                          (place, ArchivalItem.places), (language, ArchivalItem.original_languages)):
+        if value:
+            stmt = stmt.where(literal(value) == any_(column))
+    items = db.execute(stmt).scalars().all()
+    photos = {p.item_id: p for p in db.execute(
+        select(PhotoMetadata).where(PhotoMetadata.item_id.in_([i.id for i in items]))).scalars()} if items else {}
+    return [_item_card(i, photos.get(i.id)) for i in items]
+
+
+@router.get("/facets")
+def facets(db: DB) -> dict[str, list[str]]:
+    """Distinct staff-assigned tags on visible items only, for the browse and search filters."""
+    out: dict[str, list[str]] = {}
+    for name, col in (("subjects", ArchivalItem.subjects), ("people", ArchivalItem.people),
+                      ("places", ArchivalItem.places)):
+        tag = func.unnest(col).label("tag")
+        sub = select(tag).select_from(ArchivalItem).join(RightsRecord).where(item_visible()).subquery()
+        out[name] = sorted(set(db.execute(select(sub.c.tag).distinct()).scalars()))
+    return out
 
 
 @router.get("/items/{item_id}")
 def item_detail(item_id: int, db: DB, lang: str = "en") -> dict[str, Any]:
+    _raise_if_withdrawn(db, item_id)
     item = visible_item(db, item_id)
     if item is None:
         raise HTTPException(404, "This item is not available.")
@@ -132,6 +191,7 @@ def item_detail(item_id: int, db: DB, lang: str = "en") -> dict[str, Any]:
                 "kind_label": KIND_LABELS.get(p.kind, p.kind), "quote_verified": p.quote_verified,
                 "char_start": p.char_start, "bboxes": p.bboxes, "translations": translations.get(p.id, {})}
 
+    page_articles, seg_articles = constitution.articles_by_anchor(db, item.id, lang if lang in LANGS else "en")
     pages = []
     for pg in item.pages:
         pages.append({"id": pg.id, "sequence": pg.sequence, "label": pg.printed_page_label or str(pg.sequence),
@@ -140,6 +200,7 @@ def item_detail(item_id: int, db: DB, lang: str = "en") -> dict[str, Any]:
                       "derivative_label": PAGE_LABELS.get(pg.ocr_route, "Reviewed transcription"),
                       "quote_verified": pg.quote_verified,
                       "citation": citation_label(item, pg, None),
+                      "articles": page_articles.get(pg.id, []),
                       "passages": [pdict(p) for p in by_page.get(pg.id, [])]})
     segs = db.execute(select(MediaSegment).where(MediaSegment.item_id == item.id,
                                                  MediaSegment.review_status == "approved")
@@ -165,11 +226,13 @@ def item_detail(item_id: int, db: DB, lang: str = "en") -> dict[str, Any]:
         "media": ({"file_id": media.id, "format": media.format, "captions": f"/api/visitor/items/{item.id}/captions.vtt",
                    "segments": [{"id": s.id, "start_ms": s.start_ms, "end_ms": s.end_ms, "speaker": s.speaker,
                                  "text": s.transcript_text, "quote_verified": s.quote_verified,
+                                 "articles": seg_articles.get(s.id, []),
                                  "passages": [pdict(p) for p in by_seg.get(s.id, [])]} for s in segs],
                    "label": "Reviewed transcript"} if media else None),
         "photo": ({"caption": photo.caption, "people": photo.people, "place": photo.place, "event": photo.event,
                    "date_text": photo.date_text, "date_certainty": photo.date_certainty,
-                   "photographer": photo.photographer, "source_reference": photo.source_reference}
+                   "photographer": photo.photographer, "source_reference": photo.source_reference,
+                   "credit": photo_credit(photo), "label": "Reviewed caption"}
                   if photo and photo.review_status == "approved" else None),
         "summaries": [{"language": d.language, "text": d.content, "label": d.label_shown} for d in summaries],
         "narrations": [{"language": d.language, "file_id": d.file_id, "source_ids": d.source_ids,
@@ -199,6 +262,7 @@ def _related(db: Session, item_id: int) -> list[dict[str, Any]]:
 
 @router.get("/items/{item_id}/captions.vtt")
 def captions(item_id: int, db: DB) -> Response:
+    _raise_if_withdrawn(db, item_id)
     if visible_item(db, item_id) is None:
         raise HTTPException(404, "not available")
     segs = db.execute(select(MediaSegment).where(MediaSegment.item_id == item_id, MediaSegment.review_status == "approved")
@@ -220,9 +284,12 @@ def file_download(file_id: int, db: DB) -> FileResponse:
 
 @router.get("/search")
 def search(db: DB, q: Annotated[str, Query(min_length=1, max_length=300)], collection: str | None = None,
-           item_type: str | None = None, lang: str | None = None, date_from: str | None = None,
-           date_to: str | None = None) -> dict[str, Any]:
-    hits, info = hybrid_search(db, q, SearchFilters(item_type, collection, lang, date_from, date_to), limit=20)
+           item_type: str | None = None, lang: str | None = None, date_from: dt.date | None = None,
+           date_to: dt.date | None = None, subject: str | None = None, person: str | None = None,
+           place: str | None = None) -> dict[str, Any]:
+    filters = SearchFilters(item_type=item_type, collection=collection, language=lang, date_from=date_from,
+                            date_to=date_to, subject=subject, person=person, place=place)
+    hits, info = hybrid_search(db, q, filters, limit=20)
     return {"query": q, "results": [h.as_dict() for h in hits], "info": info, "llm_calls": 0}
 
 
@@ -333,6 +400,31 @@ def knowledge_map(db: DB) -> dict[str, Any]:
                       for e in edges if e.from_node in keep_ids and e.to_node in keep_ids]}
 
 
+@router.get("/constitution")
+def constitution_index(db: DB) -> list[dict[str, Any]]:
+    return constitution.article_index(db)
+
+
+@router.get("/constitution/{number}")
+def constitution_article(number: str, db: DB, lang: str = "en") -> dict[str, Any]:
+    article = db.get(ConstitutionArticle, number)
+    if article is None:
+        raise HTTPException(404, "This article is not in the archive's curated list.")
+    resolved = [(lk, p) for lk, p in constitution.resolved_links(db, constitution.active_links(db, article_number=number))
+                if p is not None]
+    hits = load_hits(db, [p.id for _, p in resolved])
+    entries = []
+    for lk, p in resolved:
+        h = hits.get(p.id)
+        if h is None:
+            continue
+        entries.append({"link_id": lk.id, "note": lk.note, "item": _item_card(db.get(ArchivalItem, lk.item_id)),
+                        "passage": h.as_dict(), "citation": h.citation, "deep_link": h.deep_link})
+    return {"number": article.number, "titles": article.titles, "part": article.part,
+            "title": constitution.article_title(article, lang), "note": constitution.ARTICLE_NOTE,
+            "entries": entries}
+
+
 @router.get("/signage")
 def signage(db: DB) -> dict[str, Any]:
     tl = timeline(db)
@@ -392,11 +484,22 @@ def get_collection(token: str, db: DB) -> dict[str, Any]:
         item = db.get(ArchivalItem, e["item_id"])
         h = hits.get(e.get("passage_id")) if e.get("passage_id") else None
         page = next((p for p in item.pages if p.sequence == e.get("page")), None) if e.get("page") else None
+        start_ms = e.get("start_ms")
+        seg = db.execute(select(MediaSegment).where(
+            MediaSegment.item_id == item.id, MediaSegment.review_status == "approved",
+            MediaSegment.start_ms == start_ms)).scalars().first() if start_ms is not None else None
+        if h:
+            link = h.deep_link
+        elif start_ms is not None:
+            link = f"/item/{item.id}?t={start_ms}"
+        elif page is not None:
+            link = f"/item/{item.id}?page={page.sequence}"
+        else:
+            link = f"/item/{item.id}"
         out.append({"item": _item_card(item), "rights_line": _rights_line(item),
                     "passage": h.as_dict() if h else None,
-                    "citation": h.citation if h else citation_label(item, page, None),
-                    "deep_link": h.deep_link if h else deep_link(item, page, None, 0).replace("&passage=0", "").replace("?passage=0", ""),
-                    "start_ms": e.get("start_ms"), "note": e.get("note")})
+                    "citation": h.citation if h else citation_label(item, page, seg),
+                    "deep_link": link, "start_ms": start_ms, "note": e.get("note")})
     return {"token": token, "expires_at": col.expires_at.isoformat(), "language": col.language, "entries": out,
             "removed_count": len(col.entries) - len(out)}
 
@@ -425,6 +528,9 @@ def withdrawals(db: DB) -> dict[str, Any]:
 
 @router.get("/passages/{passage_id}")
 def passage(passage_id: int, db: DB) -> dict[str, Any]:
+    row = db.get(Passage, passage_id)
+    if row is not None:
+        _raise_if_withdrawn(db, row.item_id)
     hits = load_hits(db, [passage_id])
     if passage_id not in hits:
         raise HTTPException(404, "not available")
@@ -433,10 +539,15 @@ def passage(passage_id: int, db: DB) -> dict[str, Any]:
 
 @router.get("/narration/{passage_id}")
 def narration_for(passage_id: int, db: DB, lang: str = "en") -> dict[str, Any]:
+    row = db.get(Passage, passage_id)
+    if row is not None:
+        _raise_if_withdrawn(db, row.item_id)
     if passage_id not in load_hits(db, [passage_id]):
         raise HTTPException(404, "not available")
-    rows = db.execute(select(Derivative).where(Derivative.kind == "narration", Derivative.status == "approved",
-                                               Derivative.language == lang)).scalars().all()
+    rows = db.execute(select(Derivative).join(FileVersion, Derivative.file_id == FileVersion.id)
+                      .where(Derivative.kind == "narration", Derivative.status == "approved",
+                             Derivative.language == lang, FileVersion.deleted_at.is_(None))
+                      .order_by(Derivative.id.desc())).scalars().all()
     for d in rows:
         if passage_id in (d.source_ids or []) and d.file_id:
             return {"file_id": d.file_id, "label": d.label_shown, "generator": d.generator}

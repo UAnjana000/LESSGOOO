@@ -1,6 +1,7 @@
 {
  "manifest_version": 1,
- "_note": "Intake-control test only (spec 4.1): exact-duplicate detection and checksum-mismatch quarantine, using the already-imported CAD file. Neither item may ever be published: rights are not_allowed and access is restricted. The rights entry is an exact copy of the one in cad_lok_sabha.manifest.json so the register row is unchanged.",
+ "_note": "Intake-control test only (spec 4.1): exact-duplicate detection and checksum-mismatch quarantine, using the already-imported CAD file. Neither item may ever be published: access is restricted. The rights entry is an exact copy of rights record version 2 in cad_lok_sabha.manifest.json so importing this manifest leaves the register row unchanged.",
+ "_note_v1": "Intake-control test only (spec 4.1): exact-duplicate detection and checksum-mismatch quarantine, using the already-imported CAD file. Neither item may ever be published: rights are not_allowed and access is restricted. The rights entry is an exact copy of the one in cad_lok_sabha.manifest.json so the register row is unchanged.",
  "rights": [
   {
    "source_key": "lok-sabha-cad-en-vol11-reprint2014",
@@ -11,16 +12,39 @@
    "volume": "XI",
    "pages": "Per-sitting PDF for 25-11-1949, 62 PDF pages",
    "rights_holder": "Lok Sabha Secretariat",
-   "basis_for_use": "Local copy for non-commercial research and prototype testing only, relying on the Parliament Digital Library copyright policy: material may be reproduced without formal permission for non-commercial research and private study, with attribution; any other re-use needs permission. Display, publication in a retrieval system, external processing and training are NOT covered.",
-   "display_permission": "not_allowed",
-   "training_permission": "not_allowed",
-   "training_basis": "No grant. Rightsholder terms require permission for re-use beyond non-commercial research and private study.",
-   "external_processing": "not_allowed",
-   "evidence": "https://eparlib.sansad.in/help/copyright-policy.jsp (text read from web-search index on 2026-09-26; direct fetch failed: connection refused / 504). Confirmed directly on 2026-09-26: https://elibrary.sansad.in/copyright-policy ('All copyrights are reserved with the Lok Sabha Secretariat ... formal permission from the Speaker'). Bytes fetched from the Internet Archive mirror https://archive.org/details/eparlib.nic.in.763285; the mirror's CC public-domain licenseurl was set by a third-party uploader and is NOT relied on.",
+   "basis_for_use": "User-asserted academic permission, stated 2026-09-27, covering display in the academic prototype demo, external processing (Sarvam OCR fallback of low-confidence pages) and model training; written permission document not yet on file. Supersedes record version 1 (2026-09-26), which relied only on the Parliament Digital Library terms for non-commercial research and private study.",
+   "display_permission": "allowed",
+   "training_permission": "allowed",
+   "training_basis": "User-asserted academic permission covering model training, stated 2026-09-27; written permission document not yet on file. Only approved passages from fully reviewed pages or passed-sample batches may enter the training-eligible corpus (spec 4.10); fine-tuning needs the spec 7.3 minimum-data gate.",
+   "external_processing": "allowed",
+   "evidence": "User statement to the data-acquisition agent, 2026-09-27 11:10 IST (display, external processing) and 11:12 IST (model training). No rightsholder document on file; the Lok Sabha Secretariat's published terms (below) still require the Speaker's permission, so the written document must be obtained. Version 1 evidence: https://eparlib.sansad.in/help/copyright-policy.jsp (text read from web-search index on 2026-09-26; direct fetch failed: connection refused / 504). Confirmed directly on 2026-09-26: https://elibrary.sansad.in/copyright-policy ('All copyrights are reserved with the Lok Sabha Secretariat ... formal permission from the Speaker'). Bytes fetched from the Internet Archive mirror https://archive.org/details/eparlib.nic.in.763285; the mirror's CC public-domain licenseurl was set by a third-party uploader and is NOT relied on.",
    "attribution": "Constituent Assembly Debates, Official Report, Vol. XI, sitting of 25 November 1949 (Lok Sabha Secretariat, sixth reprint 2014). Source: Parliament Digital Library, Lok Sabha Secretariat.",
-   "date_checked": "2026-09-26",
-   "checked_by": "data-acquisition agent (recorded from published terms; not a human rights decision)",
-   "notes": "Contains Dr. B. R. Ambedkar's speech of 25 Nov 1949 (spec 8.1 item 3). Not quote-verified. Needs written permission from the Speaker, Lok Sabha, before any visitor display."
+   "date_checked": "2026-09-27",
+   "checked_by": "data-acquisition agent, recording the user's stated academic permission (not a rightsholder document; a person must confirm)",
+   "notes": "Contains Dr. B. R. Ambedkar's speech of 25 Nov 1949 (spec 8.1 item 3). Not quote-verified. Rights version 2 (2026-09-27): display, external processing and training allowed on the user's academic permission; written permission document from the Lok Sabha Secretariat still to be obtained.",
+   "record_version": 2,
+   "superseded_versions": [
+    {
+     "record_version": 1,
+     "title": "Constituent Assembly Debates, Official Report, Vol. XI (14-11-1949 to 26-11-1949), sitting of 25 November 1949",
+     "source_url": "https://eparlib.sansad.in/handle/123456789/763285",
+     "source_institution": "Lok Sabha Secretariat (Parliament Digital Library)",
+     "edition": "Sixth reprint 2014, Lok Sabha Secretariat, New Delhi (per the file's title page)",
+     "volume": "XI",
+     "pages": "Per-sitting PDF for 25-11-1949, 62 PDF pages",
+     "rights_holder": "Lok Sabha Secretariat",
+     "basis_for_use": "Local copy for non-commercial research and prototype testing only, relying on the Parliament Digital Library copyright policy: material may be reproduced without formal permission for non-commercial research and private study, with attribution; any other re-use needs permission. Display, publication in a retrieval system, external processing and training are NOT covered.",
+     "display_permission": "not_allowed",
+     "training_permission": "not_allowed",
+     "training_basis": "No grant. Rightsholder terms require permission for re-use beyond non-commercial research and private study.",
+     "external_processing": "not_allowed",
+     "evidence": "https://eparlib.sansad.in/help/copyright-policy.jsp (text read from web-search index on 2026-09-26; direct fetch failed: connection refused / 504). Confirmed directly on 2026-09-26: https://elibrary.sansad.in/copyright-policy ('All copyrights are reserved with the Lok Sabha Secretariat ... formal permission from the Speaker'). Bytes fetched from the Internet Archive mirror https://archive.org/details/eparlib.nic.in.763285; the mirror's CC public-domain licenseurl was set by a third-party uploader and is NOT relied on.",
+     "attribution": "Constituent Assembly Debates, Official Report, Vol. XI, sitting of 25 November 1949 (Lok Sabha Secretariat, sixth reprint 2014). Source: Parliament Digital Library, Lok Sabha Secretariat.",
+     "date_checked": "2026-09-26",
+     "checked_by": "data-acquisition agent (recorded from published terms; not a human rights decision)",
+     "notes": "Contains Dr. B. R. Ambedkar's speech of 25 Nov 1949 (spec 8.1 item 3). Not quote-verified. Needs written permission from the Speaker, Lok Sabha, before any visitor display."
+    }
+   ]
   }
  ],
  "items": [
@@ -31,10 +55,16 @@
    "item_type": "text",
    "collection": "debates",
    "doc_class": "born_digital",
-   "languages": ["en"],
+   "languages": [
+    "en"
+   ],
    "access_level": "restricted",
-   "files": [{"path": "../data/incoming/cad/cad_25-11-1949.pdf",
-              "sha256": "b91746973cdc627d27b2bae85e39ca212f00a26068a44ab0204c4adf52d981bf"}]
+   "files": [
+    {
+     "path": "../data/incoming/cad/cad_25-11-1949.pdf",
+     "sha256": "b91746973cdc627d27b2bae85e39ca212f00a26068a44ab0204c4adf52d981bf"
+    }
+   ]
   },
   {
    "item_key": "intake-check-checksum-mismatch",
@@ -43,10 +73,16 @@
    "item_type": "text",
    "collection": "debates",
    "doc_class": "born_digital",
-   "languages": ["en"],
+   "languages": [
+    "en"
+   ],
    "access_level": "restricted",
-   "files": [{"path": "../data/incoming/cad/cad_25-11-1949.pdf",
-              "sha256": "0000000000000000000000000000000000000000000000000000000000000000"}]
+   "files": [
+    {
+     "path": "../data/incoming/cad/cad_25-11-1949.pdf",
+     "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+   ]
   }
  ]
 }

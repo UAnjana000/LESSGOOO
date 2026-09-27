@@ -18,6 +18,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       fonts-dejavu-core fonts-noto-core curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+# bookworm's postgresql-client is 15; pg_dump refuses a newer server and the db service is PostgreSQL 17,
+# so the worker's nightly backup needs the PGDG client matching the server major (as in deploy/production/ops).
+ARG PG_MAJOR=17
+RUN install -d /usr/share/postgresql-common/pgdg \
+    && curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+         https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+    && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
+         > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-client-${PG_MAJOR} \
+    && rm -rf /var/lib/apt/lists/*
+ENV PATH="/usr/lib/postgresql/${PG_MAJOR}/bin:$PATH"
+
 COPY --from=ghcr.io/astral-sh/uv:0.8 /uv /usr/local/bin/uv
 
 WORKDIR /app

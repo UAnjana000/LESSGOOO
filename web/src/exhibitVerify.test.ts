@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import vector from "./__fixtures__/python-signed-manifest.json";
-import { canonical, fileItemIndex, importPublicKey, leaseValid, servable, verifyManifest, type SignedManifest } from "./exhibitVerify";
+import {
+  canonical,
+  fileItemIndex,
+  importPublicKey,
+  leaseValid,
+  offlineShellAllowed,
+  servable,
+  verifyManifest,
+  type SignedManifest,
+} from "./exhibitVerify";
 
 const signed = vector.manifest as unknown as SignedManifest;
 
@@ -53,5 +62,19 @@ describe("offline serving rules", () => {
   it("does not serve items that were not in the manifest (e.g. online-only)", () => {
     expect(servable(p, "/api/visitor/items/42", idx, beforeExpiry)).toBe(false);
     expect(servable(p, "/api/visitor/search", idx, beforeExpiry)).toBe(false);
+  });
+});
+
+describe("offline navigation fallback", () => {
+  it("reopens visitor pages, including item addresses, from the precached app shell", () => {
+    for (const path of ["/", "/item/3", "/timeline", "/search", "/stories/samarpur", "/c/abc123", "/display"]) {
+      expect(offlineShellAllowed(path), path).toBe(true);
+    }
+  });
+
+  it("never falls back for staff pages or server paths", () => {
+    for (const path of ["/staff", "/staff/items/3", "/api/visitor/items/3", "/iiif/3/info.json"]) {
+      expect(offlineShellAllowed(path), path).toBe(false);
+    }
   });
 });

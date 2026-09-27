@@ -1,0 +1,61 @@
+{
+    "backup":  "C:\\Users\\cvbal\\Desktop\\lessgooo\\data\\backups\\demo\\backup-20260927T064651Z",
+    "target_db":  "archive_drill in throwaway container archive-restore-drill-20260927t065225z (pgvector/pgvector:0.8.1-pg17, data on tmpfs, not on the compose network)",
+    "target_root":  "C:\\Users\\cvbal\\AppData\\Local\\Temp\\archive-demo-restore\\drill-20260927T065225Z\\files",
+    "source_host":  "JARVIS",
+    "target_host":  "JARVIS",
+    "target_note":  "Same host as the live demo: separate scratch container and temporary folder. Not a clean machine.",
+    "started":  "2026-09-27T06:52:25.4393116Z",
+    "finished":  "2026-09-27T06:54:19.7886862Z",
+    "database_dump_checksum_ok":  true,
+    "backup_files_verified_on_disk":  565,
+    "files_restored":  565,
+    "manifest_mismatches":  [
+
+                            ],
+    "db_file_rows_checked":  562,
+    "db_file_rows_failed":  [
+
+                            ],
+    "expected_counts":  {
+                            "rights_record":  10,
+                            "staff_user":  6,
+                            "archival_item":  21,
+                            "item_version":  16,
+                            "file_version":  563,
+                            "page":  363,
+                            "passage":  649,
+                            "review_decision":  179,
+                            "audit_event":  527,
+                            "translation":  2,
+                            "training_example":  0,
+                            "dataset_version":  0
+                        },
+    "restored_counts":  {
+                            "rights_record":  10,
+                            "staff_user":  6,
+                            "archival_item":  21,
+                            "item_version":  16,
+                            "file_version":  563,
+                            "page":  363,
+                            "passage":  649,
+                            "review_decision":  179,
+                            "audit_event":  527,
+                            "translation":  2,
+                            "training_example":  0,
+                            "dataset_version":  0
+                        },
+    "row_count_mismatches":  {
+
+                             },
+    "audit_chain_ok":  true,
+    "audit_events":  527,
+    "seconds":  114.3,
+    "seconds_breakdown":  {
+                              "verify_backup_on_disk":  10.6,
+                              "database_restore":  45.4,
+                              "file_restore":  2.7,
+                              "verification":  55.6
+                          },
+    "success":  true
+}

@@ -1,0 +1,138 @@
+# SELF-HOSTED LANGFUSE (redacted AI traces only) - separate compose project, separate data stores.
+# Holds traces, token usage, latency, failures and prompt versions. It is NOT the archive database
+# and NOT the audit log (spec 4.9, 6.6). Runs on the edge server or on a separate machine (spec 3.4).
+#
+#   python deploy/langfuse/make_env.py                       # once: writes .env.langfuse (gitignored)
+#   docker compose -f docker-compose.langfuse.yml up -d      # start (core stack must be up first, see below)
+#   docker compose -f docker-compose.langfuse.yml ps
+#
+# Langfuse v4 needs Postgres, ClickHouse (>= 25.12), Redis (>= 7) and S3-compatible storage; there is no
+# lighter supported topology for the Python SDK v4 the backend pins. See docs/LANGFUSE.md.
+#
+# Network: langfuse-web also joins the core project's backend network (alias "langfuse"), so the archive
+# api/worker reach it at http://langfuse:3000 without changing docker-compose.yml. On a separate machine,
+# set LANGFUSE_ARCHIVE_NETWORK to a local network you create and point ARCHIVE_LANGFUSE_HOST at that host.
+
+name: ambedkar-langfuse
+
+x-logging: &logging
+  driver: json-file
+  options: {max-size: "10m", max-file: "3"}
+
+x-base: &base
+  env_file: [{path: .env.langfuse, required: true}]
+  restart: unless-stopped
+  logging: *logging
+  security_opt: ["no-new-privileges:true"]
+  networks: [internal]
+
+x-langfuse-depends: &langfuse-depends
+  postgres: {condition: service_healthy}
+  clickhouse: {condition: service_healthy}
+  redis: {condition: service_healthy}
+  minio: {condition: service_healthy}
+
+services:
+  langfuse-web:
+    <<: *base
+    image: docker.langfuse.com/langfuse/langfuse:4.46.0
+    depends_on: *langfuse-depends
+    environment:
+      NODE_OPTIONS: --max-old-space-size=768
+    ports:
+      - "127.0.0.1:${LANGFUSE_PORT:-3100}:3000"
+    networks:
+      internal: {}
+      archive:
+        aliases: [langfuse]
+    # A 512 MB heap hit "JavaScript heap out of memory" during startup on 4.46.0; idle RSS was ~850 MiB.
+    mem_limit: 1280m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://$$(hostname -i | cut -d' ' -f1):3000/api/public/health || wget -q -O /dev/null http://127.0.0.1:3000/api/public/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+
+  langfuse-worker:
+    <<: *base
+    image: docker.langfuse.com/langfuse/langfuse-worker:4.46.0
+    depends_on: *langfuse-depends
+    environment:
+      NODE_OPTIONS: --max-old-space-size=512
+    mem_limit: 768m
+
+  postgres:
+    <<: *base
+    image: postgres:17-alpine
+    environment:
+      TZ: UTC
+      PGTZ: UTC
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  clickhouse:
+    <<: *base
+    image: clickhouse/clickhouse-server:26.4
+    user: "101:101"
+    volumes:
+      - clickhouse:/var/lib/clickhouse
+      - clickhouse_logs:/var/log/clickhouse-server
+    mem_limit: 1280m
+    ulimits:
+      nofile: {soft: 262144, hard: 262144}
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
+  redis:
+    <<: *base
+    image: redis:7.4-alpine
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_AUTH\" --maxmemory-policy noeviction"]
+    volumes:
+      - redis:/data
+    mem_limit: 128m
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_AUTH\" --no-auth-warning ping | grep -q PONG"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+
+  minio:
+    <<: *base
+    # Chainguard publishes only :latest for free; the resolved digest is recorded in docs/LANGFUSE.md.
+    image: cgr.dev/chainguard/minio:latest
+    entrypoint: sh
+    command: ["-c", "mkdir -p /data/langfuse && exec minio server --address :9000 --console-address :9001 /data"]
+    volumes:
+      - minio:/data
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 3s
+
+networks:
+  internal:
+    internal: true
+  archive:
+    external: true
+    name: ${LANGFUSE_ARCHIVE_NETWORK:-ambedkar-archive_backend}
+
+volumes:
+  postgres: {}
+  clickhouse: {}
+  clickhouse_logs: {}
+  redis: {}
+  minio: {}

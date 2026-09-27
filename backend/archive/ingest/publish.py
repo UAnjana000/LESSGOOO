@@ -6,13 +6,18 @@ switch  -> one PostgreSQL transaction sets published_version + state=published (
 propagate -> kiosks pick up the new version on next sync; old versions cleaned after a grace period
 
 withdraw -> one write sets state=withdrawn (visitor API blocks immediately), then background cleanup
-            removes index entries and delivery copies and verifies the removal.
+            hides index entries (indexed=False) and removes delivery copies. Embeddings stay so
+            restore can re-expose the same passage IDs without minting a new version.
+
+restore  -> rights re-check, then one write returns the last published version to visitors with
+            the same passage / file-version / IIIF IDs. Missing embeddings are re-derived in place.
 """
 
 from __future__ import annotations
 
 import hashlib
 import logging
+from pathlib import Path
 from typing import Any
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -254,7 +259,7 @@ def withdraw_cleanup(db: Session, item_id: int, actor: str = "worker") -> dict[s
     item = db.get(ArchivalItem, item_id)
     if item is None or item.publication_state != PublicationState.withdrawn.value:
         return {"skipped": True}
-    db.execute(update(Passage).where(Passage.item_id == item_id).values(indexed=False, embedding=None))
+    db.execute(update(Passage).where(Passage.item_id == item_id).values(indexed=False))
     removed = 0
     for fv in db.query(FileVersion).filter_by(item_id=item_id, role="delivery", deleted_at=None):
         storage.delete_delivery(fv.storage_uri)
@@ -271,6 +276,87 @@ def withdraw_cleanup(db: Session, item_id: int, actor: str = "worker") -> dict[s
                  item_id, detail={"delivery_removed": removed, "still_indexed": still_indexed,
                                   "live_delivery_files": live_files})
     return {"verified": verified, "delivery_removed": removed, "still_indexed": still_indexed}
+
+
+def _recreate_delivery(db: Session, fv: FileVersion) -> None:
+    """Put delivery bytes back at the same FileVersion row (same id for old links / IIIF)."""
+    from archive.ingest.preprocess import delivery_jpeg
+
+    path = storage.resolve(fv.storage_uri)
+    if fv.deleted_at is None and path.exists():
+        return
+    master = db.get(FileVersion, fv.derived_from_id) if fv.derived_from_id else None
+    if fv.kind == "page_image":
+        src = master or db.execute(select(FileVersion).where(
+            FileVersion.item_id == fv.item_id, FileVersion.page_id == fv.page_id,
+            FileVersion.role == "preservation_master")).scalars().first()
+        if src is None:
+            raise PublicationError(f"cannot restore delivery file {fv.id}: no preservation master")
+        stored = storage.put_bytes(delivery_jpeg(storage.read_bytes(src.storage_uri)), "delivery", ".jpg")
+    elif master is not None:
+        suffix = Path(fv.storage_uri).suffix or Path(master.storage_uri).suffix or ".bin"
+        stored = storage.put_bytes(storage.read_bytes(master.storage_uri), "delivery", suffix)
+    else:
+        log.warning("skip restore of delivery file %s kind=%s (no master)", fv.id, fv.kind)
+        return
+    fv.storage_uri = stored.uri
+    fv.sha256 = stored.sha256
+    fv.byte_size = stored.byte_size
+    fv.deleted_at = None
+
+
+def _restore_passages(db: Session, item: ArchivalItem) -> None:
+    passages = db.execute(select(Passage).where(
+        Passage.item_id == item.id, Passage.item_version_id == item.published_version_id)).scalars().all()
+    missing = [p for p in passages if p.embedding is None]
+    if missing:
+        embedder = get_embedder()
+        vectors = embedder.embed_documents([p.text for p in missing])
+        for p, vec in zip(missing, vectors, strict=True):
+            p.embedding = vec
+            p.embedding_model = embedder.name
+    for p in passages:
+        p.indexed = True
+
+
+def restore(db: Session, item: ArchivalItem, actor: str, reason: str) -> int:
+    """Re-expose the last published version with the same passage and file-version IDs."""
+    db.execute(select(ArchivalItem.id).where(ArchivalItem.id == item.id).with_for_update())
+    db.refresh(item)
+    if item.publication_state == PublicationState.published.value and item.published_version_id:
+        return current_index_version(db)
+    if item.publication_state != PublicationState.withdrawn.value:
+        raise PublicationError("item is not withdrawn")
+    if item.published_version_id is None:
+        raise PublicationError("no published version to restore")
+    if item.rights.display_permission != "allowed":
+        raise PublicationError("rights register does not allow display")
+    if item.rights.discovery_only:
+        raise PublicationError("discovery-only source")
+    deliveries = db.execute(select(FileVersion).where(
+        FileVersion.item_id == item.id, FileVersion.role == "delivery")).scalars().all()
+    for fv in deliveries:
+        if fv.kind in {"page_image", "media"} or fv.derived_from_id:
+            _recreate_delivery(db, fv)
+    by_page = {fv.page_id: fv for fv in deliveries if fv.kind == "page_image" and fv.page_id}
+    for pg in item.pages:
+        if pg.delivery_file_id is None and pg.id in by_page:
+            pg.delivery_file_id = by_page[pg.id].id
+        elif pg.delivery_file_id:
+            fv = db.get(FileVersion, pg.delivery_file_id)
+            if fv is not None and fv.deleted_at is None:
+                continue
+            if fv is not None:
+                _recreate_delivery(db, fv)
+                pg.delivery_file_id = fv.id
+    _restore_passages(db, item)
+    item.publication_state = PublicationState.published.value
+    item.withdrawn_at = None
+    item.withdrawal_reason = None
+    idx = bump_index_version(db)
+    audit.record(db, actor, "item.restore", "archival_item", item.id, entity_version=item.version,
+                 detail={"reason": reason, "index_version": idx, "item_version_id": item.published_version_id})
+    return idx
 
 
 def withdrawn_item_ids(db: Session) -> list[int]:

@@ -37,6 +37,9 @@ class ReviewError(ValueError):
     pass
 
 
+REVIEW_ACTIONS = frozenset({"approve", "correct", "reject"})
+
+
 def _decision(db: Session, target_type: str, target_id: int, action: str, reviewer: str, role: str,
               before: str | None = None, after: str | None = None, reason: str | None = None,
               seeded: bool = False) -> ReviewDecision:
@@ -76,12 +79,12 @@ def review_page(db: Session, page: Page, action: str, reviewer: str, role: str, 
         final = text if text is not None else base
         if not final.strip():
             raise ReviewError("cannot approve empty text")
-        _approve_text(db, page, final, reviewer, "approve", before=base, reason=reason, seeded=seeded,
+        _approve_text(db, page, final, reviewer, "approve", role, before=base, reason=reason, seeded=seeded,
                       basis="full_review")
     elif action == "correct":
         if not text or not text.strip():
             raise ReviewError("correction needs the corrected text")
-        _approve_text(db, page, text, reviewer, "correct", before=base, reason=reason, seeded=seeded,
+        _approve_text(db, page, text, reviewer, "correct", role, before=base, reason=reason, seeded=seeded,
                       basis="full_review")
     elif action == "reject":
         page.status = PageStatus.rejected.value
@@ -94,24 +97,24 @@ def review_page(db: Session, page: Page, action: str, reviewer: str, role: str, 
     return page
 
 
-def _approve_text(db: Session, page: Page, final: str, reviewer: str, action: str, *, before: str, reason: str | None,
-                  seeded: bool, basis: str) -> None:
+def _approve_text(db: Session, page: Page, final: str, reviewer: str, action: str, role: str, *, before: str,
+                  reason: str | None, seeded: bool, basis: str) -> None:
     page.approved_text = final
     page.approved_text_version += 1
     page.approved_by = reviewer
     page.approved_at = utcnow()
     page.status = PageStatus.approved.value
     page.quality_signals = {**page.quality_signals, "review_basis": basis}
-    _decision(db, "page", page.id, action, reviewer, "archivist", before=before, after=final, reason=reason,
+    _decision(db, "page", page.id, action, reviewer, role, before=before, after=final, reason=reason,
               seeded=seeded)
 
 
-def reopen_page(db: Session, page: Page, reviewer: str, reason: str) -> Page:
+def reopen_page(db: Session, page: Page, reviewer: str, reason: str, role: str = "archivist") -> Page:
     """Start a correction of an approved page; the published passage stays until a new version is published."""
     page.status = PageStatus.needs_full_review.value
     page.review_mode = "full"
     page.quote_verified = False
-    _decision(db, "page", page.id, "escalate", reviewer, "archivist", before=page.approved_text, reason=reason)
+    _decision(db, "page", page.id, "escalate", reviewer, role, before=page.approved_text, reason=reason)
     _update_item_state(db, page.item)
     return page
 
@@ -134,7 +137,8 @@ def open_batch(db: Session, item: ArchivalItem, rng: random.Random | None = None
 
 
 def decide_batch(db: Session, batch: ReviewBatch, passed: bool, reviewer: str, reason: str | None = None,
-                 sample_checks: dict[int, dict[str, Any]] | None = None, seeded: bool = False) -> ReviewBatch:
+                 sample_checks: dict[int, dict[str, Any]] | None = None, seeded: bool = False,
+                 role: str = "archivist") -> ReviewBatch:
     """The archivist checks the random sample. Pass -> batch approved (sampled basis).
     Fail -> every page in the batch goes to full review."""
     if batch.status != "open":
@@ -152,10 +156,10 @@ def decide_batch(db: Session, batch: ReviewBatch, passed: bool, reviewer: str, r
             final = corrected if corrected else base
             basis = "spot_check" if p.ocr_route == "text_layer" else "sampled_batch"
             if p.id in batch.sample_page_ids:
-                _approve_text(db, p, final, reviewer, "correct" if corrected else "approve", before=base,
+                _approve_text(db, p, final, reviewer, "correct" if corrected else "approve", role, before=base,
                               reason=f"batch {batch.id} sample check", seeded=seeded, basis=basis)
             else:
-                _approve_text(db, p, final, reviewer, "approve", before=base,
+                _approve_text(db, p, final, reviewer, "approve", role, before=base,
                               reason=f"batch {batch.id} passed sample", seeded=seeded, basis=basis)
         batch.status = "passed"
     else:
@@ -166,7 +170,7 @@ def decide_batch(db: Session, batch: ReviewBatch, passed: bool, reviewer: str, r
         batch.status = "failed"
     batch.decided_by = reviewer
     batch.decided_at = utcnow()
-    _decision(db, "review_batch", batch.id, "approve" if passed else "reject", reviewer, "archivist",
+    _decision(db, "review_batch", batch.id, "approve" if passed else "reject", reviewer, role,
               reason=reason, seeded=seeded)
     if pages:
         _update_item_state(db, pages[0].item)
@@ -174,7 +178,7 @@ def decide_batch(db: Session, batch: ReviewBatch, passed: bool, reviewer: str, r
 
 
 def verify_page_quotes(db: Session, page: Page, reviewer: str, confirm_compared_with_scan: bool,
-                       seeded: bool = False) -> Page:
+                       seeded: bool = False, role: str = "archivist") -> Page:
     """Record that a person compared the approved text with the original scan word for word."""
     if not confirm_compared_with_scan:
         raise ReviewError("quote verification requires confirming a word-for-word comparison with the scan")
@@ -188,13 +192,13 @@ def verify_page_quotes(db: Session, page: Page, reviewer: str, confirm_compared_
         passage.quote_verified = True
         passage.quote_verifier = reviewer
         passage.quote_verified_at = page.quote_verified_at
-    _decision(db, "page", page.id, "verify_quote", reviewer, "archivist",
+    _decision(db, "page", page.id, "verify_quote", reviewer, role,
               reason="approved text compared with original scan word for word", seeded=seeded)
     return page
 
 
 def review_segment(db: Session, seg: MediaSegment, action: str, reviewer: str, text: str | None = None,
-                   reason: str | None = None, seeded: bool = False) -> MediaSegment:
+                   reason: str | None = None, seeded: bool = False, role: str = "archivist") -> MediaSegment:
     before = seg.transcript_text
     if action in {"approve", "correct"}:
         if action == "correct":
@@ -207,7 +211,7 @@ def review_segment(db: Session, seg: MediaSegment, action: str, reviewer: str, t
         seg.review_status = "rejected"
     else:
         raise ReviewError("unknown action")
-    _decision(db, "media_segment", seg.id, action, reviewer, "archivist", before=before,
+    _decision(db, "media_segment", seg.id, action, reviewer, role, before=before,
               after=seg.transcript_text, reason=reason, seeded=seeded)
     db.flush()
     _update_item_state(db, db.get(ArchivalItem, seg.item_id))
@@ -215,7 +219,7 @@ def review_segment(db: Session, seg: MediaSegment, action: str, reviewer: str, t
 
 
 def verify_segment_quotes(db: Session, seg: MediaSegment, reviewer: str, confirm_compared_with_recording: bool,
-                          seeded: bool = False) -> MediaSegment:
+                          seeded: bool = False, role: str = "archivist") -> MediaSegment:
     """Record that a person checked the transcript against the original audio/video."""
     if not confirm_compared_with_recording:
         raise ReviewError("quote verification requires confirming the transcript was checked against the recording")
@@ -228,13 +232,19 @@ def verify_segment_quotes(db: Session, seg: MediaSegment, reviewer: str, confirm
         passage.quote_verified = True
         passage.quote_verifier = reviewer
         passage.quote_verified_at = seg.quote_verified_at
-    _decision(db, "media_segment", seg.id, "verify_quote", reviewer, "archivist",
+    _decision(db, "media_segment", seg.id, "verify_quote", reviewer, role,
               reason="transcript checked against original recording", seeded=seeded)
     return seg
 
 
 def review_photo(db: Session, photo: PhotoMetadata, action: str, reviewer: str, updates: dict[str, Any] | None = None,
-                 seeded: bool = False) -> PhotoMetadata:
+                 seeded: bool = False, role: str = "archivist") -> PhotoMetadata:
+    if action not in REVIEW_ACTIONS:
+        raise ReviewError(f"unknown action '{action}'")
+    if action == "correct" and not updates:
+        raise ReviewError("correction needs the corrected fields")
+    if updates and "caption" in updates and not str(updates["caption"] or "").strip():
+        raise ReviewError("a caption cannot be empty")
     before = photo.caption
     if updates:
         for k in ("caption", "people", "place", "event", "date_text", "date_certainty", "photographer",
@@ -243,7 +253,7 @@ def review_photo(db: Session, photo: PhotoMetadata, action: str, reviewer: str, 
                 setattr(photo, k, updates[k])
     photo.review_status = "approved" if action in {"approve", "correct"} else "rejected"
     photo.reviewed_by = reviewer
-    _decision(db, "photo_metadata", photo.item_id, action, reviewer, "archivist", before=before, after=photo.caption,
+    _decision(db, "photo_metadata", photo.item_id, action, reviewer, role, before=before, after=photo.caption,
               seeded=seeded)
     item = db.get(ArchivalItem, photo.item_id)
     for p in item.pages:
@@ -259,6 +269,8 @@ def review_photo(db: Session, photo: PhotoMetadata, action: str, reviewer: str, 
 
 def review_translation(db: Session, tr: Translation, action: str, reviewer: str, reviewer_languages: list[str],
                        text: str | None = None, seeded: bool = False) -> Translation:
+    if action not in REVIEW_ACTIONS:
+        raise ReviewError(f"unknown action '{action}'")
     if tr.target_language not in reviewer_languages:
         raise ReviewError(f"reviewer is not a named reviewer for '{tr.target_language}'")
     before = tr.text
@@ -275,7 +287,9 @@ def review_translation(db: Session, tr: Translation, action: str, reviewer: str,
 
 
 def review_derivative(db: Session, d: Derivative, action: str, reviewer: str, text: str | None = None,
-                      seeded: bool = False) -> Derivative:
+                      seeded: bool = False, role: str = "archivist") -> Derivative:
+    if action not in REVIEW_ACTIONS:
+        raise ReviewError(f"unknown action '{action}'")
     before = d.content
     if action == "correct":
         if not text:
@@ -285,7 +299,7 @@ def review_derivative(db: Session, d: Derivative, action: str, reviewer: str, te
     d.reviewed_by = reviewer
     if d.kind == "summary" and d.status == "approved":
         d.label_shown = "Reviewed summary"
-    _decision(db, "derivative", d.id, action, reviewer, "archivist", before=before, after=d.content, seeded=seeded)
+    _decision(db, "derivative", d.id, action, reviewer, role, before=before, after=d.content, seeded=seeded)
     return d
 
 

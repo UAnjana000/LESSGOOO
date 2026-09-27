@@ -331,6 +331,60 @@
    }
   },
   {
+   "item_key": "fx-talk-video",
+   "rights_source_key": "fx-open",
+   "title": "Synthetic test-pattern video (not a historical recording)",
+   "item_type": "video",
+   "collection": "audio_video",
+   "doc_class": "audio_video",
+   "languages": [
+    "en"
+   ],
+   "creator": "FFmpeg test pattern + espeak-ng synthetic voice",
+   "date_text": "2026 (generated)",
+   "date_start": "2026-09-27",
+   "date_certainty": "exact",
+   "files": [
+    {
+     "path": "../files/fx-talk-video-synthetic.mp4",
+     "sha256": "c2b9d314528a5ce332661b5a66bdb1bbd651f706ebc8f8135018f0acd3426b01"
+    }
+   ],
+   "transcript_draft": [
+    {
+     "start_ms": 0,
+     "end_ms": 6181,
+     "text": "This is a synthetic recording made for testing the archive. It is not a historical recording.",
+     "speaker": "Synthetic voice",
+     "language": "en"
+    },
+    {
+     "start_ms": 6681,
+     "end_ms": 10613,
+     "text": "The reading room opened in two rented rooms above a grain shop.",
+     "speaker": "Synthetic voice",
+     "language": "en"
+    },
+    {
+     "start_ms": 11113,
+     "end_ms": 14797,
+     "text": "Night schools taught members to read the books they borrowed.",
+     "speaker": "Synthetic voice",
+     "language": "en"
+    },
+    {
+     "start_ms": 15297,
+     "end_ms": 19199,
+     "text": "A fee at the door keeps out those who most need to enter.",
+     "speaker": "Synthetic voice",
+     "language": "en"
+    }
+   ],
+   "capture": {
+    "work_key": "work-talk-video"
+   }
+  },
+  {
    "item_key": "fx-restricted-memo",
    "rights_source_key": "fx-rights-unknown",
    "title": "Draft memorandum (synthetic, rights unknown)",

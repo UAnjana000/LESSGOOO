@@ -1,0 +1,36 @@
+{
+ "db_file_rows_checked": 562,
+ "db_file_rows_failed": [],
+ "restored_counts": {
+  "rights_record": 10,
+  "staff_user": 6,
+  "archival_item": 21,
+  "item_version": 16,
+  "file_version": 563,
+  "page": 363,
+  "passage": 649,
+  "review_decision": 179,
+  "audit_event": 527,
+  "translation": 2,
+  "training_example": 0,
+  "dataset_version": 0
+ },
+ "expected_counts": {
+  "rights_record": 10,
+  "staff_user": 6,
+  "archival_item": 21,
+  "item_version": 16,
+  "file_version": 563,
+  "page": 363,
+  "passage": 649,
+  "review_decision": 179,
+  "audit_event": 527,
+  "translation": 2,
+  "training_example": 0,
+  "dataset_version": 0
+ },
+ "row_count_mismatches": {},
+ "audit_chain_ok": true,
+ "audit_events": 527,
+ "success": true
+}

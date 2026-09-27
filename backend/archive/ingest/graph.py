@@ -16,7 +16,7 @@ from typing import Any, TypedDict
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
-from archive import tracing
+from archive import audit, tracing
 from archive.config import get_settings
 from archive.db import session_scope
 from archive.ingest import processing, publish, review
@@ -45,18 +45,29 @@ def default_fallback() -> OcrFallback | None:
 def build_ingest_graph(fallback_factory=default_fallback, checkpointer=None, rng: random.Random | None = None):
     def process_pages(state: IngestState) -> IngestState:
         outcomes = []
-        with session_scope() as db:
+        with session_scope() as db, processing.pdf_documents():
             item = db.get(ArchivalItem, state["item_id"])
             fallback = fallback_factory()
             for page in item.pages:
-                if page.status == PageStatus.pending.value:
-                    out = processing.process_page(db, page, fallback)
-                elif page.status == PageStatus.sarvam_pending.value and fallback is not None:
-                    out = processing.run_sarvam(db, page, fallback)
-                else:
-                    continue
-                db.commit()
-                outcomes.append(out.__dict__)
+                try:
+                    if page.status == PageStatus.pending.value:
+                        out = processing.process_page(db, page, fallback)
+                    elif page.status == PageStatus.sarvam_pending.value and fallback is not None:
+                        out = processing.run_sarvam(db, page, fallback)
+                    else:
+                        continue
+                    db.commit()
+                    outcomes.append(out.__dict__)
+                except Exception as exc:
+                    # One bad page must not abort the item: it keeps its (pending) status, the failure is
+                    # audited, publication stays blocked on it, and "reprocess" retries it.
+                    db.rollback()
+                    log.exception("page processing failed", extra={"page_id": page.id})
+                    audit.record(db, state.get("actor") or "ingestion-graph", "page.process_failed", "page",
+                                 page.id, detail={"error": f"{type(exc).__name__}: {exc}"[:300]})
+                    db.commit()
+                    outcomes.append({"page_id": page.id, "route": "error", "status": page.status,
+                                     "gate_passed": None, "detail": {"error": type(exc).__name__}})
             if item.item_type in ("audio", "video"):
                 processing.make_media_delivery(db, item)
             if item.publication_state == PublicationState.draft.value:

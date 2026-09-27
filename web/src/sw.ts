@@ -1,13 +1,16 @@
 /// <reference lib="webworker" />
 // Kiosk service worker.
-// - Precaches the app shell (build output) so the kiosk UI opens without the edge server.
+// - Precaches the app shell (build output) so the kiosk UI opens without the edge server; offline
+//   navigations to visitor pages (e.g. reloading /item/3) fall back to that shell.
 // - Keeps a signed, leased exhibit cache of published, fully public items only.
 // - Network first for visitor data; cached exhibit items only when offline, only within the lease,
 //   and never for withdrawn items. Ask and staff routes are never cached.
-import { precacheAndRoute } from "workbox-precaching";
+import { matchPrecache, precacheAndRoute } from "workbox-precaching";
+import { registerRoute } from "workbox-routing";
 import {
   fileItemIndex,
   importPublicKey,
+  offlineShellAllowed,
   servable,
   verifyManifest,
   type ExhibitPayload,
@@ -17,6 +20,17 @@ import {
 declare const self: ServiceWorkerGlobalScope;
 
 precacheAndRoute(self.__WB_MANIFEST);
+// Registered after the precache route so precached URLs (e.g. "/") keep their existing handling.
+registerRoute(
+  ({ request, url }) => request.mode === "navigate" && url.origin === self.location.origin && offlineShellAllowed(url.pathname),
+  async ({ request }) => {
+    try {
+      return await fetch(request);
+    } catch {
+      return (await matchPrecache("/index.html")) ?? Response.error();
+    }
+  },
+);
 
 const META = "exhibit-meta";
 const MANIFEST_KEY = "/__exhibit/manifest";

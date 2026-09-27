@@ -1,0 +1,3 @@
+# Fixture files are checksummed in fixtures/manifests; line-ending conversion would corrupt them.
+fixtures/files/** binary
+*.pdf binary

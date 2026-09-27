@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api, ApiError, fileUrl, type ItemDetail, type PassageView } from "../api";
-import type { Key } from "../i18n";
+import { derivativeLabel, type Key } from "../i18n";
 import { formatMs, useApi } from "../hooks";
 import { useSession } from "../state";
-import { AddToList, ErrorState, FixtureChip, KindChip, Loading, VerifiedChip } from "../components/Bits";
+import { AddToList, ArticleLinks, ContentText, ErrorState, FacetLinks, FixtureChip, KindChip, Loading, useDocumentTitle, VerifiedChip } from "../components/Bits";
 import { ScanViewer } from "../components/ScanViewer";
 import { IconPlay } from "../components/Icons";
 
@@ -73,7 +73,7 @@ function PassageBlock({ item, passage, citation, page, tab, target }: { item: It
   return (
     <div ref={ref} className="stack" style={{ gap: 10 }}>
       <div className="chips">
-        <KindChip label={showReviewed ? t("reviewedTranslation") : passage.kind_label} />
+        {showReviewed ? <span className="chip">{t("reviewedTranslation")}</span> : <KindChip label={passage.kind_label} />}
         <VerifiedChip verified={passage.quote_verified && !showReviewed} />
       </div>
       <div className={`passage${target ? " target" : ""}`} lang={showReviewed ? lang : passage.language}>
@@ -92,12 +92,25 @@ function Media({ item, startMs, targetPassage }: { item: ItemDetail; startMs: nu
   const { t } = useSession();
   const media = item.media!;
   const player = useRef<HTMLAudioElement & HTMLVideoElement>(null);
+  const pendingStart = useRef<number | null>(startMs);
   const [now, setNow] = useState(0);
-  const isVideo = media.format.startsWith("video");
+  const isVideo = media.format.startsWith("video/");
 
+  // Browsers may ignore currentTime set before metadata has loaded, so a ?t= start waits for loadedmetadata.
   useEffect(() => {
-    if (startMs !== null && player.current) player.current.currentTime = startMs / 1000;
+    pendingStart.current = startMs;
+    const el = player.current;
+    if (startMs !== null && el && el.readyState >= HTMLMediaElement.HAVE_METADATA) {
+      el.currentTime = startMs / 1000;
+      pendingStart.current = null;
+    }
   }, [startMs]);
+  const applyStart = () => {
+    const el = player.current;
+    if (!el || pendingStart.current === null) return;
+    el.currentTime = pendingStart.current / 1000;
+    pendingStart.current = null;
+  };
 
   const seek = (ms: number) => {
     if (!player.current) return;
@@ -108,18 +121,19 @@ function Media({ item, startMs, targetPassage }: { item: ItemDetail; startMs: nu
   return (
     <section className="sheet stack" aria-labelledby="media-h">
       <h2 id="media-h">{t("transcript")}</h2>
-      <Player ref={player} controls preload="metadata" src={fileUrl(media.file_id)} onTimeUpdate={(e) => setNow(e.currentTarget.currentTime * 1000)}>
-        <track kind="captions" src={media.captions} srcLang={item.languages[0] ?? "en"} label={t("transcript")} default />
+      <Player ref={player} controls preload="metadata" playsInline={isVideo || undefined} src={fileUrl(media.file_id)}
+        onLoadedMetadata={applyStart} onTimeUpdate={(e) => setNow(e.currentTarget.currentTime * 1000)}>
+        <track kind="captions" src={media.captions} srcLang={item.languages[0] ?? "en"} label={isVideo ? t("captions") : t("transcript")} default />
       </Player>
       <div className="chips">
-        <KindChip label={t("transcript")} />
+        <span className="chip">{t("transcript")}</span>
       </div>
       <ol className="segments">
         {media.segments.map((s) => {
           const active = now >= s.start_ms && now < s.end_ms;
           const passage = s.passages[0];
           const target = targetPassage !== null && s.passages.some((p) => p.id === targetPassage);
-          const citation = `${item.title}, at ${formatMs(s.start_ms)}`;
+          const citation = `${item.title}, ${t("atTime", { time: formatMs(s.start_ms) })}`;
           return (
             <li key={s.id} className={`segment${active || target ? " active" : ""}`} aria-current={active ? "true" : undefined}>
               <button type="button" className="time" onClick={() => seek(s.start_ms)} aria-label={`${t("playFrom")} ${formatMs(s.start_ms)}`}>
@@ -134,6 +148,7 @@ function Media({ item, startMs, targetPassage }: { item: ItemDetail; startMs: nu
                   <VerifiedChip verified={s.quote_verified} />
                   <AddToList entry={{ item_id: item.id, title: item.title, passage_id: passage?.id, start_ms: s.start_ms, citation }} />
                 </div>
+                <ArticleLinks articles={s.articles} />
               </div>
             </li>
           );
@@ -157,20 +172,22 @@ export function Item() {
   const targetIsTranslation = Boolean(page?.passages.some((p) => Object.values(p.translations).some((x) => x.passage_id === targetPassage)));
   const [tab, setTab] = useState<Tab>("original");
   useEffect(() => setTab(hasReviewed && targetIsTranslation ? "reviewed" : "original"), [hasReviewed, targetIsTranslation]);
+  useDocumentTitle(d?.title);
 
   if (item.loading && !d) return <div className="page"><Loading /></div>;
-  if (item.error) return <div className="page"><ErrorState error={item.error} retry={item.reload} /><Link to="/search">{t("back")}</Link></div>;
+  if (item.error) return <div className="page"><ErrorState error={item.error} retry={item.reload} /><Link className="link-target" to="/search">{t("back")}</Link></div>;
   if (!d) return null;
 
   const targetBoxes = page?.passages.find((p) => p.id === targetPassage)?.bboxes;
   const summary = d.summaries.find((s) => s.language === lang) ?? d.summaries.find((s) => s.language === "en");
+  const pageLabel = page ? derivativeLabel(lang, page.derivative_label) : null;
 
   return (
     <div className="page">
       {item.offline && <div className="banner offline">{t("offlineBanner")}</div>}
       <header className="reader-head">
         <div>
-          <h1>{d.title}</h1>
+          <h1><ContentText text={d.title} /></h1>
           <div className="meta">
             {d.date_text && <span>{d.date_text}{d.date_certainty !== "exact" ? ` (${t("dateApprox")})` : ""}</span>}
             {d.creator && <span>{d.creator}</span>}
@@ -189,7 +206,7 @@ export function Item() {
         <section className="sheet" aria-labelledby="sum-h" style={{ marginBottom: 20 }}>
           <div className="row" style={{ marginBottom: 8 }}>
             <h2 id="sum-h" style={{ margin: 0, fontSize: "var(--step-1)" }}>{t("summary")}</h2>
-            <span className="chip">{summary.label}</span>
+            <KindChip label={summary.label} />
           </div>
           <p style={{ margin: 0 }} lang={summary.language}>{summary.text}</p>
         </section>
@@ -217,25 +234,39 @@ export function Item() {
             <section className="text-pane" aria-label={t("text")}>
               <div className="sheet">
                 {hasReviewed && (
-                  <div className="tabs" role="tablist">
-                    <button type="button" role="tab" aria-selected={tab === "original"} onClick={() => setTab("original")}>{page.derivative_label}</button>
-                    <button type="button" role="tab" aria-selected={tab === "reviewed"} onClick={() => setTab("reviewed")}>{t("reviewedTranslation")}</button>
+                  <div className="tabs" role="tablist" aria-label={t("text")}
+                    onKeyDown={(e) => {
+                      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+                      const next: Tab = tab === "original" ? "reviewed" : "original";
+                      setTab(next);
+                      document.getElementById(`tab-${next}`)?.focus();
+                    }}>
+                    <button type="button" role="tab" id="tab-original" aria-controls="text-panel" aria-selected={tab === "original"} tabIndex={tab === "original" ? 0 : -1}
+                      onClick={() => setTab("original")} lang={pageLabel?.lang}>{pageLabel?.text}</button>
+                    <button type="button" role="tab" id="tab-reviewed" aria-controls="text-panel" aria-selected={tab === "reviewed"} tabIndex={tab === "reviewed" ? 0 : -1}
+                      onClick={() => setTab("reviewed")}>{t("reviewedTranslation")}</button>
                   </div>
                 )}
-                {!hasReviewed && <h2 style={{ fontSize: "var(--step-1)" }}>{page.derivative_label}</h2>}
+                {!hasReviewed && <h2 style={{ fontSize: "var(--step-1)" }} lang={pageLabel?.lang}>{pageLabel?.text}</h2>}
                 {d.photo && (
                   <dl className="facts" style={{ marginBottom: 14 }}>
                     <dt>{t("caption")}</dt><dd>{d.photo.caption}</dd>
+                    {d.photo.photographer && (<><dt>{t("photographer")}</dt><dd>{d.photo.photographer}</dd></>)}
+                    {d.photo.source_reference && (<><dt>{t("sourceReference")}</dt><dd>{d.photo.source_reference}</dd></>)}
+                    {d.photo.credit && !d.photo.photographer && !d.photo.source_reference && (<><dt>{t("credit")}</dt><dd>{d.photo.credit}</dd></>)}
                     {d.photo.place && (<><dt>{t("place")}</dt><dd>{d.photo.place}</dd></>)}
                     {d.photo.event && (<><dt>{t("event")}</dt><dd>{d.photo.event}</dd></>)}
-                    {d.photo.photographer && (<><dt>{t("photographer")}</dt><dd>{d.photo.photographer}</dd></>)}
+                    {(d.photo.date_text ?? d.date_text) && (<><dt>{t("date")}</dt><dd>{d.photo.date_text ?? d.date_text}</dd></>)}
+                    {d.photo.people?.length > 0 && (<><dt>{t("people")}</dt><dd><FacetLinks facet="person" values={d.photo.people} /></dd></>)}
+                    <dt>{t("rights")}</dt><dd>{d.rights_line}</dd>
                   </dl>
                 )}
-                <div className="stack" style={{ gap: 26 }}>
+                <div className="stack" style={{ gap: 26 }} {...(hasReviewed ? { id: "text-panel", role: "tabpanel", "aria-labelledby": `tab-${tab}` } : {})}>
                   {page.passages.map((p) => (
                     <PassageBlock key={p.id} item={d} passage={p} citation={page.citation} page={page.sequence} tab={tab} target={p.id === targetPassage || Object.values(p.translations).some((x) => x.passage_id === targetPassage)} />
                   ))}
                 </div>
+                {page.articles?.length > 0 && <div style={{ marginTop: 20 }}><ArticleLinks articles={page.articles} /></div>}
               </div>
               <span className="cite">{t("citation")}: {page.citation}</span>
             </section>
@@ -251,6 +282,9 @@ export function Item() {
           <dt>{t("source")}</dt><dd>{d.source_institution}</dd>
           {d.publisher && (<><dt>{t("publisher")}</dt><dd>{d.publisher}</dd></>)}
           {d.volume && (<><dt>{t("volume")}</dt><dd>{d.volume}</dd></>)}
+          {d.subjects?.length > 0 && (<><dt>{t("subjects")}</dt><dd><FacetLinks facet="subject" values={d.subjects} /></dd></>)}
+          {d.people?.length > 0 && (<><dt>{t("people")}</dt><dd><FacetLinks facet="person" values={d.people} /></dd></>)}
+          {d.places?.length > 0 && (<><dt>{t("places")}</dt><dd><FacetLinks facet="place" values={d.places} /></dd></>)}
           <dt>{t("rights")}</dt><dd>{d.rights_line}</dd>
           <dt>{t("version")}</dt><dd>{d.version}</dd>
         </dl>
@@ -262,7 +296,7 @@ export function Item() {
           <ul className="results">
             {d.related.map((r) => (
               <li key={r.id} className="result">
-                <h3><Link to={`/item/${r.id}`}>{r.title}</Link></h3>
+                <h3><Link to={`/item/${r.id}`}><ContentText text={r.title} /></Link></h3>
                 <div className="meta">{r.date_text && <span>{r.date_text}</span>}<span>{t(`col_${r.collection}` as Key)}</span></div>
               </li>
             ))}

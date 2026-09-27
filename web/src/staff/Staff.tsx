@@ -1,11 +1,23 @@
-// Archivist workspace. English only for now (staff tool); visitor UI carries EN/HI/MR.
+// Archivist workspace. Interface text comes from i18n (EN/HI/MR); values the API sends are shown as sent.
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { Link, Navigate, NavLink, Outlet, useNavigate, useParams } from "react-router-dom";
+import { Link, Navigate, NavLink, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../api";
 import { formatMs, useApi } from "../hooks";
+import { ITEM_TYPES } from "../filters";
+import { LANGS, type Key, type Lang } from "../i18n";
+import { useSession } from "../state";
 import { StaffAuthProvider, useAuthedObjectUrl, useStaff } from "./auth";
+import { CERTAINTIES, metadataBody, metadataForm, parseList, type ItemMetadata, type MetadataForm } from "./forms";
 
 type Json = Record<string, unknown>;
+type T = (key: Key, vars?: Record<string, string | number>) => string;
+
+const COLLECTIONS = ["writings", "speeches", "debates", "manuscripts", "photographs", "audio_video"] as const;
+const DOC_CLASSES = ["born_digital", "printed", "handwritten", "photograph", "audio_video"] as const;
+const ACCESS_LEVELS = ["public", "public_online_only", "restricted"] as const;
+const PERMISSIONS = ["unknown", "allowed", "not_allowed"] as const;
+const BOOTSTRAP_COMMAND = "python -m archive.cli bootstrap";
+const PAGE_ACTIONS: Record<string, Key> = { approve: "stApprove", correct: "stCorrect", escalate: "stEscalate", reject: "stReject" };
 
 function errText(e: unknown): string {
   if (e instanceof ApiError) {
@@ -25,12 +37,12 @@ function useAction() {
   const { token } = useStaff();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  const run = async (fn: (token: string) => Promise<unknown>, okText: string, after?: () => void) => {
+  const run = async (fn: (token: string) => Promise<unknown>, okText: string | null, after?: () => void) => {
     setBusy(true);
     setMsg(null);
     try {
       await fn(token!);
-      setMsg({ ok: true, text: okText });
+      if (okText) setMsg({ ok: true, text: okText });
       after?.();
     } catch (e) {
       setMsg({ ok: false, text: errText(e) });
@@ -42,7 +54,17 @@ function useAction() {
   return { run, busy, view };
 }
 
+/** Confirmation carried across a navigation (router state), e.g. after a page review decision. */
+function Flash() {
+  const flash = (useLocation().state as { flash?: string } | null)?.flash;
+  return flash ? <p className="notice" role="status">{flash}</p> : null;
+}
+
 export function StaffRoot() {
+  const { t } = useSession();
+  useEffect(() => {
+    document.title = t("stWorkspace");
+  }, [t]);
   return (
     <StaffAuthProvider>
       <Outlet />
@@ -50,8 +72,20 @@ export function StaffRoot() {
   );
 }
 
+function StaffLanguage() {
+  const { lang, setLang, t } = useSession();
+  return (
+    <label className="staff-lang">{t("language")}
+      <select value={lang} onChange={(e) => setLang(e.target.value as Lang)}>
+        {LANGS.map((l) => <option key={l.code} value={l.code} lang={l.code}>{l.name}</option>)}
+      </select>
+    </label>
+  );
+}
+
 export function StaffLogin() {
   const { login, token } = useStaff();
+  const { t } = useSession();
   const nav = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -69,49 +103,53 @@ export function StaffLogin() {
   };
   return (
     <div className="staff">
-      <div className="page" style={{ maxWidth: 460 }}>
-        <h1>Archivist workspace</h1>
-        <p className="muted">Sign in with a staff account. Local development accounts are created by <code>python -m archive.cli bootstrap</code> from the credentials in <code>.env</code>.</p>
+      <main className="page" style={{ maxWidth: 460 }}>
+        <div className="row"><span className="spacer" /><StaffLanguage /></div>
+        <h1>{t("stWorkspace")}</h1>
+        <p className="muted">{t("stSignInLead")} <code lang="en">{BOOTSTRAP_COMMAND}</code></p>
         <form className="stack" onSubmit={submit}>
-          <label>Email<input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
-          <label>Password<input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></label>
+          <label>{t("stEmail")}<input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
+          <label>{t("stPassword")}<input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></label>
           {error && <p className="notice bad" role="alert">{error}</p>}
-          <button type="submit" className="btn">Sign in</button>
+          <button type="submit" className="btn">{t("stSignIn")}</button>
         </form>
-      </div>
+      </main>
     </div>
   );
 }
 
 export function StaffLayout() {
   const { token, user, logout } = useStaff();
+  const { t } = useSession();
   if (!token) return <Navigate to="/staff/login" replace />;
-  const links = [
-    ["/staff", "Dashboard"],
-    ["/staff/intake", "Intake"],
-    ["/staff/review", "Review queue"],
-    ["/staff/items", "Items"],
-    ["/staff/rights", "Rights register"],
-    ["/staff/jobs", "Jobs"],
-    ["/staff/audit", "Audit log"],
+  const links: [string, Key][] = [
+    ["/staff", "stNavDashboard"],
+    ["/staff/intake", "stNavIntake"],
+    ["/staff/review", "stNavReview"],
+    ["/staff/items", "stNavItems"],
+    ["/staff/rights", "stNavRights"],
+    ["/staff/jobs", "stNavJobs"],
+    ["/staff/audit", "stNavAudit"],
   ];
   return (
     <div className="staff">
+      <a className="skip-link" href="#main">{t("skip")}</a>
       <header className="staff-top">
-        <strong>Archivist workspace</strong>
-        <nav aria-label="Staff">
+        <strong>{t("stWorkspace")}</strong>
+        <nav aria-label={t("stNavLabel")}>
           {links.map(([to, label]) => (
-            <NavLink key={to} to={to} end={to === "/staff"}>{label}</NavLink>
+            <NavLink key={to} to={to} end={to === "/staff"}>{t(label)}</NavLink>
           ))}
         </nav>
         <div className="who">
+          <StaffLanguage />
           <span>{user?.email} ({user?.roles.join(", ")})</span>
-          <button type="button" className="btn secondary small" onClick={logout}>Sign out</button>
+          <button type="button" className="btn secondary small" onClick={logout}>{t("stSignOut")}</button>
         </div>
       </header>
-      <div className="page">
+      <main id="main" className="page" tabIndex={-1}>
         <Outlet />
-      </div>
+      </main>
     </div>
   );
 }
@@ -129,62 +167,73 @@ function Section({ title, children, actions }: { title: string; children: ReactN
   );
 }
 
+function Loading() {
+  const { t } = useSession();
+  return <p className="muted" role="status">{t("loading")}</p>;
+}
+
+function Nothing() {
+  const { t } = useSession();
+  return <p className="muted">{t("stNothingWaiting")}</p>;
+}
+
 // ---------------------------------------------------------------- dashboard
 
 export function StaffDashboard() {
   const { token } = useStaff();
+  const { t } = useSession();
   const stats = useApi<Json>("/api/staff/stats", token);
   const status = useApi<Json>("/api/staff/settings/status", token);
   const queue = useApi<Json>("/api/staff/review/queue", token);
   const q = queue.data as Record<string, unknown[]> | null;
   return (
     <>
-      <h1>Dashboard</h1>
+      <h1>{t("stNavDashboard")}</h1>
       <div className="form-grid">
-        <Section title="Waiting for review">
+        <Section title={t("stWaiting")}>
           {q ? (
             <dl className="facts">
-              <dt>Pages needing full review or transcription</dt><dd>{q.pages.length}</dd>
-              <dt>Batches with a sample to check</dt><dd>{q.batches.length}</dd>
-              <dt>Transcript segments</dt><dd>{q.segments.length}</dd>
-              <dt>Photo captions</dt><dd>{q.photos.length}</dd>
-              <dt>Translations</dt><dd>{q.translations.length}</dd>
-              <dt>Summaries and narration</dt><dd>{q.derivatives.length}</dd>
-              <dt>Ready to publish</dt><dd>{q.ready_to_publish.length}</dd>
+              <dt>{t("stQPages")}</dt><dd>{q.pages.length}</dd>
+              <dt>{t("stQBatches")}</dt><dd>{q.batches.length}</dd>
+              <dt>{t("stQSegments")}</dt><dd>{q.segments.length}</dd>
+              <dt>{t("stQPhotos")}</dt><dd>{q.photos.length}</dd>
+              <dt>{t("stQTranslations")}</dt><dd>{q.translations.length}</dd>
+              <dt>{t("stQDerivatives")}</dt><dd>{q.derivatives.length}</dd>
+              <dt>{t("stQReady")}</dt><dd>{q.ready_to_publish.length}</dd>
             </dl>
-          ) : <p className="muted">Loading…</p>}
-          <p style={{ marginTop: 12 }}><Link to="/staff/review">Open the review queue</Link></p>
+          ) : <Loading />}
+          <p style={{ marginTop: 12 }}><Link to="/staff/review">{t("stOpenQueue")}</Link></p>
         </Section>
-        <Section title="Integrations on this installation">
+        <Section title={t("stIntegrations")}>
           {status.data ? (
             <dl className="facts">
-              <dt>Environment</dt><dd>{String(status.data.environment)}</dd>
-              <dt>Sarvam (OCR fallback, translation, speech)</dt><dd className={`status ${status.data.sarvam_configured ? "ok" : "bad"}`}>{status.data.sarvam_configured ? "Configured" : "Not configured: failed pages stay pending"}</dd>
-              <dt>Answer model</dt><dd className={`status ${status.data.llm_configured ? "ok" : "bad"}`}>{status.data.llm_configured ? String(status.data.llm_model) : "Not configured: Ask shows extractive passages"}</dd>
-              <dt>Trace sink</dt><dd>{String(status.data.trace_backend)}</dd>
-              <dt>OCR gate</dt><dd>{String(status.data.gate_config).split(/[\\/]/).pop()}</dd>
-              <dt>Sufficiency threshold</dt><dd>{String(status.data.sufficiency_threshold)} ({String(status.data.sufficiency_threshold_version)})</dd>
+              <dt>{t("stEnvironment")}</dt><dd>{String(status.data.environment)}</dd>
+              <dt>{t("stSarvam")}</dt><dd className={`status ${status.data.sarvam_configured ? "ok" : "bad"}`}>{status.data.sarvam_configured ? t("stConfigured") : t("stSarvamOff")}</dd>
+              <dt>{t("stAnswerModel")}</dt><dd className={`status ${status.data.llm_configured ? "ok" : "bad"}`}>{status.data.llm_configured ? String(status.data.llm_model) : t("stLlmOff")}</dd>
+              <dt>{t("stTraceSink")}</dt><dd>{String(status.data.trace_backend)}</dd>
+              <dt>{t("stOcrGate")}</dt><dd>{String(status.data.gate_config).split(/[\\/]/).pop()}</dd>
+              <dt>{t("stSufficiency")}</dt><dd>{String(status.data.sufficiency_threshold)} ({String(status.data.sufficiency_threshold_version)})</dd>
             </dl>
-          ) : <p className="muted">Loading…</p>}
+          ) : <Loading />}
         </Section>
       </div>
       {stats.data && (
-        <Section title="Archive state">
+        <Section title={t("stArchiveState")}>
           <div className="form-grid">
-            <div><h3>Items by state</h3><Counts data={stats.data.items_by_state as Json} /></div>
-            <div><h3>Pages by status</h3><Counts data={stats.data.pages_by_status as Json} /></div>
-            <div><h3>Pages by OCR route</h3><Counts data={stats.data.pages_by_route as Json} /></div>
+            <div><h3>{t("stItemsByState")}</h3><Counts data={stats.data.items_by_state as Json} /></div>
+            <div><h3>{t("stPagesByStatus")}</h3><Counts data={stats.data.pages_by_status as Json} /></div>
+            <div><h3>{t("stPagesByRoute")}</h3><Counts data={stats.data.pages_by_route as Json} /></div>
           </div>
-          <h3 style={{ marginTop: 16 }}>Ask outcomes</h3>
-          <table className="grid" aria-label="Ask outcomes">
-            <thead><tr><th>Outcome</th><th>Count</th><th>Tokens in</th><th>Tokens out</th><th>Cost (USD)</th><th>Mean latency (ms)</th></tr></thead>
+          <h3 style={{ marginTop: 16 }}>{t("stAskOutcomes")}</h3>
+          <table className="grid" aria-label={t("stAskOutcomes")}>
+            <thead><tr><th>{t("stOutcome")}</th><th>{t("stCount")}</th><th>{t("stTokensIn")}</th><th>{t("stTokensOut")}</th><th>{t("stCost")}</th><th>{t("stMeanLatency")}</th></tr></thead>
             <tbody>
               {(stats.data.answers as Json[]).map((a) => (
                 <tr key={String(a.outcome)}><td>{String(a.outcome)}</td><td>{String(a.count)}</td><td>{String(a.tokens_in)}</td><td>{String(a.tokens_out)}</td><td>{Number(a.cost_usd).toFixed(4)}</td><td>{Math.round(Number(a.avg_latency_ms))}</td></tr>
               ))}
             </tbody>
           </table>
-          <p className="muted">Answer cache hits: {String(stats.data.cache_hits)}</p>
+          <p className="muted">{t("stCacheHits", { n: String(stats.data.cache_hits) })}</p>
         </Section>
       )}
     </>
@@ -205,6 +254,7 @@ function Counts({ data }: { data: Json }) {
 
 export function StaffIntake() {
   const { token } = useStaff();
+  const { t } = useSession();
   const rights = useApi<Json[]>("/api/staff/rights", token);
   const { run, busy, view } = useAction();
   const [result, setResult] = useState<Json | null>(null);
@@ -227,64 +277,60 @@ export function StaffIntake() {
     const fd = new FormData();
     fd.set("metadata", JSON.stringify(meta));
     for (const f of Array.from(files)) fd.append("files", f);
-    void run(async (tk) => setResult(await api.post<Json>("/api/staff/intake", fd, tk)), "Stored. Ingestion job queued.");
+    void run(async (tk) => setResult(await api.post<Json>("/api/staff/intake", fd, tk)), t("stStored"));
   };
 
   const selectable = (rights.data ?? []).filter((r) => !r.discovery_only);
   return (
     <>
-      <h1>Intake</h1>
-      <p className="muted" style={{ maxWidth: "80ch" }}>
-        Upload captured pages, a born-digital PDF, a photograph, or a recording. Each file is hashed (SHA-256), checked for duplicates, and stored read-only as the preservation master before any processing. Items must reference a rights register entry; discovery-only sources (such as NDLI links) cannot be ingested.
-      </p>
+      <h1>{t("stNavIntake")}</h1>
+      <p className="muted" style={{ maxWidth: "80ch" }}>{t("stIntakeLead")}</p>
       <form className="sheet stack" onSubmit={submit}>
         <div className="form-grid">
-          <label>Title<input type="text" value={form.title} onChange={set("title")} required /></label>
-          <label>Rights register entry
+          <label>{t("stTitle")}<input type="text" value={form.title} onChange={set("title")} required /></label>
+          <label>{t("stRightsEntry")}
             <select value={form.rights_source_key} onChange={set("rights_source_key")} required>
-              <option value="">Choose…</option>
+              <option value="">{t("stChoose")}</option>
               {selectable.map((r) => (
-                <option key={String(r.source_key)} value={String(r.source_key)}>{String(r.source_key)} (display: {String(r.display_permission)})</option>
+                <option key={String(r.source_key)} value={String(r.source_key)}>{t("stRightsOption", { key: String(r.source_key), perm: String(r.display_permission) })}</option>
               ))}
             </select>
           </label>
-          <label>Item type
+          <label>{t("stItemType")}
             <select value={form.item_type} onChange={set("item_type")}>
-              {["text", "printed_scan", "manuscript", "photograph", "audio", "video"].map((v) => <option key={v}>{v}</option>)}
+              {ITEM_TYPES.map((v) => <option key={v} value={v}>{t(`type_${v}`)}</option>)}
             </select>
           </label>
-          <label>Document class (sets the OCR route)
+          <label>{t("stDocClass")}
             <select value={form.doc_class} onChange={set("doc_class")}>
-              {["born_digital", "printed", "handwritten", "photograph", "audio_video"].map((v) => <option key={v}>{v}</option>)}
+              {DOC_CLASSES.map((v) => <option key={v} value={v}>{t(`stDoc_${v}`)}</option>)}
             </select>
           </label>
-          <label>Collection
+          <label>{t("stCollection")}
             <select value={form.collection} onChange={set("collection")}>
-              {["writings", "speeches", "debates", "manuscripts", "photographs", "audio_video"].map((v) => <option key={v}>{v}</option>)}
+              {COLLECTIONS.map((v) => <option key={v} value={v}>{t(`col_${v}`)}</option>)}
             </select>
           </label>
-          <label>Access
+          <label>{t("stAccess")}
             <select value={form.access_level} onChange={set("access_level")}>
-              <option value="public">public (may be cached on kiosks)</option>
-              <option value="public_online_only">public_online_only (never cached)</option>
-              <option value="restricted">restricted (never shown to visitors)</option>
+              {ACCESS_LEVELS.map((v) => <option key={v} value={v}>{t(`stAccess_${v}`)}</option>)}
             </select>
           </label>
-          <label>Languages (comma separated: en, hi, mr)<input type="text" value={form.languages} onChange={set("languages")} /></label>
-          <label>Date as written<input type="text" value={form.date_text} onChange={set("date_text")} /></label>
-          <label>Creator<input type="text" value={form.creator} onChange={set("creator")} /></label>
-          <label>Capture device<input type="text" value={form.device} onChange={set("device")} /></label>
-          <label>Operator<input type="text" value={form.operator} onChange={set("operator")} required /></label>
-          <label>Files<input type="file" multiple onChange={(e) => setFiles(e.target.files)} required style={{ minHeight: 48 }} /></label>
+          <label>{t("stLanguages")}<input type="text" value={form.languages} onChange={set("languages")} /></label>
+          <label>{t("stDateText")}<input type="text" value={form.date_text} onChange={set("date_text")} /></label>
+          <label>{t("stCreator")}<input type="text" value={form.creator} onChange={set("creator")} /></label>
+          <label>{t("stDevice")}<input type="text" value={form.device} onChange={set("device")} /></label>
+          <label>{t("stOperator")}<input type="text" value={form.operator} onChange={set("operator")} required /></label>
+          <label>{t("stFiles")}<input type="file" multiple onChange={(e) => setFiles(e.target.files)} required style={{ minHeight: 48 }} /></label>
         </div>
-        <div className="row"><button type="submit" className="btn" disabled={busy}>{busy ? "Uploading…" : "Store and queue ingestion"}</button></div>
+        <div className="row"><button type="submit" className="btn" disabled={busy}>{busy ? t("stUploading") : t("stStoreQueue")}</button></div>
         {view}
       </form>
       {result && (
-        <Section title="Intake result">
-          <p>Item <Link to={`/staff/items/${String(result.item_id)}`}>#{String(result.item_id)}</Link>, {String(result.pages)} pages, job {String(result.job_id ?? "not queued")}.</p>
-          <table className="grid" aria-label="Stored files">
-            <thead><tr><th>File</th><th>Status</th><th>SHA-256</th><th>Note</th></tr></thead>
+        <Section title={t("stIntakeResult")}>
+          <p>{t("stItemWord")} <Link to={`/staff/items/${String(result.item_id)}`}>#{String(result.item_id)}</Link>, {t("stIntakeTail", { pages: String(result.pages), job: String(result.job_id ?? t("stNotQueued")) })}</p>
+          <table className="grid" aria-label={t("stStoredFiles")}>
+            <thead><tr><th>{t("stFile")}</th><th>{t("stStatus")}</th><th>{"SHA-256"}</th><th>{t("stNote")}</th></tr></thead>
             <tbody>
               {(result.files as Json[]).map((f, i) => (
                 <tr key={i}><td>{String(f.name)}</td><td>{String(f.status)}</td><td><code>{String(f.sha256 ?? "").slice(0, 16)}</code></td><td>{String(f.detail ?? "")}</td></tr>
@@ -301,75 +347,78 @@ export function StaffIntake() {
 
 export function StaffReview() {
   const { token } = useStaff();
+  const { t } = useSession();
   const q = useApi<Record<string, Json[]>>("/api/staff/review/queue", token);
   const { run, busy, view } = useAction();
-  if (!q.data) return <p className="muted">Loading…</p>;
+  if (!q.data) return <Loading />;
   const d = q.data;
   return (
     <>
-      <h1>Review queue</h1>
+      <h1>{t("stNavReview")}</h1>
+      <Flash />
       {view}
-      <Section title={`Pages (${d.pages.length})`}>
-        {d.pages.length === 0 ? <p className="muted">Nothing waiting.</p> : (
-          <table className="grid" aria-label="Pages waiting for review">
-            <thead><tr><th>Item</th><th>Page</th><th>Status</th><th>Route</th><th>Priority</th><th /></tr></thead>
+      <Section title={t("stPagesN", { n: d.pages.length })}>
+        {d.pages.length === 0 ? <Nothing /> : (
+          <table className="grid" aria-label={t("stPagesWaiting")}>
+            <thead><tr><th>{t("stItemWord")}</th><th>{t("stPage")}</th><th>{t("stStatus")}</th><th>{t("stRoute")}</th><th>{t("stPriority")}</th><th><span className="visually-hidden">{t("stActions")}</span></th></tr></thead>
             <tbody>
               {d.pages.map((p) => (
                 <tr key={String(p.id)}>
                   <td>{String(p.item_title)}</td><td>{String(p.label ?? p.sequence)}</td><td>{String(p.status)}{p.sarvam_last_error ? ` (${String(p.sarvam_last_error)})` : ""}</td>
                   <td>{String(p.ocr_route)}</td><td>{String(p.priority)}</td>
-                  <td><Link className="btn small" to={`/staff/pages/${String(p.id)}`}>Review</Link></td>
+                  <td><Link className="btn small" to={`/staff/pages/${String(p.id)}`}>{t("stReview")}</Link></td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </Section>
-      <Section title={`Batches (${d.batches.length})`}>
+      <Section title={t("stBatchesN", { n: d.batches.length })}>
         {d.batches.map((b) => (
-          <p key={String(b.id)}>Batch {String(b.id)} (item {String(b.item_id)}, {String(b.pages)} pages, {(b.sample as number[]).length} to sample) <Link to={`/staff/batches/${String(b.id)}`}>Check sample</Link></p>
+          <p key={String(b.id)}>{t("stBatchLine", { id: String(b.id), item: String(b.item_id), pages: String(b.pages), n: (b.sample as number[]).length })} <Link to={`/staff/batches/${String(b.id)}`}>{t("stCheckSample")}</Link></p>
         ))}
-        {d.batches.length === 0 && <p className="muted">Nothing waiting.</p>}
+        {d.batches.length === 0 && <Nothing />}
       </Section>
-      <Section title={`Transcript segments (${d.segments.length})`}>
+      <Section title={t("stSegmentsN", { n: d.segments.length })}>
         {d.segments.map((s) => (
           <div key={String(s.id)} className="row" style={{ marginBottom: 8 }}>
             <span className="chip">{formatMs(Number(s.start_ms))}</span>
             <span style={{ flex: 1 }}>{String(s.text)}</span>
-            <button type="button" className="btn small" disabled={busy} onClick={() => run((tk) => api.post(`/api/staff/segments/${String(s.id)}/review`, { action: "approve" }, tk), `Segment ${String(s.id)} approved.`, q.reload)}>Approve</button>
+            {Boolean(s.draft_engine) && <span className="chip mt">{t("stSttMachineDraft", { engine: String(s.draft_engine) })}</span>}
+            <button type="button" className="btn small" disabled={busy} onClick={() => run((tk) => api.post(`/api/staff/segments/${String(s.id)}/review`, { action: "approve" }, tk), t("stSegmentApproved", { id: String(s.id) }), q.reload)}>{t("stApprove")}</button>
           </div>
         ))}
-        {d.segments.length === 0 && <p className="muted">Nothing waiting.</p>}
+        {d.segments.length === 0 && <Nothing />}
       </Section>
-      <Section title={`Photo captions (${d.photos.length})`}>
+      <Section title={t("stPhotosN", { n: d.photos.length })}>
         {d.photos.map((p) => (
           <div key={String(p.item_id)} className="row" style={{ marginBottom: 8 }}>
             <span style={{ flex: 1 }}>{String(p.caption)}</span>
-            <button type="button" className="btn small" disabled={busy} onClick={() => run((tk) => api.post(`/api/staff/photos/${String(p.item_id)}/review`, { action: "approve" }, tk), "Caption approved.", q.reload)}>Approve</button>
+            <button type="button" className="btn small" disabled={busy} onClick={() => run((tk) => api.post(`/api/staff/photos/${String(p.item_id)}/review`, { action: "approve" }, tk), t("stCaptionApproved"), q.reload)}>{t("stApprove")}</button>
           </div>
         ))}
-        {d.photos.length === 0 && <p className="muted">Nothing waiting.</p>}
+        {d.photos.length === 0 && <Nothing />}
       </Section>
-      <Section title={`Translations (${d.translations.length})`}>
-        {d.translations.map((t) => (
-          <div key={String(t.id)} className="stack" style={{ marginBottom: 12 }}>
-            <span className="chip">{String(t.target_language)} ({String(t.method)}), source passage {String(t.source_passage_id)}</span>
-            <p lang={String(t.target_language)}>{String(t.text)}</p>
+      <Section title={t("stTranslationsN", { n: d.translations.length })}>
+        {d.translations.map((tr) => (
+          <div key={String(tr.id)} className="stack" style={{ marginBottom: 12 }}>
+            <span className="chip">{t("stTranslationChip", { lang: String(tr.target_language), method: String(tr.method), id: String(tr.source_passage_id) })}</span>
+            <p lang={String(tr.target_language)}>{String(tr.text)}</p>
             <div className="row">
-              <button type="button" className="btn small" disabled={busy} onClick={() => run((tk) => api.post(`/api/staff/translations/${String(t.id)}/review`, { action: "approve" }, tk), "Translation approved.", q.reload)}>Approve as reviewer</button>
+              <button type="button" className="btn small" disabled={busy} onClick={() => run((tk) => api.post(`/api/staff/translations/${String(tr.id)}/review`, { action: "approve" }, tk), t("stTranslationApproved"), q.reload)}>{t("stApproveReviewer")}</button>
             </div>
           </div>
         ))}
-        {d.translations.length === 0 && <p className="muted">Nothing waiting.</p>}
+        {d.translations.length === 0 && <Nothing />}
       </Section>
-      <Section title={`Ready to publish (${d.ready_to_publish.length})`}>
+      <Section title={t("stReadyN", { n: d.ready_to_publish.length })}>
         {d.ready_to_publish.map((i) => (
           <div key={String(i.id)} className="row" style={{ marginBottom: 8 }}>
             <Link to={`/staff/items/${String(i.id)}`} style={{ flex: 1 }}>{String(i.title)}</Link>
-            <button type="button" className="btn small" disabled={busy} onClick={() => run((tk) => api.post(`/api/staff/items/${String(i.id)}/publish`, {}, tk), "Publication queued. The worker switches the index atomically.", q.reload)}>Publish</button>
+            <button type="button" className="btn small" disabled={busy} onClick={() => run((tk) => api.post(`/api/staff/items/${String(i.id)}/publish`, {}, tk), t("stPublishQueuedAtomic"), q.reload)}>{t("stPublish")}</button>
           </div>
         ))}
-        {d.ready_to_publish.length === 0 && <p className="muted">Nothing waiting.</p>}
+        {d.ready_to_publish.length === 0 && <Nothing />}
       </Section>
     </>
   );
@@ -380,87 +429,128 @@ export function StaffReview() {
 export function StaffPage() {
   const { id } = useParams();
   const { token } = useStaff();
+  const { t } = useSession();
+  const nav = useNavigate();
   const page = useApi<Json>(`/api/staff/pages/${id}`, token);
   const { run, busy, view } = useAction();
   const [text, setText] = useState("");
   const [compared, setCompared] = useState(false);
   const d = page.data;
-  const img = useAuthedObjectUrl(d?.master_file_id ? `/api/staff/files/${String(d.master_file_id)}` : null);
+  const img = useAuthedObjectUrl(d?.preview_file_id ? `/api/staff/files/${String(d.preview_file_id)}` : null);
+  useEffect(() => {
+    setCompared(false);
+    window.scrollTo(0, 0);
+  }, [id]);
   useEffect(() => {
     if (!d) return;
     const local = d.local as Json | null;
     const sarvam = d.sarvam as Json | null;
     setText(String(d.approved_text ?? sarvam?.text ?? local?.text ?? ""));
   }, [d]);
-  if (page.error) return <p className="notice bad">{page.error.message}</p>;
-  if (!d) return <p className="muted">Loading…</p>;
+  if (page.error) return <p className="notice bad" role="alert">{page.error.message}</p>;
+  if (!d) return <Loading />;
   const status = String(d.status);
+  // After a decision the reviewer moves on: next queued page (same item first), else the queue itself.
+  const leave = async (tk: string, done: string) => {
+    let next: Json | undefined;
+    try {
+      const queue = await api.get<{ pages: Json[] }>("/api/staff/review/queue", tk);
+      const others = queue.pages.filter((p) => String(p.id) !== id);
+      next = others.find((p) => p.item_id === d.item_id) ?? others[0];
+    } catch {
+      next = undefined;
+    }
+    if (next) nav(`/staff/pages/${String(next.id)}`, { state: { flash: `${done} ${t("stNextQueuedPage")}` } });
+    else nav("/staff/review", { state: { flash: done } });
+  };
+  const recordQuote = (tk: string) => api.post(`/api/staff/pages/${id}/verify-quotes`, { confirm: true }, tk);
   const act = (action: string, body: Json = {}) =>
-    run((tk) => api.post(`/api/staff/pages/${id}/review`, { action, ...body }, tk), `Page ${action}d.`, page.reload);
+    run(async (tk) => {
+      await api.post(`/api/staff/pages/${id}/review`, { action, ...body }, tk);
+      let done = t("stPageDecision", { action: PAGE_ACTIONS[action] ? t(PAGE_ACTIONS[action]) : action });
+      if (compared && (action === "approve" || action === "correct")) {
+        try {
+          await recordQuote(tk);
+        } catch (e) {
+          page.reload();
+          throw e;
+        }
+        done = `${done} ${t("stRecordedQuote")}`;
+      }
+      await leave(tk, done);
+    }, null);
   const signals = (d.quality_signals ?? {}) as Json;
+  const gate = d.gate_passed === null ? t("stNA") : d.gate_passed ? t("stPassed") : t("stFailed");
   return (
     <>
       <p><Link to={`/staff/items/${String(d.item_id)}`}>{String(d.item_title)}</Link></p>
-      <h1>Page {String(d.label ?? d.sequence)}</h1>
+      <h1>{t("stPageN", { n: String(d.label ?? d.sequence) })}</h1>
       <div className="row" style={{ marginBottom: 12 }}>
-        <span className="chip">status: {status}</span>
-        <span className="chip">route: {String(d.ocr_route)}</span>
-        <span className="chip">gate: {d.gate_passed === null ? "n/a" : d.gate_passed ? "passed" : "failed"} ({String(d.gate_version ?? "")})</span>
-        <span className={`chip${d.quote_verified ? " verified" : ""}`}>{d.quote_verified ? "quote-verified" : "not quote-verified"}</span>
-        <span className="chip">external processing: {d.external_processing_allowed ? "allowed" : "not allowed"}</span>
+        <span className="chip">{t("stChipStatus", { v: status })}</span>
+        <span className="chip">{t("stChipRoute", { v: String(d.ocr_route) })}</span>
+        <span className="chip">{t("stChipGate", { v: gate, ver: String(d.gate_version ?? "") })}</span>
+        <span className={`chip${d.quote_verified ? " verified" : ""}`}>{d.quote_verified ? t("stQuoteVerified") : t("stNotQuoteVerified")}</span>
+        <span className="chip">{d.external_processing_allowed ? t("stExternalAllowed") : t("stExternalNotAllowed")}</span>
       </div>
+      <Flash />
       {view}
       <div className="review-pair">
         <figure style={{ margin: 0 }}>
-          {img ? <img src={img} alt={`Preservation master of page ${String(d.sequence)}`} /> : <div className="empty-state">Loading scan…</div>}
-          <figcaption className="muted">Preservation master (read-only)</figcaption>
+          {img ? <img src={img} alt={t("stMasterAlt", { n: String(d.sequence) })} /> : <div className="empty-state">{d.preview_file_id ? t("stLoadingScan") : t("stNoScanPreview")}</div>}
+          <figcaption className="muted">{t("stMasterCaption")}</figcaption>
         </figure>
         <div className="stack">
-          <label htmlFor="page-text">Text to approve</label>
+          <label htmlFor="page-text">{t("stTextToApprove")}</label>
           <textarea id="page-text" value={text} onChange={(e) => setText(e.target.value)} lang={String(d.language ?? "en")} />
           <div className="row">
-            <button type="button" className="btn" disabled={busy || status === "approved"} onClick={() => act(text === String((d.sarvam as Json | null)?.text ?? (d.local as Json | null)?.text ?? "") ? "approve" : "correct", { text })}>Approve this text</button>
-            <button type="button" className="btn secondary" disabled={busy} onClick={() => act("escalate", { reason: "needs second opinion" })}>Escalate</button>
-            <button type="button" className="btn danger" disabled={busy} onClick={() => act("reject", { reason: "unusable capture" })}>Reject page</button>
+            <button type="button" className="btn" disabled={busy || status === "approved"} onClick={() => act(text === String((d.sarvam as Json | null)?.text ?? (d.local as Json | null)?.text ?? "") ? "approve" : "correct", { text })}>{t("stApproveText")}</button>
+            <button type="button" className="btn secondary" disabled={busy} onClick={() => act("escalate", { reason: "needs second opinion" })}>{t("stEscalate")}</button>
+            <button type="button" className="btn danger" disabled={busy} onClick={() => act("reject", { reason: "unusable capture" })}>{t("stRejectPage")}</button>
             {(status === "sarvam_pending" || status === "needs_full_review") && Boolean(d.external_processing_allowed) && (
-              <button type="button" className="btn secondary" disabled={busy} onClick={() => run((tk) => api.post(`/api/staff/pages/${id}/retry-sarvam`, {}, tk), "Sarvam retry queued.", page.reload)}>Retry Sarvam</button>
+              <button type="button" className="btn secondary" disabled={busy} onClick={() => run((tk) => api.post(`/api/staff/pages/${id}/retry-sarvam`, {}, tk), t("stSarvamQueued"), page.reload)}>{t("stRetrySarvam")}</button>
             )}
           </div>
-          {status === "approved" && (
-            <div className="sheet stack" style={{ padding: 14 }}>
-              <strong>Quote verification</strong>
-              <label className="row" style={{ fontWeight: 400 }}>
-                <input type="checkbox" checked={compared} onChange={(e) => setCompared(e.target.checked)} style={{ width: 24, height: 24 }} />
-                I compared the approved text with the original scan word for word.
-              </label>
-              <button type="button" className="btn secondary" disabled={!compared || busy || Boolean(d.quote_verified)} onClick={() => run((tk) => api.post(`/api/staff/pages/${id}/verify-quotes`, { confirm: true }, tk), "Recorded quote verification.", page.reload)}>Record quote verification</button>
-            </div>
-          )}
+          <div className="sheet stack" style={{ padding: 14 }}>
+            <strong>{t("stQuoteVerification")}</strong>
+            {d.quote_verified ? (
+              <p className="muted" style={{ margin: 0 }}>{t("stQuoteAlreadyVerified")}</p>
+            ) : (
+              <>
+                <label className="row" style={{ fontWeight: 400 }}>
+                  <input type="checkbox" checked={compared} onChange={(e) => setCompared(e.target.checked)} style={{ width: 24, height: 24 }} />
+                  {status === "approved" ? t("stComparedWords") : t("stComparedBeforeApprove")}
+                </label>
+                {status === "approved" && (
+                  <button type="button" className="btn secondary" disabled={!compared || busy} onClick={() => run(async (tk) => { await recordQuote(tk); await leave(tk, t("stRecordedQuote")); }, null)}>{t("stRecordQuote")}</button>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
-      <Section title="OCR results">
-        <table className="grid" aria-label="OCR results">
-          <thead><tr><th>Engine</th><th>Status</th><th>Confidence</th><th>Selected</th><th>Error</th></tr></thead>
+      <Section title={t("stOcrResults")}>
+        <table className="grid" aria-label={t("stOcrResults")}>
+          <thead><tr><th>{t("stEngine")}</th><th>{t("stStatus")}</th><th>{t("stConfidence")}</th><th>{t("stSelected")}</th><th>{t("stError")}</th></tr></thead>
           <tbody>
             {(d.results as Json[]).map((r) => (
-              <tr key={String(r.id)}><td>{String(r.engine)} {String(r.engine_version ?? "")}</td><td>{String(r.status)}</td><td>{r.mean_confidence == null ? "" : Number(r.mean_confidence).toFixed(1)}</td><td>{r.selected ? "yes" : ""}</td><td>{String(r.error ?? "")}</td></tr>
+              <tr key={String(r.id)}><td>{String(r.engine)} {String(r.engine_version ?? "")}</td><td>{String(r.status)}</td><td>{r.mean_confidence == null ? "" : Number(r.mean_confidence).toFixed(1)}</td><td>{r.selected ? t("stYes") : ""}</td><td>{String(r.error ?? "")}</td></tr>
             ))}
           </tbody>
         </table>
         {Object.keys(signals).length > 0 && <pre style={{ whiteSpace: "pre-wrap", fontSize: 13 }}>{JSON.stringify(signals, null, 1)}</pre>}
         {Array.isArray(d.diff) && (d.diff as string[]).length > 0 && (
           <>
-            <h3>Local OCR compared with Sarvam</h3>
+            <h3>{t("stDiff")}</h3>
             <pre style={{ whiteSpace: "pre-wrap", fontSize: 13, background: "var(--paper)", padding: 10 }}>{(d.diff as string[]).join("\n")}</pre>
           </>
         )}
       </Section>
-      <Section title="Decisions">
-        <table className="grid" aria-label="Review decisions">
-          <thead><tr><th>When</th><th>Action</th><th>Reviewer</th><th>Reason</th><th>Seeded fixture</th></tr></thead>
+      <Section title={t("stDecisions")}>
+        <table className="grid" aria-label={t("stReviewDecisions")}>
+          <thead><tr><th>{t("stWhen")}</th><th>{t("stAction")}</th><th>{t("stReviewer")}</th><th>{t("stReason")}</th><th>{t("stSeeded")}</th></tr></thead>
           <tbody>
             {(d.decisions as Json[]).map((x) => (
-              <tr key={String(x.id)}><td>{String(x.at).slice(0, 19)}</td><td>{String(x.action)}</td><td>{String(x.reviewer)}</td><td>{String(x.reason ?? "")}</td><td>{x.seeded_fixture ? "yes (not a human review)" : ""}</td></tr>
+              <tr key={String(x.id)}><td>{String(x.at).slice(0, 19)}</td><td>{String(x.action)}</td><td>{String(x.reviewer)}</td><td>{String(x.reason ?? "")}</td><td>{x.seeded_fixture ? t("stSeededYes") : ""}</td></tr>
             ))}
           </tbody>
         </table>
@@ -472,15 +562,16 @@ export function StaffPage() {
 // ---------------------------------------------------------------- batch sample check
 
 function SampleCheck({ page, value, onChange }: { page: Json; value: { checked: boolean; text: string }; onChange: (v: { checked: boolean; text: string }) => void }) {
+  const { t } = useSession();
   const img = useAuthedObjectUrl(page.delivery_file_id ? `/api/staff/files/${String(page.delivery_file_id)}` : null);
   return (
     <div className="review-pair" style={{ marginBottom: 20 }}>
-      {img ? <img src={img} alt={`Sample page ${String(page.sequence)}`} /> : <div className="empty-state">Loading scan…</div>}
+      {img ? <img src={img} alt={t("stSampleAlt", { n: String(page.sequence) })} /> : <div className="empty-state">{t("stLoadingScan")}</div>}
       <div className="stack">
-        <textarea aria-label={`Candidate text for sample page ${String(page.sequence)}`} value={value.text} onChange={(e) => onChange({ ...value, text: e.target.value })} lang={String(page.language ?? "en")} />
+        <textarea aria-label={t("stCandidateText", { n: String(page.sequence) })} value={value.text} onChange={(e) => onChange({ ...value, text: e.target.value })} lang={String(page.language ?? "en")} />
         <label className="row" style={{ fontWeight: 400 }}>
           <input type="checkbox" checked={value.checked} onChange={(e) => onChange({ ...value, checked: e.target.checked })} style={{ width: 24, height: 24 }} />
-          I checked this page against the scan (edit the text above if it needs correcting).
+          {t("stCheckedPage")}
         </label>
       </div>
     </div>
@@ -490,6 +581,7 @@ function SampleCheck({ page, value, onChange }: { page: Json; value: { checked: 
 export function StaffBatch() {
   const { id } = useParams();
   const { token } = useStaff();
+  const { t } = useSession();
   const b = useApi<Json>(`/api/staff/batches/${id}`, token);
   const { run, busy, view } = useAction();
   const [checks, setChecks] = useState<Record<string, { checked: boolean; text: string }>>({});
@@ -499,7 +591,7 @@ export function StaffBatch() {
     for (const p of b.data.sample as Json[]) init[String(p.id)] = { checked: false, text: String(p.candidate_text ?? "") };
     setChecks(init);
   }, [b.data]);
-  if (!b.data) return <p className="muted">Loading…</p>;
+  if (!b.data) return <Loading />;
   const sample = b.data.sample as Json[];
   const allChecked = sample.every((p) => checks[String(p.id)]?.checked);
   const decide = (passed: boolean) => {
@@ -510,19 +602,19 @@ export function StaffBatch() {
       sample_checks[String(p.id)] = c.text !== String(p.candidate_text ?? "") ? { ok: false, text: c.text } : { ok: true };
     }
     void run((tk) => api.post(`/api/staff/batches/${id}/decide`, { passed, reason: passed ? "sample checked" : "sample failed", sample_checks }, tk),
-      passed ? "Batch passed: all pages approved on a sampled basis." : "Batch failed: every page moves to full review.", b.reload);
+      passed ? t("stBatchPassed") : t("stBatchFailed"), b.reload);
   };
   return (
     <>
-      <h1>Batch {String(b.data.id)}</h1>
-      <p className="muted">Status: {String(b.data.status)}. {(b.data.page_ids as number[]).length} pages; check each random sample page against its scan. If any sample page is wrong in a way that suggests the rest are wrong, fail the batch.</p>
+      <h1>{t("stBatchN", { n: String(b.data.id) })}</h1>
+      <p className="muted">{t("stBatchLead", { status: String(b.data.status), n: (b.data.page_ids as number[]).length })}</p>
       {view}
       {sample.map((p) => (
         <SampleCheck key={String(p.id)} page={p} value={checks[String(p.id)] ?? { checked: false, text: "" }} onChange={(v) => setChecks({ ...checks, [String(p.id)]: v })} />
       ))}
       <div className="row">
-        <button type="button" className="btn" disabled={!allChecked || busy || b.data.status !== "open"} onClick={() => decide(true)}>Pass batch</button>
-        <button type="button" className="btn danger" disabled={busy || b.data.status !== "open"} onClick={() => decide(false)}>Fail batch</button>
+        <button type="button" className="btn" disabled={!allChecked || busy || b.data.status !== "open"} onClick={() => decide(true)}>{t("stPassBatch")}</button>
+        <button type="button" className="btn danger" disabled={busy || b.data.status !== "open"} onClick={() => decide(false)}>{t("stFailBatch")}</button>
       </div>
     </>
   );
@@ -532,17 +624,18 @@ export function StaffBatch() {
 
 export function StaffItems() {
   const { token } = useStaff();
+  const { t } = useSession();
   const items = useApi<Json[]>("/api/staff/items", token);
   return (
     <>
-      <h1>Items</h1>
-      <table className="grid" aria-label="All items">
-        <thead><tr><th>#</th><th>Title</th><th>Collection</th><th>State</th><th>Version</th><th>Pages approved</th><th>Display</th><th>Training</th><th>Access</th></tr></thead>
+      <h1>{t("stNavItems")}</h1>
+      <table className="grid" aria-label={t("stAllItems")}>
+        <thead><tr><th>#</th><th>{t("stTitle")}</th><th>{t("stCollection")}</th><th>{t("stState")}</th><th>{t("stVersion")}</th><th>{t("stPagesApproved")}</th><th>{t("stDisplay")}</th><th>{t("stTraining")}</th><th>{t("stAccess")}</th></tr></thead>
         <tbody>
           {(items.data ?? []).map((i) => (
             <tr key={String(i.id)}>
               <td>{String(i.id)}</td>
-              <td><Link to={`/staff/items/${String(i.id)}`}>{String(i.title)}</Link>{i.is_fixture ? " (fixture)" : ""}</td>
+              <td><Link to={`/staff/items/${String(i.id)}`}>{String(i.title)}</Link>{i.is_fixture ? ` (${t("stFixture")})` : ""}</td>
               <td>{String(i.collection)}</td><td>{String(i.state)}</td><td>{String(i.version)}</td>
               <td>{String(i.pages_approved)} / {String(i.pages)}</td><td>{String(i.display_permission)}</td><td>{String(i.training_permission)}</td><td>{String(i.access_level)}</td>
             </tr>
@@ -553,106 +646,511 @@ export function StaffItems() {
   );
 }
 
-export function StaffItem() {
-  const { id } = useParams();
+interface StaffSegment { id: number; start_ms: number; end_ms: number; speaker: string | null; text: string; status: string; quote_verified: boolean; draft_engine: string | null }
+interface StaffDerivative { id: number; kind: string; language: string; status: string; content: string | null; label: string | null; generator: string | null }
+interface StaffPhoto { caption: string; people: string[] | null; place: string | null; event: string | null; date_text: string | null; photographer: string | null; source_reference: string | null; status: string }
+interface PublishedPassage { id: number; page_sequence: number | null; start_ms: number | null; text: string }
+interface ConstitutionLink { id: number; article_number: string; article_title: string; passage_id: number; note: string | null; created_by: string; created_at: string }
+interface StaffArticle { number: string; titles: Record<string, string>; part: string | null }
+interface MetadataChange { version: number; before: Json | null; after: Json | null; actor: string; reason: string; at: string }
+
+/** A destructive action that asks for a reason inline before it runs. */
+function ReasonAction({ label, confirmLabel, busy, onConfirm }: { label: string; confirmLabel: string; busy: boolean; onConfirm: (reason: string) => void }) {
+  const { t } = useSession();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  if (!open) return <button type="button" className="btn danger small" disabled={busy} onClick={() => setOpen(true)}>{label}</button>;
+  return (
+    <form className="row" onSubmit={(e) => { e.preventDefault(); onConfirm(reason.trim()); }}>
+      <label className="row" style={{ fontWeight: 400 }}>{t("stReason")}
+        <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} minLength={3} required autoComplete="off" autoFocus style={{ width: 260 }} />
+      </label>
+      <button type="submit" className="btn danger small" disabled={busy || reason.trim().length < 3}>{confirmLabel}</button>
+      <button type="button" className="btn quiet small" onClick={() => { setOpen(false); setReason(""); }}>{t("stCancel")}</button>
+    </form>
+  );
+}
+
+const fmtValue = (t: T, v: unknown) => (v == null || v === "" ? t("stEmpty") : Array.isArray(v) ? v.join(", ") || t("stEmpty") : String(v));
+
+function MetadataSection({ id, metadata, version, reload }: { id: string; metadata: ItemMetadata | undefined; version: unknown; reload: () => void }) {
   const { token } = useStaff();
+  const { t } = useSession();
+  const { run, busy, view } = useAction();
+  const [form, setForm] = useState<MetadataForm>(() => metadataForm(metadata));
+  const [showHistory, setShowHistory] = useState(false);
+  const history = useApi<MetadataChange[]>(showHistory ? `/api/staff/items/${id}/metadata/history` : null, token);
+  const stored = JSON.stringify(metadata ?? null);
+  useEffect(() => setForm(metadataForm(metadata)), [stored]);
+  const set = (k: keyof MetadataForm) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const text = (k: keyof MetadataForm, label: Key, type = "text") => (
+    <label>{t(label)}<input type={type} name={k} value={form[k]} onChange={set(k)} autoComplete="off" /></label>
+  );
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    void run((tk) => api.put(`/api/staff/items/${id}/metadata`, metadataBody(form), tk), t("stMetaSaved"), () => {
+      reload();
+      if (showHistory) history.reload();
+    });
+  };
+  return (
+    <Section title={t("stMetadata")} actions={<span className="chip">{t("stMetaVersion", { n: String(version ?? 0) })}</span>}>
+      <form className="stack" onSubmit={submit}>
+        <div className="form-grid">
+          {text("subjects", "stSubjects")}
+          {text("people", "stPeople")}
+          {text("places", "stPlaces")}
+          {text("date_text", "stDateText")}
+          {text("date_start", "stDateStart", "date")}
+          {text("date_end", "stDateEnd", "date")}
+          <label>{t("stDateCertainty")}
+            <select name="date_certainty" value={form.date_certainty} onChange={set("date_certainty")}>
+              {CERTAINTIES.map((c) => <option key={c} value={c}>{t(`stCert_${c}`)}</option>)}
+            </select>
+          </label>
+          {text("languages", "stLanguages")}
+          {text("edition", "stEdition")}
+          {text("volume", "stVolume")}
+          {text("publisher", "stPublisher")}
+          {text("creator", "stCreator")}
+        </div>
+        <div className="row" style={{ alignItems: "end" }}>
+          <label style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>{t("stChangeReason")}
+            <input type="text" name="reason" value={form.reason} onChange={set("reason")} minLength={3} required autoComplete="off" />
+          </label>
+          <button type="submit" className="btn" disabled={busy}>{busy ? t("stSaving") : t("stSaveMeta")}</button>
+        </div>
+        {view}
+      </form>
+      <details style={{ marginTop: 14 }} onToggle={(e) => setShowHistory(e.currentTarget.open)}>
+        <summary style={{ cursor: "pointer", padding: "10px 0", fontWeight: 500 }}>{t("stHistory")}</summary>
+        {history.loading && <Loading />}
+        {history.error && <p className="notice bad">{history.error.message}</p>}
+        {history.data && history.data.length === 0 && <p className="muted">{t("stNoChanges")}</p>}
+        {history.data && history.data.length > 0 && (
+          <table className="grid" aria-label={t("stHistoryTable")}>
+            <thead><tr><th>{t("stVersion")}</th><th>{t("stWhen")}</th><th>{t("stWho")}</th><th>{t("stReason")}</th><th>{t("stChanged")}</th></tr></thead>
+            <tbody>
+              {history.data.map((h) => {
+                const keys = [...new Set([...Object.keys(h.before ?? {}), ...Object.keys(h.after ?? {})])]
+                  .filter((k) => JSON.stringify(h.before?.[k] ?? null) !== JSON.stringify(h.after?.[k] ?? null));
+                return (
+                  <tr key={h.version}>
+                    <td>{h.version}</td><td>{String(h.at).slice(0, 19)}</td><td>{h.actor}</td><td>{h.reason}</td>
+                    <td>{keys.length ? <ul style={{ margin: 0, paddingLeft: 18 }}>{keys.map((k) => <li key={k}><strong>{k}</strong>: {fmtValue(t, h.before?.[k])} → {fmtValue(t, h.after?.[k])}</li>)}</ul> : t("stNoFieldChanges")}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </details>
+    </Section>
+  );
+}
+
+function SummariesSection({ id, derivatives, reload }: { id: string; derivatives: StaffDerivative[]; reload: () => void }) {
+  const { t } = useSession();
+  const { run, busy, view } = useAction();
+  const [language, setLanguage] = useState("en");
+  const [text, setText] = useState("");
+  const [editing, setEditing] = useState<number | null>(null);
+  const [edit, setEdit] = useState("");
+  const draft = (withText: boolean) =>
+    run((tk) => api.post(`/api/staff/items/${id}/summary`, withText ? { language, text: text.trim() } : { language }, tk),
+      withText ? t("stHumanSaved") : t("stAiDrafted"),
+      () => { if (withText) setText(""); reload(); });
+  const review = (x: StaffDerivative, action: "approve" | "correct" | "reject", body: Json = {}) =>
+    run((tk) => api.post(`/api/staff/derivatives/${x.id}/review`, { action, ...body }, tk),
+      action === "reject" ? t("stDraftRejected") : t("stSummaryApproved"),
+      () => { setEditing(null); reload(); });
+  return (
+    <Section title={t("stSummaries")}>
+      <p className="notice">{t("stSummariesNote")}</p>
+      <div className="stack" style={{ gap: 10 }}>
+        <div className="row" style={{ alignItems: "end" }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4, width: 200 }}>{t("language")}
+            <select value={language} onChange={(e) => setLanguage(e.target.value)}>
+              {LANGS.map((l) => <option key={l.code} value={l.code} lang={l.code}>{l.name} ({l.code})</option>)}
+            </select>
+          </label>
+        </div>
+        <label htmlFor="summary-draft">{t("stSummaryText")}</label>
+        <textarea id="summary-draft" value={text} onChange={(e) => setText(e.target.value)} lang={language} rows={4} />
+        <div className="row">
+          <button type="button" className="btn" disabled={busy || !text.trim()} onClick={() => draft(true)}>{t("stSaveHuman")}</button>
+          <button type="button" className="btn secondary" disabled={busy} onClick={() => draft(false)}>{t("stDraftAi")}</button>
+        </div>
+        {view}
+      </div>
+      {derivatives.length > 0 && (
+        <div className="stack" style={{ marginTop: 18, gap: 14 }}>
+          {derivatives.map((x) => (
+            <div key={x.id} className="stack" style={{ gap: 8, paddingTop: 12, borderTop: "1px solid var(--rule)" }}>
+              <div className="row">
+                <span className="chip">{x.label ?? x.kind}</span>
+                <span className="chip">{x.kind} ({x.language})</span>
+                <span className="chip">{x.status}</span>
+                {x.status === "draft" && <span className="chip mt">{t("stNotVisible")}</span>}
+                {x.generator && <span className="muted">{x.generator}</span>}
+              </div>
+              {editing === x.id ? (
+                <>
+                  <label htmlFor={`deriv-${x.id}`} className="visually-hidden">{t("stCorrectedText")}</label>
+                  <textarea id={`deriv-${x.id}`} value={edit} onChange={(e) => setEdit(e.target.value)} lang={x.language} rows={4} />
+                  <div className="row">
+                    <button type="button" className="btn small" disabled={busy || !edit.trim()} onClick={() => review(x, "correct", { text: edit.trim() })}>{t("stSaveCorrection")}</button>
+                    <button type="button" className="btn quiet small" onClick={() => setEditing(null)}>{t("stCancel")}</button>
+                  </div>
+                </>
+              ) : x.content ? <p lang={x.language} style={{ margin: 0 }}>{x.content}</p> : null}
+              {x.status === "draft" && editing !== x.id && (
+                <div className="row">
+                  <button type="button" className="btn small" disabled={busy} onClick={() => review(x, "approve")}>{t("stApprove")}</button>
+                  {x.content != null && <button type="button" className="btn secondary small" disabled={busy} onClick={() => { setEditing(x.id); setEdit(x.content ?? ""); }}>{t("stCorrect")}</button>}
+                  <button type="button" className="btn danger small" disabled={busy} onClick={() => window.confirm(t("stConfirmRejectDraft")) && review(x, "reject")}>{t("stReject")}</button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </Section>
+  );
+}
+
+function photoForm(p: StaffPhoto) {
+  return {
+    caption: p.caption ?? "", photographer: p.photographer ?? "", source_reference: p.source_reference ?? "",
+    place: p.place ?? "", event: p.event ?? "", date_text: p.date_text ?? "", people: (p.people ?? []).join(", "),
+  };
+}
+
+function PhotoSection({ id, photo, reload }: { id: string; photo: StaffPhoto; reload: () => void }) {
+  const { t } = useSession();
+  const { run, busy, view } = useAction();
+  const [form, setForm] = useState(() => photoForm(photo));
+  const stored = JSON.stringify(photo);
+  useEffect(() => setForm(photoForm(photo)), [stored]);
+  const set = (k: keyof ReturnType<typeof photoForm>) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const changed = JSON.stringify(form) !== JSON.stringify(photoForm(photo));
+  const approve = () => {
+    const updates = {
+      caption: form.caption.trim(), photographer: form.photographer.trim() || null, source_reference: form.source_reference.trim() || null,
+      place: form.place.trim() || null, event: form.event.trim() || null, date_text: form.date_text.trim() || null, people: parseList(form.people),
+    };
+    void run((tk) => api.post(`/api/staff/photos/${id}/review`, { action: changed ? "correct" : "approve", updates }, tk),
+      changed ? t("stCaptionCorrected") : t("stCaptionApproved"), reload);
+  };
+  return (
+    <Section title={t("stPhotoSection")} actions={<span className={`chip${photo.status === "approved" ? " verified" : ""}`}>{t("stChipStatus", { v: photo.status })}</span>}>
+      <p className="muted">{t("stPhotoNote")}</p>
+      <div className="stack" style={{ gap: 10 }}>
+        <label htmlFor="photo-caption">{t("stCaption")}</label>
+        <textarea id="photo-caption" value={form.caption} onChange={set("caption")} rows={3} />
+        <div className="form-grid">
+          <label>{t("stPhotographer")}<input type="text" value={form.photographer} onChange={set("photographer")} autoComplete="off" /></label>
+          <label>{t("stSourceRef")}<input type="text" value={form.source_reference} onChange={set("source_reference")} autoComplete="off" /></label>
+          <label>{t("stPlace")}<input type="text" value={form.place} onChange={set("place")} autoComplete="off" /></label>
+          <label>{t("stEvent")}<input type="text" value={form.event} onChange={set("event")} autoComplete="off" /></label>
+          <label>{t("stDateText")}<input type="text" value={form.date_text} onChange={set("date_text")} autoComplete="off" /></label>
+          <label>{t("stPeople")}<input type="text" value={form.people} onChange={set("people")} autoComplete="off" /></label>
+        </div>
+        <div className="row">
+          <button type="button" className="btn" disabled={busy || !form.caption.trim()} onClick={approve}>{changed ? t("stSaveCorrections") : t("stApproveCaption")}</button>
+          <button type="button" className="btn danger" disabled={busy} onClick={() => window.confirm(t("stConfirmRejectCaption")) && run((tk) => api.post(`/api/staff/photos/${id}/review`, { action: "reject" }, tk), t("stCaptionRejected"), reload)}>{t("stRejectCaption")}</button>
+        </div>
+        {view}
+      </div>
+    </Section>
+  );
+}
+
+function SegmentsSection({ segments, reload }: { segments: StaffSegment[]; reload: () => void }) {
+  const { t } = useSession();
+  const { run, busy, view } = useAction();
+  const [editing, setEditing] = useState<number | null>(null);
+  const [edit, setEdit] = useState("");
+  const review = (s: StaffSegment, action: "approve" | "correct" | "reject", body: Json = {}) =>
+    run((tk) => api.post(`/api/staff/segments/${s.id}/review`, { action, ...body }, tk),
+      t(action === "reject" ? "stSegRejected" : action === "correct" ? "stSegCorrected" : "stSegApproved", { t: formatMs(s.start_ms) }),
+      () => { setEditing(null); reload(); });
+  return (
+    <Section title={t("stSegments")}>
+      {view}
+      {segments.map((s) => (
+        <div key={s.id} className="row" style={{ marginBottom: 10, alignItems: "flex-start" }}>
+          <span className="chip">{formatMs(s.start_ms)}</span>
+          {editing === s.id ? (
+            <div className="stack" style={{ flex: 1, gap: 6 }}>
+              <label htmlFor={`seg-${s.id}`} className="visually-hidden">{t("stCorrectedTranscriptAt", { t: formatMs(s.start_ms) })}</label>
+              <textarea id={`seg-${s.id}`} value={edit} onChange={(e) => setEdit(e.target.value)} rows={3} />
+              <div className="row">
+                <button type="button" className="btn small" disabled={busy || !edit.trim()} onClick={() => review(s, "correct", { text: edit.trim() })}>{t("stSaveCorrection")}</button>
+                <button type="button" className="btn quiet small" onClick={() => setEditing(null)}>{t("stCancel")}</button>
+              </div>
+            </div>
+          ) : <span style={{ flex: 1 }}>{s.speaker ? <strong>{s.speaker}: </strong> : null}{s.text}</span>}
+          {s.draft_engine && (s.status === "draft"
+            ? <span className="chip mt">{t("stSttMachineDraft", { engine: s.draft_engine })}</span>
+            : <span className="muted">{t("stSttDraftedBy", { engine: s.draft_engine })}</span>)}
+          <span className="chip">{s.status}</span>
+          {s.status === "draft" && editing !== s.id && (
+            <>
+              <button type="button" className="btn small" disabled={busy} onClick={() => review(s, "approve")}>{t("stApprove")}</button>
+              <button type="button" className="btn secondary small" disabled={busy} onClick={() => { setEditing(s.id); setEdit(s.text); }}>{t("stCorrect")}</button>
+              <ReasonAction label={t("stReject")} confirmLabel={t("stConfirmReject")} busy={busy} onConfirm={(reason) => review(s, "reject", { reason })} />
+            </>
+          )}
+          {s.status === "approved" && !s.quote_verified && (
+            <button type="button" className="btn secondary small" disabled={busy} title={t("stAudioOnly")}
+              onClick={() => window.confirm(t("stConfirmListened")) && run((tk) => api.post(`/api/staff/segments/${s.id}/verify-quotes`, { confirm: true }, tk), t("stRecorded"), reload)}>
+              {t("stRecordAudioCheck")}
+            </button>
+          )}
+          {s.quote_verified && <span className="chip verified">{t("stQuoteVerified")}</span>}
+        </div>
+      ))}
+    </Section>
+  );
+}
+
+/** Sarvam speech-to-text: queues a draft transcript that always goes to full review, never to publication. */
+function SpeechToTextSection({ id, allowed, hasRecording, reload }: { id: string; allowed: boolean; hasRecording: boolean; reload: () => void }) {
+  const { token, can } = useStaff();
+  const { t } = useSession();
+  const { run, busy, view } = useAction();
+  const [file, setFile] = useState<File | null>(null);
+  const [language, setLanguage] = useState("");
+  const [jobId, setJobId] = useState<number | null>(null);
+  const jobs = useApi<Json[]>(jobId ? "/api/staff/jobs" : null, token);
+  const job = jobs.data?.find((j) => j.id === jobId);
+  const status = job ? String(job.status) : null;
+  useEffect(() => {
+    if (!jobId || status === "failed") return;
+    if (status === "done") {
+      reload();
+      return;
+    }
+    const timer = setTimeout(jobs.reload, 3000);
+    return () => clearTimeout(timer);
+  }, [jobId, status, jobs.data]);
+  if (!can("archivist") && !can("reviewer")) return null;
+  const start = (withFile: boolean) => {
+    const fd = new FormData();
+    if (language) fd.set("language", language);
+    if (withFile && file) fd.set("file", file);
+    void run(async (tk) => setJobId((await api.post<{ job_id: number }>(`/api/staff/items/${id}/speech-to-text`, fd, tk)).job_id), t("stSttQueued"));
+  };
+  return (
+    <Section title={t("stSpeechToText")}>
+      <p className="notice">{t("stSttWarning")}</p>
+      <p className="muted">{t("stSttSent")}</p>
+      {!allowed ? <p className="notice bad" role="alert">{t("stSttRights")}</p> : (
+        <div className="stack" style={{ gap: 10 }}>
+          <div className="form-grid">
+            <label>{t("stSttRecording")}
+              <input type="file" accept=".wav,.mp3,.m4a,.flac,.ogg,audio/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} style={{ minHeight: 48 }} />
+            </label>
+            <label>{t("stSttLanguage")}
+              <select value={language} onChange={(e) => setLanguage(e.target.value)}>
+                <option value="">{t("stSttItemLanguage")}</option>
+                {LANGS.map((l) => <option key={l.code} value={l.code} lang={l.code}>{l.name} ({l.code})</option>)}
+              </select>
+            </label>
+          </div>
+          <div className="row">
+            <button type="button" className="btn" disabled={busy || !file} onClick={() => start(true)}>{t("stSttUpload")}</button>
+            {hasRecording && <button type="button" className="btn secondary" disabled={busy} onClick={() => start(false)}>{t("stSttStored")}</button>}
+          </div>
+          {view}
+          {jobId && (status === "queued" || status === "running" || !status) && <p className="muted" role="status">{t("stSttRunning", { id: jobId })}</p>}
+          {status === "done" && <p className="notice" role="status">{t("stSttDone", { n: Number((job?.result as Json | undefined)?.segments ?? 0) })}</p>}
+          {status === "failed" && <p className="notice bad" role="alert">{t("stSttFailed", { error: String(job?.error ?? "") })}</p>}
+        </div>
+      )}
+    </Section>
+  );
+}
+
+const passageWhere = (t: T, p: PublishedPassage) =>
+  p.page_sequence != null ? t("stPageN", { n: p.page_sequence }) : p.start_ms != null ? t("stAtTime", { t: formatMs(p.start_ms) }) : t("stPassageN", { n: p.id });
+const excerpt = (s: string, n = 90) => (s.length > n ? `${s.slice(0, n).trimEnd()}…` : s);
+
+function ConstitutionSection({ passages, links, reload }: { passages: PublishedPassage[]; links: ConstitutionLink[]; reload: () => void }) {
+  const { token, can } = useStaff();
+  const { t } = useSession();
+  const articles = useApi<StaffArticle[]>("/api/staff/constitution/articles", token);
+  const { run, busy, view } = useAction();
+  const [link, setLink] = useState({ passage_id: "", article_number: "", note: "" });
+  const [art, setArt] = useState({ number: "", en: "", hi: "", mr: "", part: "" });
+  const curator = can("curator");
+  const byId = new Map(passages.map((p) => [p.id, p]));
+  const addLink = (e: FormEvent) => {
+    e.preventDefault();
+    void run((tk) => api.post("/api/staff/constitution/links", { passage_id: Number(link.passage_id), article_number: link.article_number, note: link.note.trim() || undefined }, tk),
+      t("stLinked", { n: link.article_number }), () => { setLink({ passage_id: "", article_number: "", note: "" }); reload(); });
+  };
+  const addArticle = (e: FormEvent) => {
+    e.preventDefault();
+    const titles: Record<string, string> = { en: art.en.trim() };
+    if (art.hi.trim()) titles.hi = art.hi.trim();
+    if (art.mr.trim()) titles.mr = art.mr.trim();
+    const number = art.number.trim();
+    void run((tk) => api.post("/api/staff/constitution/articles", { number, titles, part: art.part.trim() || undefined }, tk),
+      t("stArticleAdded", { n: number }), () => { setArt({ number: "", en: "", hi: "", mr: "", part: "" }); setLink((l) => ({ ...l, article_number: number })); articles.reload(); });
+  };
+  return (
+    <Section title={t("stConstLinks")}>
+      <p className="muted">{t("stConstNote")}{!curator && <> {t("stConstCuratorOnly")}</>}</p>
+      {view}
+      {links.length === 0 ? <p className="muted">{t("stNoLinks")}</p> : (
+        <table className="grid" aria-label={t("stConstLinksTable")} style={{ marginBottom: 16 }}>
+          <thead><tr><th>{t("stArticle")}</th><th>{t("stPassage")}</th><th>{t("stNote")}</th><th>{t("stAdded")}</th><th><span className="visually-hidden">{t("stActions")}</span></th></tr></thead>
+          <tbody>
+            {links.map((l) => {
+              const p = byId.get(l.passage_id);
+              return (
+                <tr key={l.id}>
+                  <td>{t("stArticleTitle", { n: l.article_number, title: l.article_title })}</td>
+                  <td>{p ? `${passageWhere(t, p)}: ${excerpt(p.text)}` : t("stPassageN", { n: l.passage_id })}</td>
+                  <td>{l.note ?? ""}</td>
+                  <td>{l.created_by}, {String(l.created_at).slice(0, 10)}</td>
+                  <td>{curator && <ReasonAction label={t("stRemove")} confirmLabel={t("stConfirmRemoval")} busy={busy} onConfirm={(reason) => run((tk) => api.post(`/api/staff/constitution/links/${l.id}/remove`, { reason }, tk), t("stLinkRemoved", { n: l.article_number }), reload)} />}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+      {curator && (
+        <>
+          <form className="stack" onSubmit={addLink} style={{ gap: 10 }}>
+            <h3 style={{ margin: 0 }}>{t("stAddLink")}</h3>
+            <div className="form-grid">
+              <label>{t("stPassage")}
+                <select value={link.passage_id} onChange={(e) => setLink({ ...link, passage_id: e.target.value })} required>
+                  <option value="">{t("stChoose")}</option>
+                  {passages.map((p) => <option key={p.id} value={p.id}>{passageWhere(t, p)}: {excerpt(p.text, 70)}</option>)}
+                </select>
+              </label>
+              <label>{t("stArticle")}
+                <select value={link.article_number} onChange={(e) => setLink({ ...link, article_number: e.target.value })} required>
+                  <option value="">{articles.loading ? t("loading") : t("stChoose")}</option>
+                  {(articles.data ?? []).map((a) => <option key={a.number} value={a.number}>{t("stArticleTitle", { n: a.number, title: a.titles.en ?? Object.values(a.titles)[0] ?? "" })}</option>)}
+                </select>
+              </label>
+              <label>{t("stNoteVisitors")}<input type="text" value={link.note} onChange={(e) => setLink({ ...link, note: e.target.value })} autoComplete="off" /></label>
+            </div>
+            <div className="row"><button type="submit" className="btn" disabled={busy}>{t("stAddLink")}</button></div>
+          </form>
+          <details style={{ marginTop: 14 }}>
+            <summary style={{ cursor: "pointer", padding: "10px 0", fontWeight: 500 }}>{t("stArticleMissing")}</summary>
+            <form className="stack" onSubmit={addArticle} style={{ gap: 10 }}>
+              <div className="form-grid">
+                <label>{t("stArticleNumber")}<input type="text" value={art.number} onChange={(e) => setArt({ ...art, number: e.target.value })} required placeholder={t("stArticleNumberEg")} autoComplete="off" /></label>
+                <label>{t("stEnTitle")}<input type="text" lang="en" value={art.en} onChange={(e) => setArt({ ...art, en: e.target.value })} required autoComplete="off" /></label>
+                <label>{t("stHiTitle")}<input type="text" lang="hi" value={art.hi} onChange={(e) => setArt({ ...art, hi: e.target.value })} autoComplete="off" /></label>
+                <label>{t("stMrTitle")}<input type="text" lang="mr" value={art.mr} onChange={(e) => setArt({ ...art, mr: e.target.value })} autoComplete="off" /></label>
+                <label>{t("stPart")}<input type="text" value={art.part} onChange={(e) => setArt({ ...art, part: e.target.value })} placeholder={t("stPartEg")} autoComplete="off" /></label>
+              </div>
+              <div className="row"><button type="submit" className="btn secondary" disabled={busy}>{t("stAddArticle")}</button></div>
+            </form>
+          </details>
+        </>
+      )}
+    </Section>
+  );
+}
+
+export function StaffItem() {
+  const { id = "" } = useParams();
+  const { token } = useStaff();
+  const { t } = useSession();
   const item = useApi<Json>(`/api/staff/items/${id}`, token);
   const { run, busy, view } = useAction();
   const [reason, setReason] = useState("");
   const d = item.data;
-  if (!d) return <p className="muted">Loading…</p>;
+  if (!d) return <Loading />;
   const rights = d.rights as Json;
+  const segments = (d.segments ?? []) as StaffSegment[];
+  const passages = (d.published_passages ?? []) as PublishedPassage[];
   return (
     <>
       <h1>{String(d.title)}</h1>
       <div className="row" style={{ marginBottom: 12 }}>
-        <span className="chip">state: {String(d.state)}</span>
-        <span className="chip">version {String(d.version)}</span>
-        <span className="chip">access: {String(d.access_level)}</span>
-        {Boolean(d.is_fixture) && <span className="chip fixture">synthetic fixture</span>}
-        {d.state === "published" && <Link to={`/item/${String(d.id)}`}>Open visitor view</Link>}
+        <span className="chip">{t("stChipState", { v: String(d.state) })}</span>
+        <span className="chip">{t("stChipVersion", { v: String(d.version) })}</span>
+        <span className="chip">{t("stChipAccess", { v: String(d.access_level) })}</span>
+        {Boolean(d.is_fixture) && <span className="chip fixture">{t("stSyntheticFixture")}</span>}
+        {d.state === "published" && <Link to={`/item/${String(d.id)}`}>{t("stOpenVisitor")}</Link>}
       </div>
       {view}
-      <Section title="Publication" actions={
+      <Section title={t("stPublication")} actions={
         <>
-          <button type="button" className="btn small" disabled={busy || !d.ready} onClick={() => run((tk) => api.post(`/api/staff/items/${id}/publish`, {}, tk), "Publication queued.", item.reload)}>Publish</button>
+          <button type="button" className="btn small" disabled={busy || !d.ready} onClick={() => run((tk) => api.post(`/api/staff/items/${id}/publish`, {}, tk), t("stPublishQueued"), item.reload)}>{t("stPublish")}</button>
         </>
       }>
-        {d.ready ? <p className="status ok">All review gates passed.</p> : (
+        {d.ready ? <p className="status ok">{t("stGatesPassed")}</p> : (
           <ul>{(d.problems as string[]).map((p) => <li key={p}>{p}</li>)}</ul>
         )}
         {d.state === "published" && (
-          <form className="row" onSubmit={(e) => { e.preventDefault(); void run((tk) => api.post(`/api/staff/items/${id}/withdraw`, { reason }, tk), "Withdrawn: removed from search, Ask, QR links and kiosk manifests. The preservation master is kept.", item.reload); }}>
-            <label style={{ flex: 1 }}>Withdrawal reason<input type="text" value={reason} onChange={(e) => setReason(e.target.value)} minLength={3} required /></label>
-            <button type="submit" className="btn danger" disabled={busy}>Withdraw</button>
+          <form className="row" onSubmit={(e) => { e.preventDefault(); void run((tk) => api.post(`/api/staff/items/${id}/withdraw`, { reason }, tk), t("stWithdrawn"), item.reload); }}>
+            <label style={{ flex: 1 }}>{t("stWithdrawReason")}<input type="text" value={reason} onChange={(e) => setReason(e.target.value)} minLength={3} required /></label>
+            <button type="submit" className="btn danger" disabled={busy}>{t("stWithdraw")}</button>
+          </form>
+        )}
+        {d.state === "withdrawn" && (
+          <form className="row" onSubmit={(e) => { e.preventDefault(); void run((tk) => api.post(`/api/staff/items/${id}/restore`, { reason }, tk), t("stRestored"), item.reload); }}>
+            <label style={{ flex: 1 }}>{t("stRestoreReason")}<input type="text" value={reason} onChange={(e) => setReason(e.target.value)} minLength={3} required /></label>
+            <button type="submit" className="btn" disabled={busy}>{t("stRestore")}</button>
           </form>
         )}
       </Section>
-      <Section title="Rights">
+      <Section title={t("rights")}>
         <dl className="facts">
-          <dt>Register entry</dt><dd>{String(rights.source_key)}</dd>
-          <dt>Rights holder</dt><dd>{String(rights.rights_holder)}</dd>
-          <dt>Display</dt><dd>{String(rights.display_permission)}</dd>
-          <dt>Training</dt><dd>{String(rights.training_permission)}</dd>
-          <dt>External processing</dt><dd>{String(rights.external_processing)}</dd>
-          <dt>Evidence</dt><dd>{String(rights.evidence)}</dd>
+          <dt>{t("stRegisterEntry")}</dt><dd>{String(rights.source_key)}</dd>
+          <dt>{t("stRightsHolder")}</dt><dd>{String(rights.rights_holder)}</dd>
+          <dt>{t("stDisplay")}</dt><dd>{String(rights.display_permission)}</dd>
+          <dt>{t("stTraining")}</dt><dd>{String(rights.training_permission)}</dd>
+          <dt>{t("stExternalProcessing")}</dt><dd>{String(rights.external_processing)}</dd>
+          <dt>{t("stEvidence")}</dt><dd>{String(rights.evidence)}</dd>
         </dl>
       </Section>
+      <MetadataSection id={id} metadata={d.metadata as ItemMetadata | undefined} version={d.metadata_version} reload={item.reload} />
+      {Boolean(d.photo) && <PhotoSection id={id} photo={d.photo as StaffPhoto} reload={item.reload} />}
       {(d.pages as Json[]).length > 0 && (
-        <Section title="Pages">
-          <table className="grid" aria-label="Pages of this item">
-            <thead><tr><th>Page</th><th>Status</th><th>Route</th><th>Gate</th><th>Review</th><th>Quote-verified</th><th /></tr></thead>
+        <Section title={t("stPages")}>
+          <table className="grid" aria-label={t("stPagesOfItem")}>
+            <thead><tr><th>{t("stPage")}</th><th>{t("stStatus")}</th><th>{t("stRoute")}</th><th>{t("stGate")}</th><th>{t("stReview")}</th><th>{t("stQuoteVerifiedCol")}</th><th><span className="visually-hidden">{t("stActions")}</span></th></tr></thead>
             <tbody>
               {(d.pages as Json[]).map((p) => (
                 <tr key={String(p.id)}>
                   <td>{String(p.label ?? p.sequence)}</td><td>{String(p.status)}</td><td>{String(p.ocr_route)}</td>
-                  <td>{p.gate_passed === null ? "" : p.gate_passed ? "passed" : "failed"}</td><td>{String(p.review_mode ?? "")}</td>
-                  <td>{p.quote_verified ? "yes" : ""}</td>
-                  <td><Link to={`/staff/pages/${String(p.id)}`}>Open</Link></td>
+                  <td>{p.gate_passed === null ? "" : p.gate_passed ? t("stPassed") : t("stFailed")}</td><td>{String(p.review_mode ?? "")}</td>
+                  <td>{p.quote_verified ? t("stYes") : ""}</td>
+                  <td><Link to={`/staff/pages/${String(p.id)}`}>{t("openItem")}</Link></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </Section>
       )}
-      {(d.segments as Json[]).length > 0 && (
-        <Section title="Transcript segments">
-          {(d.segments as Json[]).map((s) => (
-            <div key={String(s.id)} className="row" style={{ marginBottom: 8 }}>
-              <span className="chip">{formatMs(Number(s.start_ms))}</span>
-              <span style={{ flex: 1 }}>{String(s.text)}</span>
-              <span className="chip">{String(s.status)}</span>
-              {s.status === "approved" && !s.quote_verified && (
-                <button type="button" className="btn secondary small" disabled={busy} title="Only after listening to the original recording"
-                  onClick={() => window.confirm("Confirm you listened to the original recording and the transcript matches word for word.") && run((tk) => api.post(`/api/staff/segments/${String(s.id)}/verify-quotes`, { confirm: true }, tk), "Recorded.", item.reload)}>
-                  Record quote check against audio
-                </button>
-              )}
-              {Boolean(s.quote_verified) && <span className="chip verified">quote-verified</span>}
-            </div>
-          ))}
-        </Section>
+      {(d.item_type === "audio" || d.item_type === "video") && (
+        <SpeechToTextSection id={id} reload={item.reload}
+          allowed={rights.external_processing === "allowed" && d.access_level !== "restricted"}
+          hasRecording={(d.files as Json[]).some((f) => f.role === "preservation_master" && !f.deleted && /^(audio|video)\//.test(String(f.format)))} />
       )}
-      {(d.derivatives as Json[]).length > 0 && (
-        <Section title="Summaries and narration">
-          {(d.derivatives as Json[]).map((x) => (
-            <div key={String(x.id)} className="stack" style={{ marginBottom: 10 }}>
-              <div className="row"><span className="chip">{String(x.kind)} ({String(x.language)})</span><span className="chip">{String(x.status)}</span><span className="muted">{String(x.generator ?? "")}</span></div>
-              {x.content ? <p>{String(x.content)}</p> : null}
-              {x.status === "draft" && (
-                <div className="row"><button type="button" className="btn small" disabled={busy} onClick={() => run((tk) => api.post(`/api/staff/derivatives/${String(x.id)}/review`, { action: "approve" }, tk), "Approved.", item.reload)}>Approve</button></div>
-              )}
-            </div>
-          ))}
-        </Section>
-      )}
-      <Section title="Files">
-        <table className="grid" aria-label="Files of this item">
-          <thead><tr><th>#</th><th>Role</th><th>Kind</th><th>Format</th><th>Bytes</th><th>SHA-256</th><th>Generator</th></tr></thead>
+      {segments.length > 0 && <SegmentsSection segments={segments} reload={item.reload} />}
+      <SummariesSection id={id} derivatives={(d.derivatives ?? []) as StaffDerivative[]} reload={item.reload} />
+      {passages.length > 0 && <ConstitutionSection passages={passages} links={(d.constitution_links ?? []) as ConstitutionLink[]} reload={item.reload} />}
+      <Section title={t("stFiles")}>
+        <table className="grid" aria-label={t("stFilesOfItem")}>
+          <thead><tr><th>#</th><th>{t("stRole")}</th><th>{t("stKind")}</th><th>{t("stFormat")}</th><th>{t("stBytes")}</th><th>{"SHA-256"}</th><th>{t("stGenerator")}</th></tr></thead>
           <tbody>
             {(d.files as Json[]).map((f) => (
               <tr key={String(f.id)} style={{ opacity: f.deleted ? 0.5 : 1 }}>
-                <td>{String(f.id)}</td><td>{String(f.role)}</td><td>{String(f.kind)}</td><td>{String(f.format)}</td><td>{String(f.bytes)}</td><td><code>{String(f.sha256).slice(0, 16)}</code></td><td>{String(f.generator ?? "")}{f.deleted ? " (removed)" : ""}</td>
+                <td>{String(f.id)}</td><td>{String(f.role)}</td><td>{String(f.kind)}</td><td>{String(f.format)}</td><td>{String(f.bytes)}</td><td><code>{String(f.sha256).slice(0, 16)}</code></td><td>{String(f.generator ?? "")}{f.deleted ? ` (${t("stRemoved")})` : ""}</td>
               </tr>
             ))}
           </tbody>
@@ -670,55 +1168,62 @@ const EMPTY_RIGHTS = {
   source_url: "", edition: "", volume: "", discovery_only: false, notes: "",
 };
 
+const PERMISSION_LABELS: Record<"display_permission" | "training_permission" | "external_processing", Key> = {
+  display_permission: "stDisplayPermission",
+  training_permission: "stTrainingPermission",
+  external_processing: "stExternalProcessing",
+};
+
 export function StaffRights() {
   const { token } = useStaff();
+  const { t } = useSession();
   const rights = useApi<Json[]>("/api/staff/rights", token);
   const { run, busy, view } = useAction();
   const [form, setForm] = useState<typeof EMPTY_RIGHTS>(EMPTY_RIGHTS);
   const set = (k: keyof typeof EMPTY_RIGHTS) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });
-  const perm = (k: "display_permission" | "training_permission" | "external_processing") => (
-    <label>{k.replace(/_/g, " ")}
+  const perm = (k: keyof typeof PERMISSION_LABELS) => (
+    <label>{t(PERMISSION_LABELS[k])}
       <select value={form[k]} onChange={set(k)}>
-        {["unknown", "allowed", "not_allowed"].map((v) => <option key={v}>{v}</option>)}
+        {PERMISSIONS.map((v) => <option key={v} value={v}>{t(`stPerm_${v}`)}</option>)}
       </select>
     </label>
   );
   return (
     <>
-      <h1>Rights register</h1>
-      <p className="muted" style={{ maxWidth: "80ch" }}>Permissions are never inferred from a download being available. Unknown means not allowed. Changing display from allowed withdraws that source's published items; changing training from allowed flags the datasets that used it.</p>
-      <table className="grid" aria-label="Rights register entries" style={{ marginBottom: 20 }}>
-        <thead><tr><th>Key</th><th>Title</th><th>Holder</th><th>Display</th><th>Training</th><th>External processing</th><th>Discovery only</th><th /></tr></thead>
+      <h1>{t("stNavRights")}</h1>
+      <p className="muted" style={{ maxWidth: "80ch" }}>{t("stRightsLead")}</p>
+      <table className="grid" aria-label={t("stRightsTable")} style={{ marginBottom: 20 }}>
+        <thead><tr><th>{t("stKey")}</th><th>{t("stTitle")}</th><th>{t("stHolder")}</th><th>{t("stDisplay")}</th><th>{t("stTraining")}</th><th>{t("stExternalProcessing")}</th><th>{t("stDiscoveryOnly")}</th><th><span className="visually-hidden">{t("stActions")}</span></th></tr></thead>
         <tbody>
           {(rights.data ?? []).map((r) => (
             <tr key={String(r.id)}>
-              <td>{String(r.source_key)}{r.is_fixture ? " (fixture)" : ""}</td><td>{String(r.title)}</td><td>{String(r.rights_holder)}</td>
-              <td>{String(r.display_permission)}</td><td>{String(r.training_permission)}</td><td>{String(r.external_processing)}</td><td>{r.discovery_only ? "yes" : ""}</td>
-              <td><button type="button" className="btn quiet small" onClick={() => setForm(Object.fromEntries(Object.keys(EMPTY_RIGHTS).map((k) => [k, r[k] ?? (EMPTY_RIGHTS as Json)[k]])) as typeof EMPTY_RIGHTS)}>Edit</button></td>
+              <td>{String(r.source_key)}{r.is_fixture ? ` (${t("stFixture")})` : ""}</td><td>{String(r.title)}</td><td>{String(r.rights_holder)}</td>
+              <td>{String(r.display_permission)}</td><td>{String(r.training_permission)}</td><td>{String(r.external_processing)}</td><td>{r.discovery_only ? t("stYes") : ""}</td>
+              <td><button type="button" className="btn quiet small" onClick={() => setForm(Object.fromEntries(Object.keys(EMPTY_RIGHTS).map((k) => [k, r[k] ?? (EMPTY_RIGHTS as Json)[k]])) as typeof EMPTY_RIGHTS)}>{t("stEdit")}</button></td>
             </tr>
           ))}
         </tbody>
       </table>
-      <form className="sheet stack" onSubmit={(e) => { e.preventDefault(); void run((tk) => api.post("/api/staff/rights", form, tk), "Rights entry saved and audited.", rights.reload); }}>
-        <h2 style={{ fontSize: "var(--step-1)" }}>Add or update an entry</h2>
+      <form className="sheet stack" onSubmit={(e) => { e.preventDefault(); void run((tk) => api.post("/api/staff/rights", form, tk), t("stRightsSaved"), rights.reload); }}>
+        <h2 style={{ fontSize: "var(--step-1)" }}>{t("stAddUpdateEntry")}</h2>
         <div className="form-grid">
-          <label>Source key<input type="text" value={form.source_key} onChange={set("source_key")} required /></label>
-          <label>Title<input type="text" value={form.title} onChange={set("title")} required /></label>
-          <label>Institution<input type="text" value={form.source_institution} onChange={set("source_institution")} required /></label>
-          <label>Rights holder<input type="text" value={form.rights_holder} onChange={set("rights_holder")} required /></label>
-          <label>Basis for use<input type="text" value={form.basis_for_use} onChange={set("basis_for_use")} required /></label>
+          <label>{t("stSourceKey")}<input type="text" value={form.source_key} onChange={set("source_key")} required /></label>
+          <label>{t("stTitle")}<input type="text" value={form.title} onChange={set("title")} required /></label>
+          <label>{t("stInstitution")}<input type="text" value={form.source_institution} onChange={set("source_institution")} required /></label>
+          <label>{t("stRightsHolder")}<input type="text" value={form.rights_holder} onChange={set("rights_holder")} required /></label>
+          <label>{t("stBasis")}<input type="text" value={form.basis_for_use} onChange={set("basis_for_use")} required /></label>
           {perm("display_permission")}
           {perm("training_permission")}
           {perm("external_processing")}
-          <label>Evidence (licence text, letter, agreement reference)<input type="text" value={form.evidence} onChange={set("evidence")} required /></label>
-          <label>Attribution line<input type="text" value={form.attribution} onChange={set("attribution")} required /></label>
-          <label>Date checked<input type="date" value={form.date_checked} onChange={set("date_checked")} required /></label>
-          <label>Checked by<input type="text" value={form.checked_by} onChange={set("checked_by")} required /></label>
-          <label>Source URL<input type="text" value={form.source_url ?? ""} onChange={set("source_url")} /></label>
+          <label>{t("stEvidenceLong")}<input type="text" value={form.evidence} onChange={set("evidence")} required /></label>
+          <label>{t("stAttribution")}<input type="text" value={form.attribution} onChange={set("attribution")} required /></label>
+          <label>{t("stDateChecked")}<input type="date" value={form.date_checked} onChange={set("date_checked")} required /></label>
+          <label>{t("stCheckedBy")}<input type="text" value={form.checked_by} onChange={set("checked_by")} required /></label>
+          <label>{t("stSourceUrl")}<input type="text" value={form.source_url ?? ""} onChange={set("source_url")} /></label>
         </div>
         <div className="row">
-          <button type="submit" className="btn" disabled={busy}>Save entry</button>
-          <button type="button" className="btn secondary" onClick={() => setForm(EMPTY_RIGHTS)}>Clear</button>
+          <button type="submit" className="btn" disabled={busy}>{t("stSaveEntry")}</button>
+          <button type="button" className="btn secondary" onClick={() => setForm(EMPTY_RIGHTS)}>{t("stClear")}</button>
         </div>
         {view}
       </form>
@@ -730,12 +1235,13 @@ export function StaffRights() {
 
 export function StaffJobs() {
   const { token } = useStaff();
+  const { t } = useSession();
   const jobs = useApi<Json[]>("/api/staff/jobs", token);
   return (
     <>
-      <div className="row"><h1>Jobs</h1><span className="spacer" /><button type="button" className="btn secondary small" onClick={jobs.reload}>Refresh</button></div>
-      <table className="grid" aria-label="Recent jobs">
-        <thead><tr><th>#</th><th>Kind</th><th>Status</th><th>Attempts</th><th>Payload</th><th>Error</th><th>Updated</th></tr></thead>
+      <div className="row"><h1>{t("stNavJobs")}</h1><span className="spacer" /><button type="button" className="btn secondary small" onClick={jobs.reload}>{t("stRefresh")}</button></div>
+      <table className="grid" aria-label={t("stRecentJobs")}>
+        <thead><tr><th>#</th><th>{t("stKind")}</th><th>{t("stStatus")}</th><th>{t("stAttempts")}</th><th>{t("stPayload")}</th><th>{t("stError")}</th><th>{t("stUpdated")}</th></tr></thead>
         <tbody>
           {(jobs.data ?? []).map((j) => (
             <tr key={String(j.id)}><td>{String(j.id)}</td><td>{String(j.kind)}</td><td>{String(j.status)}</td><td>{String(j.attempts)}</td><td><code>{JSON.stringify(j.payload)}</code></td><td>{String(j.error ?? "")}</td><td>{String(j.updated_at).slice(0, 19)}</td></tr>
@@ -748,26 +1254,27 @@ export function StaffJobs() {
 
 export function StaffAudit() {
   const { token, can } = useStaff();
+  const { t } = useSession();
   const audit = useApi<Json[]>("/api/staff/audit?limit=300", token);
   const { run, busy, view } = useAction();
   const [chain, setChain] = useState<string | null>(null);
   return (
     <>
       <div className="row">
-        <h1>Audit log</h1>
+        <h1>{t("stNavAudit")}</h1>
         <span className="spacer" />
         {can("admin") && (
           <button type="button" className="btn secondary small" disabled={busy} onClick={() => run(async (tk) => {
             const r = await api.get<{ chain_ok: boolean; events_checked: number }>("/api/staff/audit/verify", tk);
-            setChain(`${r.chain_ok ? "Hash chain intact" : "HASH CHAIN BROKEN"} across ${r.events_checked} events.`);
-          }, "Verified.")}>Verify hash chain</button>
+            setChain(t(r.chain_ok ? "stChainOk" : "stChainBroken", { n: r.events_checked }));
+          }, t("stVerified"))}>{t("stVerifyChain")}</button>
         )}
       </div>
       {view}
       {chain && <p className="notice">{chain}</p>}
-      <p className="muted">Append-only: the database rejects updates and deletes on this table. Each row carries the hash of the previous row.</p>
-      <table className="grid" aria-label="Audit events">
-        <thead><tr><th>#</th><th>When</th><th>Actor</th><th>Action</th><th>Entity</th><th>Detail</th><th>Row hash</th></tr></thead>
+      <p className="muted">{t("stAuditNote")}</p>
+      <table className="grid" aria-label={t("stAuditEvents")}>
+        <thead><tr><th>#</th><th>{t("stWhen")}</th><th>{t("stActor")}</th><th>{t("stAction")}</th><th>{t("stEntity")}</th><th>{t("stDetail")}</th><th>{t("stRowHash")}</th></tr></thead>
         <tbody>
           {(audit.data ?? []).map((a) => (
             <tr key={String(a.id)}><td>{String(a.id)}</td><td>{String(a.at).slice(0, 19)}</td><td>{String(a.actor)}</td><td>{String(a.action)}</td><td>{String(a.entity)} {String(a.entity_id)}</td><td><code style={{ fontSize: 12 }}>{JSON.stringify(a.detail)}</code></td><td><code>{String(a.row_hash)}</code></td></tr>

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError, type AskResult } from "../api";
 import { useSession } from "../state";
-import { AddToList, FixtureChip, KindChip, VerifiedChip } from "../components/Bits";
+import { AddToList, CitationLink, ContentText, FixtureChip, KindChip, useDocumentTitle, VerifiedChip } from "../components/Bits";
 
 export function Ask() {
   const s = useSession();
@@ -14,6 +14,7 @@ export function Ask() {
   const [busy, setBusy] = useState(false);
   const input = useRef<HTMLTextAreaElement>(null);
   const autoAsked = useRef(false);
+  useDocumentTitle(t("askTitle"));
 
   const submit = async (e?: FormEvent, override?: string) => {
     e?.preventDefault();
@@ -74,8 +75,8 @@ export function Ask() {
         <button type="submit" className="btn" disabled={busy || !question.trim()}>{t("askButton")}</button>
       </form>
 
+      <p role="status" className="muted" style={{ marginTop: busy ? 16 : 0 }}>{busy ? t("askThinking") : ""}</p>
       <div aria-live="polite" aria-busy={busy}>
-        {busy && <p role="status" className="muted" style={{ marginTop: 16 }}>{t("askThinking")}</p>}
         {result && asked && (
           <article className="answer">
             <h2 style={{ fontSize: "var(--step-1)" }}>{asked}</h2>
@@ -128,7 +129,7 @@ function AnswerBody({ result, numberOf }: { result: AskResult; numberOf: (pid: n
   return (
     <>
       <div className="label-row">
-        <span className="chip verified">{t("askLabel")}</span>
+        <span className="chip ai">{t("askLabel")}</span>
         {r.paraphrase_only && <span className="chip">{t("askParaphrase")}</span>}
         {r.cache_hit && <span className="chip">{t("askCached")}</span>}
       </div>
@@ -137,9 +138,7 @@ function AnswerBody({ result, numberOf }: { result: AskResult; numberOf: (pid: n
           <p key={i} className="sentence" lang={r.language} style={{ margin: 0 }}>
             {sent.text}
             {sent.citations.map((pid) => (
-              <sup key={pid}>
-                <a href={`#src-${pid}`} aria-label={`${t("source")} ${numberOf(pid)}`}>{numberOf(pid)}</a>
-              </sup>
+              <CitationLink key={pid} n={numberOf(pid)} targetId={`src-${pid}`} />
             ))}
           </p>
         ))}
@@ -153,20 +152,20 @@ function AnswerBody({ result, numberOf }: { result: AskResult; numberOf: (pid: n
 function Sources({ result, heading, showExcerpt = true }: { result: AskResult; heading: string; showExcerpt?: boolean }) {
   const { t } = useSession();
   return (
-    <section aria-label={heading}>
-      <h3 style={{ marginTop: 20 }}>{heading}</h3>
+    <section aria-labelledby="sources-h">
+      <h3 id="sources-h" style={{ marginTop: 20 }}>{heading}</h3>
       <ol className="sources">
         {result.citations.map((c, i) => (
-          <li key={c.passage_id} id={`src-${c.passage_id}`}>
+          <li key={c.passage_id} id={`src-${c.passage_id}`} tabIndex={-1}>
             <div className="row">
-              <span className="n">{i + 1}</span>
-              <Link to={c.deep_link}><strong>{c.title}</strong></Link>
+              <span className="n" aria-hidden="true">{i + 1}</span>
+              <Link className="title-link" to={c.deep_link}><strong><ContentText text={c.title} /></strong></Link>
               <span className="spacer" />
               <KindChip label={c.kind_label} />
               <VerifiedChip verified={c.quote_verified} />
               <FixtureChip show={c.is_fixture} />
             </div>
-            {showExcerpt && <blockquote>{c.excerpt}</blockquote>}
+            {showExcerpt && <blockquote><ContentText text={c.excerpt} /></blockquote>}
             <span className="cite">{t("citation")}: {c.label}</span>
             <div className="row" style={{ marginTop: 8 }}>
               <Link className="btn small" to={c.deep_link}>{t("openItem")}</Link>

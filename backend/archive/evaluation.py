@@ -108,6 +108,27 @@ def calibrate_gate(rows: list[dict[str, Any]], signal: str = "mean_confidence") 
 
 # ---------------------------------------------------------------- retrieval
 
+def base_rankings(db: Session, question: str, emb=None, rr=None, candidate_k: int | None = None) -> dict[str, Any]:
+    """Rankings from the BASE models: keyword, semantic, hybrid (RRF) and hybrid + base reranker.
+    Shared by the retrieval evaluation and hard-negative mining so both see the same candidates."""
+    emb, rr = emb or get_embedder(), rr or get_reranker()
+    cand_k = candidate_k or get_settings().retrieval_candidate_k
+    kw = keyword_ids(db, question, SearchFilters(), cand_k)
+    sem = semantic_ids(db, emb.embed_query(question), SearchFilters(), cand_k)
+    scores: dict[int, float] = {}
+    for lst in (kw, sem):
+        for r, pid in enumerate(lst):
+            scores[pid] = scores.get(pid, 0) + 1 / (61 + r)
+    hyb = sorted(scores, key=scores.get, reverse=True)[:cand_k]
+    hits = load_hits(db, hyb)
+    texts = [hits[p].text for p in hyb if p in hits]
+    ids = [p for p in hyb if p in hits]
+    rscores = rr.score(question, texts) if texts else []
+    ranked = sorted(zip(rscores, ids, strict=True), key=lambda t: -t[0])
+    return {"keyword": kw, "semantic": sem, "hybrid": hyb, "hybrid_rerank": [p for _, p in ranked],
+            "rerank_scores": {p: float(sc) for sc, p in ranked}, "rrf": scores, "candidate_k": cand_k}
+
+
 def evaluate_retrieval(db: Session, questions: list[dict[str, Any]], k: int = 5) -> dict[str, Any]:
     """questions: [{question, language, positive_passage_ids}]. Compares keyword, semantic, hybrid(RRF)
     and hybrid+rerank with the BASE models (no fine-tuning)."""
@@ -118,18 +139,8 @@ def evaluate_retrieval(db: Session, questions: list[dict[str, Any]], k: int = 5)
     per_lang: dict[str, list[float]] = {}
     for q in questions:
         rel = set(q["positive_passage_ids"])
-        kw = keyword_ids(db, q["question"], SearchFilters(), s.retrieval_candidate_k)
-        sem = semantic_ids(db, emb.embed_query(q["question"]), SearchFilters(), s.retrieval_candidate_k)
-        scores: dict[int, float] = {}
-        for lst in (kw, sem):
-            for r, pid in enumerate(lst):
-                scores[pid] = scores.get(pid, 0) + 1 / (61 + r)
-        hyb = sorted(scores, key=scores.get, reverse=True)[: s.retrieval_candidate_k]
-        hits = load_hits(db, hyb)
-        texts = [hits[p].text for p in hyb if p in hits]
-        ids = [p for p in hyb if p in hits]
-        rscores = rr.score(q["question"], texts) if texts else []
-        reranked = [p for _, p in sorted(zip(rscores, ids, strict=True), key=lambda t: -t[0])]
+        rk = base_rankings(db, q["question"], emb, rr, s.retrieval_candidate_k)
+        kw, sem, hyb, reranked = rk["keyword"], rk["semantic"], rk["hybrid"], rk["hybrid_rerank"]
         for mode, ranked in (("keyword", kw), ("semantic", sem), ("hybrid", hyb), ("hybrid_rerank", reranked)):
             modes[mode]["recall@k"].append(recall_at_k(ranked, rel, k))
             modes[mode]["recall@cand"].append(recall_at_k(ranked, rel, s.retrieval_candidate_k))

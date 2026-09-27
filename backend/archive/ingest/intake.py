@@ -66,6 +66,9 @@ def sniff_format(data: bytes) -> tuple[str, str]:
             return mime, ext
     if data[:4] == b"RIFF" and data[8:12] == b"WAVE":
         return "audio/wav", ".wav"
+    # Untagged MP3: MPEG audio frame sync with a non-zero layer (ADTS AAC has layer 00).
+    if len(data) > 1 and data[0] == 0xFF and data[1] & 0xE0 == 0xE0 and data[1] & 0x06:
+        return "audio/mpeg", ".mp3"
     if data[4:8] == b"ftyp":
         return ("audio/mp4", ".m4a") if data[8:11] in (b"M4A", b"M4B") else ("video/mp4", ".mp4")
     if data[:4] == b"\x1aE\xdf\xa3":
