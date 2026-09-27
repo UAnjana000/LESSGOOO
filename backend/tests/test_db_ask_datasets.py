@@ -9,7 +9,7 @@ import re
 import pytest
 from sqlalchemy import select
 
-from archive.ask.llm import LLMResult
+from archive.ask.llm import LLMResult, LLMUnavailable
 from archive.ask.service import ask
 from archive.datasets.corpus import flag_datasets_for_rights, freeze_dataset, load_labels
 from archive.ingest import publish, review
@@ -123,6 +123,18 @@ class TestAskGraph:
         res = ask(db, Q, [], "en", "session-0009", llm=None, use_default_llm=False)
         assert res["outcome"] == "extractive" and res["citations"] and res["sentences"] == []
         assert res["message"]
+
+    def test_answer_model_failure_offers_closest_passages_without_an_answer(self, db, archive):
+        class FailingLLM:
+            model = "failing-llm-test-double"
+
+            def complete(self, system: str, user: str, max_tokens: int) -> LLMResult:
+                raise LLMUnavailable("503 Service Unavailable")
+
+        res = ask(db, Q, [], "en", "session-0012", llm=FailingLLM())
+        assert res["outcome"] == "error" and res["label"] is None and res["sentences"] == []
+        assert res["message"] and res["citations"]
+        assert res["citations"][0]["item_id"] in {archive["fee"].id, archive["lamp"].id}
 
     def test_opinion_bait_refused_without_llm(self, db, archive):
         llm = FakeLLM(["valid"])

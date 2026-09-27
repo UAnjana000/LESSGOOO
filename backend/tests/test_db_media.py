@@ -111,8 +111,9 @@ def test_seed_media_delivery_replaces_a_bad_copy_but_publication_still_waits_for
     review.review_segment(db, segs[0], "approve", SEED, seeded=True)
 
     assert _seed_media_delivery(db) == {"synthetic-talk": "stored"}
-    live = db.execute(select(FileVersion).where(FileVersion.item_id == item.id, FileVersion.role == "delivery",
-                                                FileVersion.deleted_at.is_(None))).scalar_one()
+    live = db.execute(select(FileVersion).where(
+        FileVersion.item_id == item.id, FileVersion.role == "delivery",
+        FileVersion.deleted_at.is_(None))).scalar_one()
     assert live.sha256 == master.sha256 and storage.verify(live.storage_uri, live.sha256)
     assert bad.deleted_at is not None
     with pytest.raises(publish.PublicationError, match="segment"):

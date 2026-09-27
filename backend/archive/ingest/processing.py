@@ -136,7 +136,8 @@ def process_page(db: Session, page: Page, fallback: OcrFallback | None, actor: s
     if page.doc_class == DocClass.born_digital.value:
         master = db.get(FileVersion, page.image_file_id)
         if master.format == "application/pdf":
-            tl = extract_pdf(storage.read_bytes(master.storage_uri))[page.preprocessing_params.get("pdf_page_index", 0)]
+            tl = extract_pdf(storage.read_bytes(master.storage_uri), language=page.language)[
+                page.preprocessing_params.get("pdf_page_index", 0)]
             if tl.reliable:
                 db.add(OcrResult(page_id=page.id, engine="text_layer", engine_version="pypdf", text=tl.text,
                                  selected=True))

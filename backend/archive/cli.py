@@ -196,8 +196,8 @@ def _seed_media_delivery(db) -> dict[str, str]:
             continue
         if live:
             live.deleted_at = utcnow()
-        master = db.execute(select(FileVersion).where(FileVersion.item_id == item.id,
-                                                      FileVersion.role == "preservation_master")).scalars().first()
+        master = db.execute(select(FileVersion).where(
+            FileVersion.item_id == item.id, FileVersion.role == "preservation_master")).scalars().first()
         if master is None:
             out[key] = "no preservation master"
             continue
@@ -209,7 +209,8 @@ def _seed_media_delivery(db) -> dict[str, str]:
         db.add(fv)
         db.flush()
         audit.record(db, SEED, "file.store_delivery", "file_version", fv.id, checksum_after=stored.sha256,
-                     detail={"item_id": item.id, "replaced": live.id if live else None, "seeded_fixture": True})
+                     detail={"item_id": item.id, "replaced": live.id if live else None,
+                             "seeded_fixture": True})
         out[key] = "stored"
     return out
 
@@ -489,7 +490,8 @@ def cmd_seed_fixture_media(_: argparse.Namespace) -> None:
                      if k in keys and i.publication_state == "approved"]
         report["publication"] = _seed_publish(graph, ready)
     with session_scope() as db:
-        report["state"] = {k: {"publication_state": i.publication_state, "published_version_id": i.published_version_id}
+        report["state"] = {k: {"publication_state": i.publication_state,
+                               "published_version_id": i.published_version_id}
                            for k, i in _items_by_key(db).items() if k in keys}
     _print(report)
 

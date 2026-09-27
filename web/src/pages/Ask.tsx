@@ -91,7 +91,14 @@ function AnswerBody({ result, numberOf }: { result: AskResult; numberOf: (pid: n
   const { t } = useSession();
   const r = result;
   if (r.outcome === "offline") return <div className="notice">{t("askOffline")}</div>;
-  if (r.outcome === "error") return <div className="notice bad">{t("errorGeneric")}</div>;
+  if (r.outcome === "error") {
+    return (
+      <>
+        <div className="notice bad">{t("errorGeneric")}</div>
+        {r.citations.length > 0 && <Sources result={r} heading={t("askRelated")} />}
+      </>
+    );
+  }
   if (r.outcome === "refused" || r.outcome === "rejected_input") {
     return (
       <>
