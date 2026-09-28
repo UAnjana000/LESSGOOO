@@ -42,7 +42,7 @@ export function ScanViewer({ iiif, fileId, label, highlight }: Props) {
       if (!item || !highlight?.length) return;
       for (const [x0, y0, x1, y1] of highlight) {
         const el = document.createElement("div");
-        el.style.cssText = "border:3px solid #c9a24a;background:rgba(201,162,74,.15);pointer-events:none";
+        el.style.cssText = "border:3px solid #1a3fb8;background:rgba(26,63,184,.12);pointer-events:none";
         viewer.addOverlay({ element: el, location: item.imageToViewportRectangle(x0, y0, x1 - x0, y1 - y0) });
       }
     });
