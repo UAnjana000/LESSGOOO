@@ -10,7 +10,7 @@ export function Constitution() {
   return (
     <Page title={t("constitutionTitle")} lead={t("constitutionLead")}>
       <p className="notice">{t("constitutionCurated")}</p>
-      {list.loading && <Loading />}
+      {list.loading && <Loading center />}
       {list.error && <ErrorState error={list.error} retry={list.reload} />}
       {list.data && (
         <ul className="results">
@@ -44,7 +44,7 @@ export function ConstitutionArticlePage() {
   return (
     <div className="page">
       <p><Link className="link-target" to="/constitution">{t("allArticles")}</Link></p>
-      {art.loading && !d && <Loading />}
+      {art.loading && !d && <Loading center />}
       {art.error && <ErrorState error={art.error} retry={art.reload} notFound={t("articleNotFound")} />}
       {d && (
         <>

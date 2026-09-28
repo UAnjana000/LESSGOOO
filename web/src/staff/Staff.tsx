@@ -6,6 +6,7 @@ import { formatMs, useApi } from "../hooks";
 import { ITEM_TYPES } from "../filters";
 import { LANGS, type Key, type Lang } from "../i18n";
 import { useSession } from "../state";
+import { Loading } from "../components/Bits";
 import { StaffAuthProvider, useAuthedObjectUrl, useStaff } from "./auth";
 import { CERTAINTIES, metadataBody, metadataForm, parseList, type ItemMetadata, type MetadataForm } from "./forms";
 
@@ -127,7 +128,6 @@ export function StaffLayout() {
     ["/staff/intake", "stNavIntake"],
     ["/staff/review", "stNavReview"],
     ["/staff/items", "stNavItems"],
-    ["/staff/rights", "stNavRights"],
     ["/staff/jobs", "stNavJobs"],
     ["/staff/audit", "stNavAudit"],
   ];
@@ -167,11 +167,6 @@ function Section({ title, children, actions }: { title: string; children: ReactN
   );
 }
 
-function Loading() {
-  const { t } = useSession();
-  return <p className="muted" role="status">{t("loading")}</p>;
-}
-
 function Nothing() {
   const { t } = useSession();
   return <p className="muted">{t("stNothingWaiting")}</p>;
@@ -191,7 +186,9 @@ export function StaffDashboard() {
       <h1>{t("stNavDashboard")}</h1>
       <div className="form-grid">
         <Section title={t("stWaiting")}>
-          {q ? (
+          {queue.loading && <Loading />}
+          {queue.error && <p className="notice bad" role="alert">{queue.error.message}</p>}
+          {q && (
             <dl className="facts">
               <dt>{t("stQPages")}</dt><dd>{q.pages.length}</dd>
               <dt>{t("stQBatches")}</dt><dd>{q.batches.length}</dd>
@@ -201,11 +198,13 @@ export function StaffDashboard() {
               <dt>{t("stQDerivatives")}</dt><dd>{q.derivatives.length}</dd>
               <dt>{t("stQReady")}</dt><dd>{q.ready_to_publish.length}</dd>
             </dl>
-          ) : <Loading />}
+          )}
           <p style={{ marginTop: 12 }}><Link to="/staff/review">{t("stOpenQueue")}</Link></p>
         </Section>
         <Section title={t("stIntegrations")}>
-          {status.data ? (
+          {status.loading && <Loading />}
+          {status.error && <p className="notice bad" role="alert">{status.error.message}</p>}
+          {status.data && (
             <dl className="facts">
               <dt>{t("stEnvironment")}</dt><dd>{String(status.data.environment)}</dd>
               <dt>{t("stSarvam")}</dt><dd className={`status ${status.data.sarvam_configured ? "ok" : "bad"}`}>{status.data.sarvam_configured ? t("stConfigured") : t("stSarvamOff")}</dd>
@@ -214,9 +213,11 @@ export function StaffDashboard() {
               <dt>{t("stOcrGate")}</dt><dd>{String(status.data.gate_config).split(/[\\/]/).pop()}</dd>
               <dt>{t("stSufficiency")}</dt><dd>{String(status.data.sufficiency_threshold)} ({String(status.data.sufficiency_threshold_version)})</dd>
             </dl>
-          ) : <Loading />}
+          )}
         </Section>
       </div>
+      {stats.loading && <Loading />}
+      {stats.error && <p className="notice bad" role="alert">{stats.error.message}</p>}
       {stats.data && (
         <Section title={t("stArchiveState")}>
           <div className="form-grid">
@@ -252,22 +253,59 @@ function Counts({ data }: { data: Json }) {
 
 // ---------------------------------------------------------------- intake
 
+const INTAKE_PRESETS = [
+  { id: "baws", labelKey: "stPresetBaws", collection: "writings", item_type: "printed_scan", doc_class: "printed", languages: "en, mr", rights_source_key: "rights-daf-baws", access_level: "public" },
+  { id: "speech", labelKey: "stPresetSpeech", collection: "speeches", item_type: "audio", doc_class: "audio_video", languages: "en", rights_source_key: "rights-daf-baws", access_level: "public" },
+  { id: "photo", labelKey: "stPresetPhoto", collection: "photographs", item_type: "photograph", doc_class: "photograph", languages: "en", rights_source_key: "rights-daf-baws", access_level: "public" },
+  { id: "cad", labelKey: "stPresetCad", collection: "debates", item_type: "printed_scan", doc_class: "printed", languages: "en, hi", rights_source_key: "rights-cad", access_level: "public" },
+] as const;
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function StaffIntake() {
   const { token } = useStaff();
   const { t } = useSession();
   const rights = useApi<Json[]>("/api/staff/rights", token);
   const { run, busy, view } = useAction();
   const [result, setResult] = useState<Json | null>(null);
+  const [activePreset, setActivePreset] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [form, setForm] = useState({
     title: "", item_type: "printed_scan", collection: "writings", doc_class: "printed", languages: "en",
     rights_source_key: "", date_text: "", creator: "", device: "capture-station-1", operator: "", access_level: "public",
   });
-  const [files, setFiles] = useState<FileList | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });
+
+  const applyPreset = (p: typeof INTAKE_PRESETS[number]) => {
+    setActivePreset(p.id);
+    setForm((f) => ({
+      ...f,
+      collection: p.collection,
+      item_type: p.item_type,
+      doc_class: p.doc_class,
+      languages: p.languages,
+      rights_source_key: p.rights_source_key,
+      access_level: p.access_level,
+    }));
+  };
+
+  const handleFilesAdded = (incoming: FileList | File[]) => {
+    const list = Array.from(incoming);
+    setFiles((prev) => [...prev, ...list]);
+  };
+
+  const removeFile = (idx: number) => {
+    setFiles((prev) => prev.filter((_, i) => i !== idx));
+  };
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (!files?.length) return;
+    if (!files.length) return;
     const meta = {
       title: form.title, item_type: form.item_type, collection: form.collection, doc_class: form.doc_class,
       languages: form.languages.split(",").map((s) => s.trim()).filter(Boolean), rights_source_key: form.rights_source_key,
@@ -276,15 +314,33 @@ export function StaffIntake() {
     };
     const fd = new FormData();
     fd.set("metadata", JSON.stringify(meta));
-    for (const f of Array.from(files)) fd.append("files", f);
+    for (const f of files) fd.append("files", f);
     void run(async (tk) => setResult(await api.post<Json>("/api/staff/intake", fd, tk)), t("stStored"));
   };
 
   const selectable = (rights.data ?? []).filter((r) => !r.discovery_only);
+  const totalBytes = files.reduce((acc, f) => acc + f.size, 0);
+
   return (
     <>
       <h1>{t("stNavIntake")}</h1>
       <p className="muted" style={{ maxWidth: "80ch" }}>{t("stIntakeLead")}</p>
+
+      {/* Preset Profiles */}
+      <div className="staff-presets" role="group" aria-label={t("stIntakePresets")}>
+        <span className="muted" style={{ fontSize: "var(--step--1)", marginRight: 4 }}>{t("stIntakePresets")}:</span>
+        {INTAKE_PRESETS.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            className={`staff-preset-btn ${activePreset === p.id ? "active" : ""}`}
+            onClick={() => applyPreset(p)}
+          >
+            {t(p.labelKey)}
+          </button>
+        ))}
+      </div>
+
       <form className="sheet stack" onSubmit={submit}>
         <div className="form-grid">
           <label>{t("stTitle")}<input type="text" value={form.title} onChange={set("title")} required /></label>
@@ -321,9 +377,76 @@ export function StaffIntake() {
           <label>{t("stCreator")}<input type="text" value={form.creator} onChange={set("creator")} /></label>
           <label>{t("stDevice")}<input type="text" value={form.device} onChange={set("device")} /></label>
           <label>{t("stOperator")}<input type="text" value={form.operator} onChange={set("operator")} required /></label>
-          <label>{t("stFiles")}<input type="file" multiple onChange={(e) => setFiles(e.target.files)} required style={{ minHeight: 48 }} /></label>
         </div>
-        <div className="row"><button type="submit" className="btn" disabled={busy}>{busy ? t("stUploading") : t("stStoreQueue")}</button></div>
+
+        {/* Drag & Drop Staging Area */}
+        <div
+          className={`staff-dropzone ${isDragging ? "dragover" : ""}`}
+          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDragging(false);
+            if (e.dataTransfer.files?.length) handleFilesAdded(e.dataTransfer.files);
+          }}
+        >
+          <div className="staff-dropzone-icon" aria-hidden="true">📥</div>
+          <strong>{t("stDropZoneLead")}</strong>
+          <span className="muted" style={{ fontSize: "var(--step--1)" }}>{t("stDropZoneHint")}</span>
+          <input
+            type="file"
+            multiple
+            aria-label={t("stFiles")}
+            onChange={(e) => { if (e.target.files) handleFilesAdded(e.target.files); }}
+          />
+        </div>
+
+        {/* Staged Pre-Flight Files Table */}
+        {files.length > 0 && (
+          <div className="staff-staged-tray">
+            <div className="staff-staged-header">
+              <strong>{t("stStagedFiles", { n: files.length })}</strong>
+              <div className="row">
+                <span className="chip">{t("stTotalSize")}: {formatBytes(totalBytes)}</span>
+                <button type="button" className="btn quiet small" onClick={() => setFiles([])}>
+                  {t("stClearStaging")}
+                </button>
+              </div>
+            </div>
+            <table className="grid" aria-label={t("stStagedFiles", { n: files.length })}>
+              <thead>
+                <tr>
+                  <th>{t("stTitle")}</th>
+                  <th>{t("stItemType")}</th>
+                  <th>{t("stCost")}</th>
+                  <th>{t("stStatus")}</th>
+                  <th><span className="visually-hidden">{t("stActions")}</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {files.map((f, idx) => (
+                  <tr key={`${f.name}-${idx}`}>
+                    <td>{f.name}</td>
+                    <td><span className="chip">{f.name.split(".").pop()?.toUpperCase() || f.type}</span></td>
+                    <td>{formatBytes(f.size)}</td>
+                    <td><span className="status ok">✓ {t("stPreflightReady")}</span></td>
+                    <td>
+                      <button type="button" className="btn quiet small" onClick={() => removeFile(idx)}>
+                        {t("remove")}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className="row">
+          <button type="submit" className="btn" disabled={busy || files.length === 0}>
+            {busy ? t("stUploading") : t("stStoreQueue")}
+          </button>
+        </div>
         {view}
       </form>
       {result && (
@@ -350,22 +473,113 @@ export function StaffReview() {
   const { t } = useSession();
   const q = useApi<Record<string, Json[]>>("/api/staff/review/queue", token);
   const { run, busy, view } = useAction();
-  if (!q.data) return <Loading />;
+  const [selectedPages, setSelectedPages] = useState<Record<string, boolean>>({});
+
+  if (q.error) return <p className="notice bad" role="alert">{q.error.message}</p>;
+  if (!q.data) return <Loading center />;
   const d = q.data;
+
+  const selectedIds = Object.keys(selectedPages).filter((k) => selectedPages[k]);
+  const allSelected = d.pages.length > 0 && d.pages.every((p) => selectedPages[String(p.id)]);
+
+  const toggleAll = (checked: boolean) => {
+    const next: Record<string, boolean> = {};
+    for (const p of d.pages) next[String(p.id)] = checked;
+    setSelectedPages(next);
+  };
+
+  const approveBatch = (ids: string[]) => {
+    if (!ids.length) return;
+    void run(async (tk) => {
+      for (const pid of ids) {
+        await api.post(`/api/staff/pages/${pid}/review`, { action: "approve" }, tk);
+      }
+    }, t("stBatchApproveHighConf"), () => {
+      setSelectedPages({});
+      q.reload();
+    });
+  };
+
+  const approveHighConfidence = () => {
+    const highConfIds = d.pages
+      .filter((p) => String(p.status) !== "rejected" && !p.sarvam_last_error)
+      .map((p) => String(p.id));
+    if (!highConfIds.length) return;
+    if (window.confirm(t("stBatchApproveConfirm", { n: highConfIds.length }))) {
+      approveBatch(highConfIds);
+    }
+  };
+
   return (
     <>
       <h1>{t("stNavReview")}</h1>
       <Flash />
       {view}
-      <Section title={t("stPagesN", { n: d.pages.length })}>
+      <Section title={t("stPagesN", { n: d.pages.length })} actions={
+        d.pages.length > 0 ? (
+          <div className="row">
+            <button
+              type="button"
+              className="btn secondary small"
+              disabled={busy}
+              onClick={approveHighConfidence}
+            >
+              ⚡ {t("stBatchApproveHighConf")}
+            </button>
+            {selectedIds.length > 0 && (
+              <button
+                type="button"
+                className="btn small"
+                disabled={busy}
+                onClick={() => approveBatch(selectedIds)}
+              >
+                ✓ {t("stApproveSelected", { n: selectedIds.length })}
+              </button>
+            )}
+          </div>
+        ) : undefined
+      }>
         {d.pages.length === 0 ? <Nothing /> : (
           <table className="grid" aria-label={t("stPagesWaiting")}>
-            <thead><tr><th>{t("stItemWord")}</th><th>{t("stPage")}</th><th>{t("stStatus")}</th><th>{t("stRoute")}</th><th>{t("stPriority")}</th><th><span className="visually-hidden">{t("stActions")}</span></th></tr></thead>
+            <thead>
+              <tr>
+                <th style={{ width: 44 }}>
+                  <input
+                    type="checkbox"
+                    aria-label={t("stSelectAll")}
+                    checked={allSelected}
+                    onChange={(e) => toggleAll(e.target.checked)}
+                    style={{ width: 20, height: 20 }}
+                  />
+                </th>
+                <th>{t("stItemWord")}</th>
+                <th>{t("stPage")}</th>
+                <th>{t("stStatus")}</th>
+                <th>{t("stRoute")}</th>
+                <th>{t("stPriority")}</th>
+                <th><span className="visually-hidden">{t("stActions")}</span></th>
+              </tr>
+            </thead>
             <tbody>
               {d.pages.map((p) => (
                 <tr key={String(p.id)}>
-                  <td>{String(p.item_title)}</td><td>{String(p.label ?? p.sequence)}</td><td>{String(p.status)}{p.sarvam_last_error ? ` (${String(p.sarvam_last_error)})` : ""}</td>
-                  <td>{String(p.ocr_route)}</td><td>{String(p.priority)}</td>
+                  <td>
+                    <input
+                      type="checkbox"
+                      aria-label={String(p.item_title)}
+                      checked={Boolean(selectedPages[String(p.id)])}
+                      onChange={(e) => setSelectedPages((prev) => ({ ...prev, [String(p.id)]: e.target.checked }))}
+                      style={{ width: 20, height: 20 }}
+                    />
+                  </td>
+                  <td>{String(p.item_title)}</td>
+                  <td>{String(p.label ?? p.sequence)}</td>
+                  <td>{String(p.status)}{p.sarvam_last_error ? ` (${String(p.sarvam_last_error)})` : ""}</td>
+                  <td>{String(p.ocr_route)}</td>
+                  <td>
+                    <span className="chip">{String(p.priority)}</span>
+                    {!p.sarvam_last_error && <span className="chip verified" style={{ marginLeft: 6 }}>{t("stHighConfidenceChip")}</span>}
+                  </td>
                   <td><Link className="btn small" to={`/staff/pages/${String(p.id)}`}>{t("stReview")}</Link></td>
                 </tr>
               ))}
@@ -435,35 +649,40 @@ export function StaffPage() {
   const { run, busy, view } = useAction();
   const [text, setText] = useState("");
   const [compared, setCompared] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState<number>(100);
   const d = page.data;
   const img = useAuthedObjectUrl(d?.preview_file_id ? `/api/staff/files/${String(d.preview_file_id)}` : null);
+
   useEffect(() => {
     setCompared(false);
     window.scrollTo(0, 0);
   }, [id]);
+
   useEffect(() => {
     if (!d) return;
     const local = d.local as Json | null;
     const sarvam = d.sarvam as Json | null;
     setText(String(d.approved_text ?? sarvam?.text ?? local?.text ?? ""));
   }, [d]);
-  if (page.error) return <p className="notice bad" role="alert">{page.error.message}</p>;
-  if (!d) return <Loading />;
-  const status = String(d.status);
+
+  const status = d ? String(d.status) : "";
+
   // After a decision the reviewer moves on: next queued page (same item first), else the queue itself.
   const leave = async (tk: string, done: string) => {
     let next: Json | undefined;
     try {
       const queue = await api.get<{ pages: Json[] }>("/api/staff/review/queue", tk);
       const others = queue.pages.filter((p) => String(p.id) !== id);
-      next = others.find((p) => p.item_id === d.item_id) ?? others[0];
+      next = others.find((p) => p.item_id === d?.item_id) ?? others[0];
     } catch {
       next = undefined;
     }
     if (next) nav(`/staff/pages/${String(next.id)}`, { state: { flash: `${done} ${t("stNextQueuedPage")}` } });
     else nav("/staff/review", { state: { flash: done } });
   };
+
   const recordQuote = (tk: string) => api.post(`/api/staff/pages/${id}/verify-quotes`, { confirm: true }, tk);
+
   const act = (action: string, body: Json = {}) =>
     run(async (tk) => {
       await api.post(`/api/staff/pages/${id}/review`, { action, ...body }, tk);
@@ -479,12 +698,61 @@ export function StaffPage() {
       }
       await leave(tk, done);
     }, null);
+
+  // Global Keyboard shortcuts for Triage Mode
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isInput = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT");
+      if (isInput && !e.altKey) return;
+
+      if (e.key === "a" || e.key === "A") {
+        e.preventDefault();
+        if (status !== "approved" && !busy) {
+          const isOriginal = text === String((d?.sarvam as Json | null)?.text ?? (d?.local as Json | null)?.text ?? "");
+          act(isOriginal ? "approve" : "correct", { text });
+        }
+      } else if (e.key === "e" || e.key === "E") {
+        e.preventDefault();
+        document.getElementById("page-text")?.focus();
+      } else if (e.key === "x" || e.key === "X") {
+        e.preventDefault();
+        if (!busy) act("escalate", { reason: "needs second opinion" });
+      } else if (e.key === "r" || e.key === "R") {
+        e.preventDefault();
+        if (!busy) act("reject", { reason: "unusable capture" });
+      } else if (e.key === "z" || e.key === "Z") {
+        e.preventDefault();
+        setZoomLevel((z) => (z === 100 ? 150 : z === 150 ? 200 : 100));
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [d, text, status, busy]);
+
+  if (page.error) return <p className="notice bad" role="alert">{page.error.message}</p>;
+  if (!d) return <Loading center />;
+
   const signals = (d.quality_signals ?? {}) as Json;
   const gate = d.gate_passed === null ? t("stNA") : d.gate_passed ? t("stPassed") : t("stFailed");
+
   return (
     <>
       <p><Link to={`/staff/items/${String(d.item_id)}`}>{String(d.item_title)}</Link></p>
       <h1>{t("stPageN", { n: String(d.label ?? d.sequence) })}</h1>
+
+      {/* Triage Hotkey Banner */}
+      <div className="triage-banner" role="region" aria-label={t("stTriageModeBanner")}>
+        <span>{t("stTriageModeBanner")}</span>
+        <div className="triage-keys" aria-hidden="true">
+          <span className="triage-key-chip">A</span>
+          <span className="triage-key-chip">E</span>
+          <span className="triage-key-chip">X</span>
+          <span className="triage-key-chip">R</span>
+          <span className="triage-key-chip">Z</span>
+        </div>
+      </div>
+
       <div className="row" style={{ marginBottom: 12 }}>
         <span className="chip">{t("stChipStatus", { v: status })}</span>
         <span className="chip">{t("stChipRoute", { v: String(d.ocr_route) })}</span>
@@ -495,10 +763,51 @@ export function StaffPage() {
       <Flash />
       {view}
       <div className="review-pair">
-        <figure style={{ margin: 0 }}>
-          {img ? <img src={img} alt={t("stMasterAlt", { n: String(d.sequence) })} /> : <div className="empty-state">{d.preview_file_id ? t("stLoadingScan") : t("stNoScanPreview")}</div>}
-          <figcaption className="muted">{t("stMasterCaption")}</figcaption>
-        </figure>
+        <div className="scan-viewer-box">
+          <div className="row" style={{ justifyContent: "space-between", marginBottom: 6 }}>
+            <div className="scan-zoom-controls" role="group" aria-label={t("scanControls")}>
+              <button
+                type="button"
+                className={`btn secondary small ${zoomLevel === 100 ? "active" : ""}`}
+                onClick={() => setZoomLevel(100)}
+              >
+                {t("stScanZoomFit")}
+              </button>
+              <button
+                type="button"
+                className={`btn secondary small ${zoomLevel === 150 ? "active" : ""}`}
+                onClick={() => setZoomLevel(150)}
+              >
+                {t("stScanZoom150")}
+              </button>
+              <button
+                type="button"
+                className={`btn secondary small ${zoomLevel === 200 ? "active" : ""}`}
+                onClick={() => setZoomLevel(200)}
+              >
+                {t("stScanZoom200")}
+              </button>
+            </div>
+            <span className="muted" style={{ fontSize: "var(--step--1)" }}>
+              {t("stPageN", { n: String(d.sequence) })}
+            </span>
+          </div>
+          <figure style={{ margin: 0 }}>
+            <div className="scan-zoom-wrap">
+              {img ? (
+                <img
+                  src={img}
+                  alt={t("stMasterAlt", { n: String(d.sequence) })}
+                  style={{ width: `${zoomLevel}%` }}
+                />
+              ) : (
+                <div className="empty-state">{d.preview_file_id ? t("stLoadingScan") : t("stNoScanPreview")}</div>
+              )}
+            </div>
+            <figcaption className="muted" style={{ marginTop: 6 }}>{t("stMasterCaption")}</figcaption>
+          </figure>
+        </div>
+
         <div className="stack">
           <label htmlFor="page-text">{t("stTextToApprove")}</label>
           <textarea id="page-text" value={text} onChange={(e) => setText(e.target.value)} lang={String(d.language ?? "en")} />
@@ -591,7 +900,8 @@ export function StaffBatch() {
     for (const p of b.data.sample as Json[]) init[String(p.id)] = { checked: false, text: String(p.candidate_text ?? "") };
     setChecks(init);
   }, [b.data]);
-  if (!b.data) return <Loading />;
+  if (b.error) return <p className="notice bad" role="alert">{b.error.message}</p>;
+  if (!b.data) return <Loading center />;
   const sample = b.data.sample as Json[];
   const allChecked = sample.every((p) => checks[String(p.id)]?.checked);
   const decide = (passed: boolean) => {
@@ -629,19 +939,23 @@ export function StaffItems() {
   return (
     <>
       <h1>{t("stNavItems")}</h1>
-      <table className="grid" aria-label={t("stAllItems")}>
-        <thead><tr><th>#</th><th>{t("stTitle")}</th><th>{t("stCollection")}</th><th>{t("stState")}</th><th>{t("stVersion")}</th><th>{t("stPagesApproved")}</th><th>{t("stDisplay")}</th><th>{t("stTraining")}</th><th>{t("stAccess")}</th></tr></thead>
-        <tbody>
-          {(items.data ?? []).map((i) => (
-            <tr key={String(i.id)}>
-              <td>{String(i.id)}</td>
-              <td><Link to={`/staff/items/${String(i.id)}`}>{String(i.title)}</Link>{i.is_fixture ? ` (${t("stFixture")})` : ""}</td>
-              <td>{String(i.collection)}</td><td>{String(i.state)}</td><td>{String(i.version)}</td>
-              <td>{String(i.pages_approved)} / {String(i.pages)}</td><td>{String(i.display_permission)}</td><td>{String(i.training_permission)}</td><td>{String(i.access_level)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {items.loading && <Loading center />}
+      {items.error && <p className="notice bad" role="alert">{items.error.message}</p>}
+      {items.data && (
+        <table className="grid" aria-label={t("stAllItems")}>
+          <thead><tr><th>#</th><th>{t("stTitle")}</th><th>{t("stCollection")}</th><th>{t("stState")}</th><th>{t("stVersion")}</th><th>{t("stPagesApproved")}</th><th>{t("stDisplay")}</th><th>{t("stTraining")}</th><th>{t("stAccess")}</th></tr></thead>
+          <tbody>
+            {(items.data ?? []).map((i) => (
+              <tr key={String(i.id)}>
+                <td>{String(i.id)}</td>
+                <td><Link to={`/staff/items/${String(i.id)}`}>{String(i.title)}</Link>{i.is_fixture ? ` (${t("stFixture")})` : ""}</td>
+                <td>{String(i.collection)}</td><td>{String(i.state)}</td><td>{String(i.version)}</td>
+                <td>{String(i.pages_approved)} / {String(i.pages)}</td><td>{String(i.display_permission)}</td><td>{String(i.training_permission)}</td><td>{String(i.access_level)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </>
   );
 }
@@ -767,14 +1081,22 @@ function SummariesSection({ id, derivatives, reload }: { id: string; derivatives
   return (
     <Section title={t("stSummaries")}>
       <p className="notice">{t("stSummariesNote")}</p>
+      <div className="multilingual-nav" role="tablist" aria-label={t("stMultilingualMeta")}>
+        {LANGS.map((l) => (
+          <button
+            key={l.code}
+            type="button"
+            role="tab"
+            aria-selected={language === l.code}
+            className={`multilingual-tab ${language === l.code ? "active" : ""}`}
+            onClick={() => setLanguage(l.code)}
+          >
+            {l.name} ({l.code})
+            {derivatives.some((d) => d.language === l.code) && <span style={{ marginLeft: 6 }}>✓</span>}
+          </button>
+        ))}
+      </div>
       <div className="stack" style={{ gap: 10 }}>
-        <div className="row" style={{ alignItems: "end" }}>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4, width: 200 }}>{t("language")}
-            <select value={language} onChange={(e) => setLanguage(e.target.value)}>
-              {LANGS.map((l) => <option key={l.code} value={l.code} lang={l.code}>{l.name} ({l.code})</option>)}
-            </select>
-          </label>
-        </div>
         <label htmlFor="summary-draft">{t("stSummaryText")}</label>
         <textarea id="summary-draft" value={text} onChange={(e) => setText(e.target.value)} lang={language} rows={4} />
         <div className="row">
@@ -1070,8 +1392,9 @@ export function StaffItem() {
   const item = useApi<Json>(`/api/staff/items/${id}`, token);
   const { run, busy, view } = useAction();
   const [reason, setReason] = useState("");
+  if (item.error) return <p className="notice bad" role="alert">{item.error.message}</p>;
+  if (!item.data) return <Loading center />;
   const d = item.data;
-  if (!d) return <Loading />;
   const rights = d.rights as Json;
   const segments = (d.segments ?? []) as StaffSegment[];
   const passages = (d.published_passages ?? []) as PublishedPassage[];
@@ -1107,15 +1430,24 @@ export function StaffItem() {
           </form>
         )}
       </Section>
-      <Section title={t("rights")}>
-        <dl className="facts">
-          <dt>{t("stRegisterEntry")}</dt><dd>{String(rights.source_key)}</dd>
-          <dt>{t("stRightsHolder")}</dt><dd>{String(rights.rights_holder)}</dd>
-          <dt>{t("stDisplay")}</dt><dd>{String(rights.display_permission)}</dd>
-          <dt>{t("stTraining")}</dt><dd>{String(rights.training_permission)}</dd>
-          <dt>{t("stExternalProcessing")}</dt><dd>{String(rights.external_processing)}</dd>
-          <dt>{t("stEvidence")}</dt><dd>{String(rights.evidence)}</dd>
-        </dl>
+      <Section title={t("rights")} actions={
+        <span className={`chip ${rights.display_permission === "allowed" ? "verified" : ""}`}>
+          {rights.display_permission === "allowed" ? `✓ ${t("stClearanceAllowed")}` : t("stClearanceRestricted")}
+        </span>
+      }>
+        <div className="rights-provenance-card">
+          <div className="row" style={{ justifyContent: "space-between" }}>
+            <strong>{t("stRightsCardTitle")}</strong>
+            <span className="chip">{String(rights.source_key)}</span>
+          </div>
+          <dl className="facts">
+            <dt>{t("stRightsHolder")}</dt><dd>{String(rights.rights_holder)}</dd>
+            <dt>{t("stDisplay")}</dt><dd><span className={`chip ${rights.display_permission === "allowed" ? "verified" : ""}`}>{String(rights.display_permission)}</span></dd>
+            <dt>{t("stTraining")}</dt><dd><span className="chip">{String(rights.training_permission)}</span></dd>
+            <dt>{t("stExternalProcessing")}</dt><dd><span className="chip">{String(rights.external_processing)}</span></dd>
+            <dt>{t("stEvidence")}</dt><dd style={{ fontStyle: "italic" }}>"{String(rights.evidence)}"</dd>
+          </dl>
+        </div>
       </Section>
       <MetadataSection id={id} metadata={d.metadata as ItemMetadata | undefined} version={d.metadata_version} reload={item.reload} />
       {Boolean(d.photo) && <PhotoSection id={id} photo={d.photo as StaffPhoto} reload={item.reload} />}
@@ -1192,18 +1524,22 @@ export function StaffRights() {
     <>
       <h1>{t("stNavRights")}</h1>
       <p className="muted" style={{ maxWidth: "80ch" }}>{t("stRightsLead")}</p>
-      <table className="grid" aria-label={t("stRightsTable")} style={{ marginBottom: 20 }}>
-        <thead><tr><th>{t("stKey")}</th><th>{t("stTitle")}</th><th>{t("stHolder")}</th><th>{t("stDisplay")}</th><th>{t("stTraining")}</th><th>{t("stExternalProcessing")}</th><th>{t("stDiscoveryOnly")}</th><th><span className="visually-hidden">{t("stActions")}</span></th></tr></thead>
-        <tbody>
-          {(rights.data ?? []).map((r) => (
-            <tr key={String(r.id)}>
-              <td>{String(r.source_key)}{r.is_fixture ? ` (${t("stFixture")})` : ""}</td><td>{String(r.title)}</td><td>{String(r.rights_holder)}</td>
-              <td>{String(r.display_permission)}</td><td>{String(r.training_permission)}</td><td>{String(r.external_processing)}</td><td>{r.discovery_only ? t("stYes") : ""}</td>
-              <td><button type="button" className="btn quiet small" onClick={() => setForm(Object.fromEntries(Object.keys(EMPTY_RIGHTS).map((k) => [k, r[k] ?? (EMPTY_RIGHTS as Json)[k]])) as typeof EMPTY_RIGHTS)}>{t("stEdit")}</button></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {rights.loading && <Loading center />}
+      {rights.error && <p className="notice bad" role="alert">{rights.error.message}</p>}
+      {rights.data && (
+        <table className="grid" aria-label={t("stRightsTable")} style={{ marginBottom: 20 }}>
+          <thead><tr><th>{t("stKey")}</th><th>{t("stTitle")}</th><th>{t("stHolder")}</th><th>{t("stDisplay")}</th><th>{t("stTraining")}</th><th>{t("stExternalProcessing")}</th><th>{t("stDiscoveryOnly")}</th><th><span className="visually-hidden">{t("stActions")}</span></th></tr></thead>
+          <tbody>
+            {rights.data.map((r) => (
+              <tr key={String(r.id)}>
+                <td>{String(r.source_key)}{r.is_fixture ? ` (${t("stFixture")})` : ""}</td><td>{String(r.title)}</td><td>{String(r.rights_holder)}</td>
+                <td>{String(r.display_permission)}</td><td>{String(r.training_permission)}</td><td>{String(r.external_processing)}</td><td>{r.discovery_only ? t("stYes") : ""}</td>
+                <td><button type="button" className="btn quiet small" onClick={() => setForm(Object.fromEntries(Object.keys(EMPTY_RIGHTS).map((k) => [k, r[k] ?? (EMPTY_RIGHTS as Json)[k]])) as typeof EMPTY_RIGHTS)}>{t("stEdit")}</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
       <form className="sheet stack" onSubmit={(e) => { e.preventDefault(); void run((tk) => api.post("/api/staff/rights", form, tk), t("stRightsSaved"), rights.reload); }}>
         <h2 style={{ fontSize: "var(--step-1)" }}>{t("stAddUpdateEntry")}</h2>
         <div className="form-grid">
@@ -1240,14 +1576,18 @@ export function StaffJobs() {
   return (
     <>
       <div className="row"><h1>{t("stNavJobs")}</h1><span className="spacer" /><button type="button" className="btn secondary small" onClick={jobs.reload}>{t("stRefresh")}</button></div>
-      <table className="grid" aria-label={t("stRecentJobs")}>
-        <thead><tr><th>#</th><th>{t("stKind")}</th><th>{t("stStatus")}</th><th>{t("stAttempts")}</th><th>{t("stPayload")}</th><th>{t("stError")}</th><th>{t("stUpdated")}</th></tr></thead>
-        <tbody>
-          {(jobs.data ?? []).map((j) => (
-            <tr key={String(j.id)}><td>{String(j.id)}</td><td>{String(j.kind)}</td><td>{String(j.status)}</td><td>{String(j.attempts)}</td><td><code>{JSON.stringify(j.payload)}</code></td><td>{String(j.error ?? "")}</td><td>{String(j.updated_at).slice(0, 19)}</td></tr>
-          ))}
-        </tbody>
-      </table>
+      {jobs.loading && <Loading center />}
+      {jobs.error && <p className="notice bad" role="alert">{jobs.error.message}</p>}
+      {jobs.data && (
+        <table className="grid" aria-label={t("stRecentJobs")}>
+          <thead><tr><th>#</th><th>{t("stKind")}</th><th>{t("stStatus")}</th><th>{t("stAttempts")}</th><th>{t("stPayload")}</th><th>{t("stError")}</th><th>{t("stUpdated")}</th></tr></thead>
+          <tbody>
+            {jobs.data.map((j) => (
+              <tr key={String(j.id)}><td>{String(j.id)}</td><td>{String(j.kind)}</td><td>{String(j.status)}</td><td>{String(j.attempts)}</td><td><code>{JSON.stringify(j.payload)}</code></td><td>{String(j.error ?? "")}</td><td>{String(j.updated_at).slice(0, 19)}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </>
   );
 }
@@ -1273,14 +1613,18 @@ export function StaffAudit() {
       {view}
       {chain && <p className="notice">{chain}</p>}
       <p className="muted">{t("stAuditNote")}</p>
-      <table className="grid" aria-label={t("stAuditEvents")}>
-        <thead><tr><th>#</th><th>{t("stWhen")}</th><th>{t("stActor")}</th><th>{t("stAction")}</th><th>{t("stEntity")}</th><th>{t("stDetail")}</th><th>{t("stRowHash")}</th></tr></thead>
-        <tbody>
-          {(audit.data ?? []).map((a) => (
-            <tr key={String(a.id)}><td>{String(a.id)}</td><td>{String(a.at).slice(0, 19)}</td><td>{String(a.actor)}</td><td>{String(a.action)}</td><td>{String(a.entity)} {String(a.entity_id)}</td><td><code style={{ fontSize: 12 }}>{JSON.stringify(a.detail)}</code></td><td><code>{String(a.row_hash)}</code></td></tr>
-          ))}
-        </tbody>
-      </table>
+      {audit.loading && <Loading center />}
+      {audit.error && <p className="notice bad" role="alert">{audit.error.message}</p>}
+      {audit.data && (
+        <table className="grid" aria-label={t("stAuditEvents")}>
+          <thead><tr><th>#</th><th>{t("stWhen")}</th><th>{t("stActor")}</th><th>{t("stAction")}</th><th>{t("stEntity")}</th><th>{t("stDetail")}</th><th>{t("stRowHash")}</th></tr></thead>
+          <tbody>
+            {audit.data.map((a) => (
+              <tr key={String(a.id)}><td>{String(a.id)}</td><td>{String(a.at).slice(0, 19)}</td><td>{String(a.actor)}</td><td>{String(a.action)}</td><td>{String(a.entity)} {String(a.entity_id)}</td><td><code style={{ fontSize: 12 }}>{JSON.stringify(a.detail)}</code></td><td><code>{String(a.row_hash)}</code></td></tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </>
   );
 }

@@ -102,8 +102,8 @@ class Settings(BaseSettings):
     rerank_max_chars: int = 900
     retrieval_top_k: int = 5
     passage_max_chars: int = 900
-    sufficiency_threshold: float = 0.35
-    sufficiency_threshold_version: str = "uncalibrated-v0"
+    sufficiency_threshold: float = 0.20
+    sufficiency_threshold_version: str = "calibrated-v1"
     session_turns: int = 3
     question_max_chars: int = 500
     prompt_version: str = "ask-v1"

@@ -170,6 +170,11 @@ export interface Hit {
     rights_line?: string;
     credit?: string | null;
     item_type?: string;
+    creator?: string | null;
+    date_text?: string | null;
+    subjects?: string[];
+    people?: string[];
+    places?: string[];
     articles?: ArticleRef[];
   };
 }

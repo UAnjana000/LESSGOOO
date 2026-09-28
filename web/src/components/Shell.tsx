@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useSession } from "../state";
 import { useExhibitStatus } from "../exhibit";
 import { LanguageSwitch } from "./Bits";
-import { IconAsk, IconConstitution, IconHome, IconList, IconMap, IconSearch, IconStories, IconTimeline } from "./Icons";
+import { IconAsk, IconConstitution, IconHome, IconList, IconMap, IconSearch, IconSettings, IconStories, IconTimeline } from "./Icons";
 
 const IDLE_MS_DEFAULT = 120_000;
 /** WCAG 2.2.1: visitors get at least 20 s warning, and one simple action, before the visit is cleared. */
@@ -40,11 +40,34 @@ export function Shell() {
   const finishRef = useRef<HTMLDialogElement>(null);
   const warnRef = useRef<HTMLDialogElement>(null);
   const mainRef = useRef<HTMLElement>(null);
+  const settingsRef = useRef<HTMLDivElement>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [attract, setAttract] = useState(false);
   const [remaining, setRemaining] = useState(IDLE_WARNING_MS / 1000);
   const exhibit = useExhibitStatus();
   const idleMs = (s.config?.session_idle_seconds ?? 0) * 1000 || IDLE_MS_DEFAULT;
   const warnAfter = Math.max(idleMs - IDLE_WARNING_MS, 10_000);
+
+  // Close settings drop-up on click outside or Escape
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const handlePointerDown = (e: PointerEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
+        setSettingsOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setSettingsOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [settingsOpen]);
 
   const endVisit = useCallback(() => {
     closeModal(finishRef.current);
@@ -145,14 +168,67 @@ export function Shell() {
             )}
           </NavLink>
         </nav>
-        <div className="controls" role="group" aria-label={t("displaySettings")}>
-          <LanguageSwitch />
-          <button type="button" className="toggle" onClick={s.cycleTextScale} aria-label={`${t("textSize")}: ${Math.round(s.textScale * 100)}%`}>
-            A<span aria-hidden="true" style={{ fontSize: "1.3em" }}>A</span> {Math.round(s.textScale * 100)}%
-          </button>
-          <button type="button" className="toggle" aria-pressed={s.contrast} onClick={s.toggleContrast}>
-            {t("contrast")}
-          </button>
+        <div className="controls" role="group" aria-label={t("displaySettings")} ref={settingsRef}>
+          <div className="settings-dropup-wrap">
+            <button
+              type="button"
+              className={`toggle settings-toggle-btn ${settingsOpen ? "active" : ""}`}
+              onClick={() => setSettingsOpen((prev) => !prev)}
+              aria-expanded={settingsOpen}
+              aria-haspopup="dialog"
+              aria-label={t("displaySettings")}
+              title={t("displaySettings")}
+            >
+              <IconSettings />
+              <span className="settings-toggle-label">{t("displaySettings")}</span>
+            </button>
+
+            {settingsOpen && (
+              <div className="settings-dropup-menu" role="dialog" aria-label={t("displaySettings")}>
+                <div className="settings-dropup-header">
+                  <span className="settings-dropup-title">{t("displaySettings")}</span>
+                  <button
+                    type="button"
+                    className="settings-close-btn"
+                    onClick={() => setSettingsOpen(false)}
+                    aria-label={t("clearSelection")}
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="settings-section">
+                  <span className="settings-section-title">{t("language")}</span>
+                  <LanguageSwitch className="langs settings-langs" />
+                </div>
+
+                <div className="settings-section">
+                  <span className="settings-section-title">{t("textSize")}</span>
+                  <button
+                    type="button"
+                    className="toggle settings-option-btn"
+                    onClick={s.cycleTextScale}
+                    aria-label={`${t("textSize")}: ${Math.round(s.textScale * 100)}%`}
+                  >
+                    A<span aria-hidden="true" style={{ fontSize: "1.3em" }}>A</span> {Math.round(s.textScale * 100)}%
+                  </button>
+                </div>
+
+                <div className="settings-section">
+                  <span className="settings-section-title">{t("contrast")}</span>
+                  <button
+                    type="button"
+                    className="toggle settings-option-btn"
+                    aria-pressed={s.contrast}
+                    onClick={s.toggleContrast}
+                  >
+                    {t("contrast")}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           <button type="button" className="finish" onClick={() => openModal(finishRef.current)}>
             {t("finish")}
           </button>

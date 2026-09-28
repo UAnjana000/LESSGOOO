@@ -3,7 +3,7 @@ import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
 // The local Caddy proxy serves a `tls internal` certificate, so allow it when proxying in dev.
-const api = { target: process.env.VITE_API_PROXY ?? "http://localhost:8000", changeOrigin: true, secure: false };
+const api = { target: process.env.VITE_API_PROXY ?? "https://localhost:8443", changeOrigin: true, secure: false };
 
 export default defineConfig({
   plugins: [
@@ -33,7 +33,12 @@ export default defineConfig({
     }),
   ],
   server: {
+    host: "0.0.0.0",
     port: 5173,
+    watch: {
+      usePolling: true,
+      interval: 100,
+    },
     proxy: { "/api": api, "/iiif": api },
   },
   test: { environment: "jsdom" },

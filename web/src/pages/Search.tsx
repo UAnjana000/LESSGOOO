@@ -28,38 +28,75 @@ function FacetSelect({ label, all, options, value, onChange }: { label: string; 
 function HitCard({ h }: { h: Hit }) {
   const { t } = useSession();
   const isPhoto = h.extra?.item_type === "photograph";
+  const subjects = h.extra?.subjects ?? [];
   return (
-    <li className="result">
+    <li className="result" style={{ position: "relative" }}>
       <div>
-        <h2 style={{ fontSize: "var(--step-1)", margin: 0 }}><Link to={h.deep_link}><ContentText text={h.title} /></Link></h2>
-        <div className="meta">
+        <h2 style={{ fontSize: "var(--step-1)", margin: "0 0 4px" }}>
+          <Link to={h.deep_link}>
+            <ContentText text={h.title} />
+          </Link>
+        </h2>
+        <div className="meta" style={{ rowGap: "4px" }}>
+          {h.extra?.creator && <span style={{ fontWeight: 600, color: "var(--ink)" }}>{h.extra.creator}</span>}
+          {h.extra?.date_text && <span>{h.extra.date_text}</span>}
           <span>{t(`col_${h.collection}` as Key)}</span>
+          {h.extra?.volume && <span>{h.extra.volume}</span>}
+          {h.page_sequence != null && <span>p. {h.page_sequence}</span>}
           <span lang={h.language}>{langName(h.language)}</span>
           {h.start_ms != null && <span>{t("atTime", { time: formatMs(h.start_ms) })}</span>}
         </div>
       </div>
-      <div className="chips" style={{ justifyContent: "flex-end" }}>
+      <div className="chips" style={{ justifyContent: "flex-end", alignSelf: "flex-start" }}>
         <KindChip label={h.kind_label} />
         <VerifiedChip verified={h.quote_verified} />
         <FixtureChip show={h.extra?.is_fixture} />
       </div>
-      <blockquote lang={h.language}>{h.text}</blockquote>
+
+      <blockquote lang={h.language} style={{ borderLeft: "3px solid var(--indigo)", paddingLeft: "14px", margin: "8px 0" }}>
+        {h.text}
+      </blockquote>
+
+      {subjects.length > 0 && (
+        <div className="chips" style={{ gridColumn: "1 / -1", gap: "4px" }}>
+          {subjects.slice(0, 4).map((s) => (
+            <span key={s} className="chip" style={{ fontSize: "0.75rem", padding: "1px 8px", minHeight: "22px" }}>
+              #{s}
+            </span>
+          ))}
+        </div>
+      )}
+
       {isPhoto && (h.extra.credit || h.extra.rights_line) && (
         <dl className="facts" style={{ gridColumn: "1 / -1" }}>
           {h.extra.credit && (<><dt>{t("credit")}</dt><dd>{h.extra.credit}</dd></>)}
           {h.extra.rights_line && (<><dt>{t("rights")}</dt><dd>{h.extra.rights_line}</dd></>)}
         </dl>
       )}
+
       <span className="cite" style={{ gridColumn: "1 / -1" }}>
         {t("citation")}: {h.citation}
       </span>
-      {(h.extra?.articles?.length ?? 0) > 0 && <div style={{ gridColumn: "1 / -1" }}><ArticleLinks articles={h.extra.articles} /></div>}
-      <div className="row" style={{ gridColumn: "1 / -1" }}>
+
+      {(h.extra?.articles?.length ?? 0) > 0 && (
+        <div style={{ gridColumn: "1 / -1" }}>
+          <ArticleLinks articles={h.extra.articles} />
+        </div>
+      )}
+
+      <div className="row" style={{ gridColumn: "1 / -1", marginTop: "4px" }}>
         <Link className="btn small" to={h.deep_link}>
           {t("openItem")}
         </Link>
         <AddToList
-          entry={{ item_id: h.item_id, title: h.title, passage_id: h.passage_id, page: h.page_sequence ?? undefined, start_ms: h.start_ms ?? undefined, citation: h.citation }}
+          entry={{
+            item_id: h.item_id,
+            title: h.title,
+            passage_id: h.passage_id,
+            page: h.page_sequence ?? undefined,
+            start_ms: h.start_ms ?? undefined,
+            citation: h.citation,
+          }}
         />
       </div>
     </li>
@@ -69,24 +106,52 @@ function HitCard({ h }: { h: Hit }) {
 function ItemCardView({ it }: { it: ItemCard }) {
   const { t } = useSession();
   const photo = it.photo;
+  const subjects = it.subjects ?? [];
   return (
     <li className="result">
       <div className={photo ? "thumb-row" : undefined}>
         {photo?.image_file_id != null && (
-          <img className="thumb" src={fileUrl(photo.image_file_id)} alt={photo.caption} loading="lazy" decoding="async" width={128} height={96} />
+          <img
+            className="thumb"
+            src={fileUrl(photo.image_file_id)}
+            alt={photo.caption}
+            loading="lazy"
+            decoding="async"
+            width={128}
+            height={96}
+          />
         )}
         <div style={{ minWidth: 0 }}>
-          <h2 style={{ fontSize: "var(--step-1)", margin: 0 }}><Link to={`/item/${it.id}`}><ContentText text={it.title} /></Link></h2>
-          <div className="meta">
+          <h2 style={{ fontSize: "var(--step-1)", margin: "0 0 4px" }}>
+            <Link to={`/item/${it.id}`}>
+              <ContentText text={it.title} />
+            </Link>
+          </h2>
+          <div className="meta" style={{ rowGap: "4px" }}>
+            {it.creator && <span style={{ fontWeight: 600, color: "var(--ink)" }}>{it.creator}</span>}
             {it.date_text && <span>{it.date_text}</span>}
-            {it.creator && <span>{it.creator}</span>}
             <span>{t(`col_${it.collection}` as Key)}</span>
+            {it.volume && <span>{it.volume}</span>}
+            {it.edition && <span>{it.edition}</span>}
           </div>
           {photo && <p className="card-caption">{photo.caption}</p>}
-          {photo?.credit && <p className="muted" style={{ margin: "4px 0 0", fontSize: "var(--step--1)" }}>{t("credit")}: {photo.credit}</p>}
+          {photo?.credit && (
+            <p className="muted" style={{ margin: "4px 0 0", fontSize: "var(--step--1)" }}>
+              {t("credit")}: {photo.credit}
+            </p>
+          )}
+          {subjects.length > 0 && (
+            <div className="chips" style={{ marginTop: "6px", gap: "4px" }}>
+              {subjects.slice(0, 4).map((s) => (
+                <span key={s} className="chip" style={{ fontSize: "0.75rem", padding: "1px 8px", minHeight: "22px" }}>
+                  #{s}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
-      <div className="chips" style={{ justifyContent: "flex-end" }}>
+      <div className="chips" style={{ justifyContent: "flex-end", alignSelf: "flex-start" }}>
         <FixtureChip show={it.is_fixture} />
         {it.online_only && <span className="chip">{t("onlineOnlyShort")}</span>}
       </div>
@@ -185,7 +250,7 @@ export function Search() {
         )}
       </fieldset>
 
-      {searchUrl && search.loading && <p role="status">{t("searching")}</p>}
+      {searchUrl && search.loading && <Loading label={t("searching")} center />}
       {searchUrl && search.error && <ErrorState error={search.error} retry={search.reload} />}
       {searchUrl && search.data && (
         <>
@@ -198,7 +263,7 @@ export function Search() {
         </>
       )}
 
-      {!searchUrl && browse.loading && <Loading />}
+      {!searchUrl && browse.loading && <Loading center />}
       {!searchUrl && browse.error && <ErrorState error={browse.error} retry={browse.reload} />}
       {!searchUrl && browse.data && (
         <ul className="results">

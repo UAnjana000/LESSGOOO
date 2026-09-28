@@ -31,10 +31,10 @@ function MachineTranslation({ passage, enabled }: { passage: PassageView; enable
     <div className="stack" style={{ gap: 8 }}>
       {!state.text && (
         <button type="button" className="btn quiet small" onClick={run} disabled={state.loading}>
-          {state.loading ? t("loading") : t("translateOnDemand")}
+          {state.loading ? <Loading inline size="sm" /> : t("translateOnDemand")}
         </button>
       )}
-      {state.error && <p className="muted">{state.error}</p>}
+      {state.error && <p className="notice bad" role="alert">{state.error}</p>}
       {state.text && (
         <div>
           <span className="chip mt">{t("mtLabel")}</span>
@@ -209,7 +209,7 @@ export function Item() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  if (item.loading && !d) return <div className="page"><Loading /></div>;
+  if (item.loading && !d) return <div className="page"><Loading center /></div>;
   if (item.error) return <div className="page"><ErrorState error={item.error} retry={item.reload} /><Link className="link-target" to="/search">{t("back")}</Link></div>;
   if (!d) return null;
 

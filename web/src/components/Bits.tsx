@@ -75,36 +75,54 @@ export function FixtureChip({ show }: { show?: boolean }) {
   return <span className="chip fixture">{t("fixtureChip")}</span>;
 }
 
-export function Loading() {
+export interface LoadingProps {
+  label?: string;
+  inline?: boolean;
+  center?: boolean;
+  card?: boolean;
+  size?: "sm" | "md" | "lg";
+  className?: string;
+}
+
+export function Loading({ label, inline = false, center = false, card = false, size = "md", className = "" }: LoadingProps) {
   const { t } = useSession();
+  const text = label ?? t("loading");
+  const spinnerClass = `spinner ${size === "sm" ? "sm" : size === "lg" ? "lg" : ""}`.trim();
+  const wrapClass = `loader-wrap ${inline ? "inline" : ""} ${center ? "center" : ""} ${card ? "card" : ""} ${className}`.trim();
+
   return (
-    <p role="status" className="muted">
-      {t("loading")}
-    </p>
+    <div role="status" aria-live="polite" className={wrapClass}>
+      <span className={spinnerClass} aria-hidden="true" />
+      <span className="loader-text muted">{text}</span>
+    </div>
   );
 }
 
 /** API error details are English-only, so visitors see a translated message instead. */
 const WITHDRAWN_CATEGORIES = new Set(["withdrawn", "rights", "takedown"]);
 
-export function ErrorState({ error, retry, notFound }: { error: ApiError; retry?: () => void; notFound?: string }) {
+export function ErrorState({ error, retry, notFound, message }: { error?: ApiError | null; retry?: () => void; notFound?: string; message?: string }) {
   const { t } = useSession();
-  const withdrawn = error.status === 410 && Boolean(error.reasonCategory && WITHDRAWN_CATEGORIES.has(error.reasonCategory));
-  const msg = withdrawn
-    ? t("withdrawnNotice")
-    : error.status === 404 || error.status === 410
-      ? notFound ?? t("notAvailable")
-      : error.offline
-        ? t("offlineBanner")
-        : t("errorGeneric");
+  const withdrawn = error?.status === 410 && Boolean(error?.reasonCategory && WITHDRAWN_CATEGORIES.has(error.reasonCategory));
+  const msg = message
+    ? message
+    : withdrawn
+      ? t("withdrawnNotice")
+      : error?.status === 404 || error?.status === 410
+        ? notFound ?? t("notAvailable")
+        : error?.offline
+          ? t("offlineBanner")
+          : t("errorGeneric");
   return (
     <div className="notice bad" role="alert">
-      <p>{msg}</p>
-      {retry && error.status !== 404 && error.status !== 410 && (
-        <button type="button" className="btn secondary small" onClick={retry}>
-          {t("retry")}
-        </button>
-      )}
+      <div className="row" style={{ alignItems: "center", gap: 12 }}>
+        <p style={{ margin: 0, flex: 1 }}>{msg}</p>
+        {retry && error && error.status !== 404 && error.status !== 410 && (
+          <button type="button" className="btn secondary small" onClick={retry}>
+            {t("retry")}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

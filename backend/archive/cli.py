@@ -868,6 +868,11 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--fixtures", default="/fixtures")
     p.set_defaults(fn=cmd_seed_fixtures)
     sub.add_parser("seed-fixture-media").set_defaults(fn=cmd_seed_fixture_media)
+    sub.add_parser("seed-historical", help="seed authentic texts from Dr. Ambedkar Foundation and CAD Archive").set_defaults(
+        fn=lambda args: __import__("archive.seed_historical", fromlist=["seed_historical_corpus"]).seed_historical_corpus(
+            __import__("archive.db", fromlist=["new_session"]).new_session()
+        )
+    )
     p = sub.add_parser("validate-manifest")
     p.add_argument("path")
     p.set_defaults(fn=cmd_validate_manifest)

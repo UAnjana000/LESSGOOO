@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import type { Key } from "../i18n";
 import { useSession } from "../state";
+import { Loading } from "./Bits";
 import { recorderMimeType, recordingSupported, voiceErrorKey, type TranscribeResult } from "../voice";
 
 type Phase = "idle" | "recording" | "working";
@@ -18,7 +19,7 @@ function MicIcon() {
 }
 
 /** Push-to-talk (start, then stop); the API transcribes the recording and the text goes to the question box. */
-export function VoiceQuestion({ onText, disabled = false }: { onText: (text: string) => void; disabled?: boolean }) {
+export function VoiceQuestion({ onText, disabled = false, hideNote = false }: { onText: (text: string) => void; disabled?: boolean; hideNote?: boolean }) {
   const s = useSession();
   const { t } = s;
   const max = s.config?.ask_voice_max_seconds ?? 120;
@@ -106,7 +107,6 @@ export function VoiceQuestion({ onText, disabled = false }: { onText: (text: str
   };
 
   const status = phase === "recording" ? t("askVoiceRecording")
-    : phase === "working" ? t("askVoiceWorking")
     : message ? t(message.key, { seconds: max }) : "";
 
   return (
@@ -116,7 +116,7 @@ export function VoiceQuestion({ onText, disabled = false }: { onText: (text: str
           ref={micButton}
           type="button"
           className="btn secondary small"
-          aria-describedby="voice-note"
+          aria-describedby={!hideNote ? "voice-note" : undefined}
           disabled={disabled || phase === "working"}
           onClick={() => (phase === "recording" ? recorder.current?.stop() : void start())}
         >
@@ -124,8 +124,12 @@ export function VoiceQuestion({ onText, disabled = false }: { onText: (text: str
         </button>
         {phase === "recording" && <span className="voice-clock" aria-hidden="true">{clock(elapsed)} / {clock(max)}</span>}
       </div>
-      <p id="voice-note" className="muted voice-note">{t("askVoiceNote", { seconds: max })}</p>
-      <p role="status" className={message?.bad && phase === "idle" ? "status bad voice-note" : "muted voice-note"}>{status}</p>
+      {!hideNote && <p id="voice-note" className="muted voice-note">{t("askVoiceNote", { seconds: max })}</p>}
+      {phase === "working" ? (
+        <Loading inline size="sm" label={t("askVoiceWorking")} />
+      ) : (
+        status && <p role="status" className={message?.bad && phase === "idle" ? "status bad voice-note" : "muted voice-note"}>{status}</p>
+      )}
     </div>
   );
 }
