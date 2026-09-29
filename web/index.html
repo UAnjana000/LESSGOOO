@@ -7,20 +7,6 @@
     <meta name="description" content="Search and read the archive's approved sources, with citations to the original pages." />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <title>Dr. B. R. Ambedkar Digital Heritage Archive</title>
-    <script>
-      (function() {
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.getRegistrations().then(function(regs) {
-            for (var i = 0; i < regs.length; i++) { regs[i].unregister(); }
-          });
-        }
-        if ('caches' in window) {
-          caches.keys().then(function(names) {
-            for (var i = 0; i < names.length; i++) { caches.delete(names[i]); }
-          });
-        }
-      })();
-    </script>
   </head>
   <body>
     <div id="root"></div>
