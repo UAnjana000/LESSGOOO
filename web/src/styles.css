@@ -2539,6 +2539,20 @@ table.grid th,
 table.grid td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--rule); vertical-align: top; }
 table.grid th { background: var(--paper); color: var(--ink); font-weight: 700; border-bottom: 2px solid var(--ink); }
 table.grid tbody tr:hover td { background: var(--sheet-2); }
+/* Long JSON (audit detail, job payload) and hashes wrap inside their cell instead of widening the page;
+   the 16ch floor keeps a hash readable when the table squeezes its column. */
+table.grid code { white-space: pre-wrap; overflow-wrap: anywhere; display: inline-block; min-width: 16ch; }
+/* Phones: the workspace keeps to the screen width; a wide table scrolls inside itself, not the page. */
+@media (max-width: 640px) {
+  .staff .page { padding: 20px 16px 48px; }
+  .staff .sheet { padding: 20px 16px; }
+  .staff-top { padding: 8px 16px; }
+  .staff-top .who { flex-wrap: wrap; margin-left: 0; }
+  .staff dl.facts { grid-template-columns: max-content minmax(0, 1fr); }
+  .staff dl.facts dd { overflow-wrap: anywhere; }
+  /* position: relative keeps the visually-hidden header text inside the scroller. */
+  table.grid { display: block; overflow-x: auto; position: relative; }
+}
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px 20px; }
 .form-grid label { display: flex; flex-direction: column; gap: 6px; font-size: var(--step--1); }
 .review-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; }

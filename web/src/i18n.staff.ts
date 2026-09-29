@@ -387,6 +387,18 @@ export const staffEn = {
   stClearanceAllowed: "Cleared for Public Exhibition",
   stClearanceRestricted: "Restricted - Internal Only",
   stClearanceUnknown: "Pending Rights Clearance",
+
+  stReadOnly: "Read-only view: actions are disabled.",
+  stArchivistOnly: "Actions that need the archivist role are hidden for your account.",
+  stNothingStored: "Nothing was stored, so no ingestion job was queued.",
+  stTranslationLangOnly: "Only a named reviewer for {lang} or an archivist can approve this translation.",
+  stDraftAiRights: "Draft with AI is not available: the rights register does not allow external processing for this item, or the item is restricted.",
+  stRightsCascadeConfirm: "Display or training permission is moving away from Allowed. Saving withdraws this source's published items from the public archive (display) and flags the datasets and models that used it (training). Save anyway?",
+  stRightsWithdrawnItems: "Items withdrawn: {ids}.",
+  stRightsFlagged: "Flagged dataset versions: {datasets}; models: {models}.",
+  stNone: "none",
+  stTrainingBasis: "Training basis",
+  stRightsNotes: "Notes",
 };
 
 export type StaffKey = keyof typeof staffEn;
@@ -776,6 +788,18 @@ export const staffHi: Record<StaffKey, string> = {
   stClearanceAllowed: "सार्वजनिक प्रदर्शन हेतु स्वीकृत",
   stClearanceRestricted: "प्रतिबंधित - केवल आंतरिक",
   stClearanceUnknown: "अधिकार सत्यापन लंबित",
+
+  stReadOnly: "केवल देखने के लिए: कार्रवाइयाँ बंद हैं।",
+  stArchivistOnly: "जिन कार्रवाइयों के लिए आर्काइविस्ट भूमिका चाहिए, वे आपके खाते के लिए छिपी हैं।",
+  stNothingStored: "कुछ भी सहेजा नहीं गया, इसलिए कोई प्रविष्टि कार्य कतार में नहीं डाला गया।",
+  stTranslationLangOnly: "इस अनुवाद को केवल {lang} के नामित समीक्षक या आर्काइविस्ट स्वीकृत कर सकते हैं।",
+  stDraftAiRights: "AI से मसौदा उपलब्ध नहीं: अधिकार रजिस्टर इस सामग्री के बाहरी प्रसंस्करण की अनुमति नहीं देता, या सामग्री प्रतिबंधित है।",
+  stRightsCascadeConfirm: "प्रदर्शन या प्रशिक्षण अनुमति 'अनुमति है' से बदल रही है। सहेजने पर इस स्रोत की प्रकाशित सामग्री सार्वजनिक अभिलेखागार से हटा ली जाएगी (प्रदर्शन) और जिन डेटासेट व मॉडलों ने इसका उपयोग किया वे चिह्नित होंगे (प्रशिक्षण)। फिर भी सहेजें?",
+  stRightsWithdrawnItems: "हटाई गई सामग्री: {ids}।",
+  stRightsFlagged: "चिह्नित डेटासेट संस्करण: {datasets}; मॉडल: {models}।",
+  stNone: "कोई नहीं",
+  stTrainingBasis: "प्रशिक्षण का आधार",
+  stRightsNotes: "टिप्पणियाँ",
 };
 
 export const staffMr: Record<StaffKey, string> = {
@@ -1163,4 +1187,16 @@ export const staffMr: Record<StaffKey, string> = {
   stClearanceAllowed: "सार्वजनिक प्रदर्शनासाठी मंजूर",
   stClearanceRestricted: "प्रतिबंधित - फक्त अंतर्गत",
   stClearanceUnknown: "हक्क पडताळणी प्रलंबित",
+
+  stReadOnly: "फक्त पाहण्यासाठी: कृती बंद आहेत.",
+  stArchivistOnly: "ज्या कृतींसाठी आर्काइव्हिस्ट भूमिका लागते, त्या तुमच्या खात्यासाठी लपवल्या आहेत.",
+  stNothingStored: "काहीही जतन झाले नाही, त्यामुळे नोंदणीचे कोणतेही काम रांगेत टाकले नाही.",
+  stTranslationLangOnly: "हे भाषांतर फक्त {lang} चे नामनिर्देशित पुनरावलोकक किंवा आर्काइव्हिस्ट मंजूर करू शकतात.",
+  stDraftAiRights: "AI मसुदा उपलब्ध नाही: हक्क नोंदवही या साहित्याच्या बाह्य प्रक्रियेस परवानगी देत नाही, किंवा साहित्य प्रतिबंधित आहे.",
+  stRightsCascadeConfirm: "प्रदर्शन किंवा प्रशिक्षण परवानगी 'परवानगी आहे' वरून बदलत आहे. जतन केल्यास या स्रोताचे प्रकाशित साहित्य सार्वजनिक संग्रहातून काढले जाईल (प्रदर्शन) आणि ज्या डेटासेट व मॉडेल्सनी ते वापरले ते चिन्हांकित होतील (प्रशिक्षण). तरीही जतन करायचे?",
+  stRightsWithdrawnItems: "काढलेले साहित्य: {ids}.",
+  stRightsFlagged: "चिन्हांकित डेटासेट आवृत्त्या: {datasets}; मॉडेल्स: {models}.",
+  stNone: "काहीही नाही",
+  stTrainingBasis: "प्रशिक्षणाचा आधार",
+  stRightsNotes: "टिपा",
 };
