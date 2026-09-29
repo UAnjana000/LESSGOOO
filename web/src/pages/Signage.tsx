@@ -3,7 +3,7 @@ import { fileUrl, type Hit, type ItemCard, type TimelineEvent } from "../api";
 import { pick, textLang, type Lang } from "../i18n";
 import { useApi } from "../hooks";
 import { useSession } from "../state";
-import { useDocumentTitle } from "../components/Bits";
+import { ErrorState, Loading, useDocumentTitle } from "../components/Bits";
 
 interface SignageData {
   timeline: TimelineEvent[];
@@ -65,6 +65,14 @@ export function Signage() {
             <p style={{ color: "var(--brass-ink)", fontSize: "1.2vw" }}>{t("citation")}: {s.citation}</p>
           </div>
           <div>{s.image && <img src={fileUrl(s.image)} alt={t("imageOf", { title: s.title.text })} />}</div>
+        </div>
+      ) : sig.loading ? (
+        <div className="signage-loading">
+          <Loading size="lg" label={t("loading")} />
+        </div>
+      ) : sig.error ? (
+        <div className="signage-error">
+          <ErrorState error={sig.error} retry={sig.reload} />
         </div>
       ) : (
         <div />

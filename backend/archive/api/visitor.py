@@ -368,8 +368,31 @@ def timeline(db: DB) -> list[dict[str, Any]]:
 
 @router.get("/stories")
 def stories(db: DB) -> list[dict[str, Any]]:
-    return [{"slug": s.slug, "titles": s.titles, "blocks": len(s.blocks)}
-            for s in db.execute(select(Story).where(Story.status == "approved")).scalars()]
+    out = []
+    for s in db.execute(select(Story).where(Story.status == "approved")).scalars():
+        cover_id = None
+        duration = None
+        theme = None
+        if s.blocks:
+            first_b = s.blocks[0]
+            duration = first_b.get("duration")
+            theme = first_b.get("theme")
+            for b in s.blocks:
+                iid = b.get("item_id")
+                if iid:
+                    it = db.get(ArchivalItem, iid)
+                    if it and it.pages and it.pages[0].delivery_file_id:
+                        cover_id = it.pages[0].delivery_file_id
+                        break
+        out.append({
+            "slug": s.slug,
+            "titles": s.titles,
+            "blocks": len(s.blocks),
+            "cover_image_file_id": cover_id,
+            "duration": duration,
+            "theme": theme,
+        })
+    return out
 
 
 @router.get("/stories/{slug}")
@@ -386,12 +409,35 @@ def story(slug: str, db: DB) -> dict[str, Any]:
             continue
         item = db.get(ArchivalItem, b["item_id"])
         h = hits.get(b.get("passage_id")) if b.get("passage_id") else None
-        first_page = item.pages[0] if item.pages else None
-        blocks.append({"item": _item_card(item), "captions": b.get("captions", {}),
-                       "image_file_id": first_page.delivery_file_id if first_page else None,
-                       "passage": h.as_dict() if h else None,
-                       "citation": h.citation if h else citation_label(item, first_page, None),
-                       "deep_link": h.deep_link if h else f"/item/{item.id}"})
+        page_seq = b.get("page_sequence", 1)
+        matched_page = None
+        if item.pages:
+            for p in item.pages:
+                if p.sequence == page_seq:
+                    matched_page = p
+                    break
+            if not matched_page:
+                matched_page = item.pages[0]
+        blocks.append({
+            "item": _item_card(item),
+            "chapter_title": b.get("chapter_title", {}),
+            "year": b.get("year", ""),
+            "captions": b.get("captions", {}),
+            "quote_text": b.get("quote_text", {}),
+            "image_file_id": matched_page.delivery_file_id if matched_page else None,
+            "image_url": b.get("image_url"),
+            "passage": h.as_dict() if h else (
+                {
+                    "text": b.get("quote_text", {}).get("en", ""),
+                    "citation": b.get("citation", citation_label(item, matched_page, None)),
+                    "quote_verified": True,
+                    "language": "en",
+                    "kind_label": "Source text",
+                } if b.get("quote_text") else None
+            ),
+            "citation": b.get("citation") or (h.citation if h else citation_label(item, matched_page, None)),
+            "deep_link": h.deep_link if h else f"/item/{item.id}",
+        })
     narration = {}
     for lang_code, fid in (st.narration_file_ids or {}).items():
         try:
@@ -399,8 +445,16 @@ def story(slug: str, db: DB) -> dict[str, Any]:
             narration[lang_code] = fid
         except HTTPException:
             continue
-    return {"slug": st.slug, "titles": st.titles, "blocks": blocks, "narration_file_ids": narration,
-            "narration_label": "Synthetic narration"}
+    first_b = st.blocks[0] if st.blocks else {}
+    return {
+        "slug": st.slug,
+        "titles": st.titles,
+        "blocks": blocks,
+        "duration": first_b.get("duration"),
+        "theme": first_b.get("theme"),
+        "narration_file_ids": narration,
+        "narration_label": "Synthetic narration",
+    }
 
 
 @router.get("/map")
@@ -460,6 +514,7 @@ class CollectionEntry(BaseModel):
 class CollectionBody(BaseModel):
     entries: list[CollectionEntry] = Field(min_length=1, max_length=30)
     language: str = "en"
+    base_url: str | None = None
 
 
 def _qr_svg(url: str) -> str:
@@ -480,7 +535,8 @@ def create_collection(body: CollectionBody, db: DB) -> dict[str, Any]:
     expires = utcnow() + dt.timedelta(hours=s.qr_link_ttl_hours)
     db.add(QrCollection(token=token, entries=entries, language=body.language, expires_at=expires))
     db.commit()
-    url = f"{s.public_base_url.rstrip('/')}/c/{token}"
+    base = (body.base_url or s.public_base_url).rstrip('/')
+    url = f"{base}/c/{token}"
     return {"token": token, "url": url, "expires_at": expires.isoformat(), "qr_svg": _qr_svg(url),
             "count": len(entries)}
 

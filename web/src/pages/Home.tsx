@@ -50,7 +50,7 @@ export function Home() {
       </section>
 
       <h2 className="visually-hidden">{t("collections")}</h2>
-      {home.loading && <Loading />}
+      {home.loading && <Loading center />}
       {home.error && <ErrorState error={home.error} retry={home.reload} />}
       {home.data && (
         <ul className="drawers">

@@ -53,6 +53,7 @@ afterEach(async () => {
   root = null;
   host?.remove();
   host = null;
+  sessionStorage.clear();
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
@@ -64,7 +65,8 @@ async function flush(times = 5) {
 async function until(check: () => boolean, what: string) {
   for (let i = 0; i < 200; i++) {
     if (check()) return;
-    await flush(1);
+    await flush(2);
+    await new Promise((r) => setTimeout(r, 10));
   }
   throw new Error(`Timed out waiting for ${what}`);
 }

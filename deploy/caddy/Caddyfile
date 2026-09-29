@@ -17,9 +17,9 @@ http:// {
 # SITE_ADDRESS: "localhost" for the demo, or the edge server's LAN name/IP for tablets
 # (e.g. "archive.gallery.lan, 192.168.10.5"). A secure origin is required for the service worker.
 {$SITE_ADDRESS:localhost} {
-	# Demo uses Caddy's local CA; tablets must trust its root certificate (see docs/DEPLOYMENT.md).
-	# Production replaces this with managed certificates (deploy/production/Caddyfile).
-	tls internal
+	# Demo uses Caddy's local CA (internal). In cloud VPS with a public domain,
+	# set TLS_MODE to your email for automatic Let's Encrypt certificates.
+	tls {$TLS_MODE:internal}
 
 	encode zstd gzip
 	log {
@@ -32,7 +32,7 @@ http:// {
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		Permissions-Policy "camera=(), microphone=(self), geolocation=(), interest-cohort=()"
-		Content-Security-Policy "default-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+		Content-Security-Policy "default-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
 		-Server
 	}
 
@@ -47,7 +47,8 @@ http:// {
 		@hashed path /assets/*
 		header @hashed Cache-Control "public, max-age=31536000, immutable"
 		@shell path / /index.html /sw.js /manifest.webmanifest
-		header @shell Cache-Control "no-cache"
+		header @shell Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+		header @shell Clear-Site-Data '"cache"'
 		try_files {path} /index.html
 		file_server
 	}

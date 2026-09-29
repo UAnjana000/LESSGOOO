@@ -25,16 +25,65 @@ export function apiErrorFromBody(status: number, body: unknown, offline: boolean
   return new ApiError(status, detail || "error", offline, category);
 }
 
+export const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
+export const API_FALLBACK = (import.meta.env.VITE_API_FALLBACK_URL ?? "").replace(/\/$/, "");
+
+let activeBaseUrl = API_BASE;
+
+export function getActiveApiBase(): string {
+  return activeBaseUrl;
+}
+
+export function setActiveApiBase(url: string) {
+  activeBaseUrl = url.replace(/\/$/, "");
+}
+
+export function resolveApiUrl(path: string, base: string = activeBaseUrl): string {
+  if (!path || path.startsWith("http://") || path.startsWith("https://") || path.startsWith("blob:") || path.startsWith("data:")) {
+    return path;
+  }
+  return `${base}${path.startsWith("/") ? "" : "/"}${path}`;
+}
+
 async function request<T>(path: string, init: RequestInit = {}, token?: string | null): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body && !(init.body instanceof FormData)) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  let res: Response;
+  let res: Response | null = null;
   try {
-    res = await fetch(path, { ...init, headers });
+    res = await fetch(resolveApiUrl(path, activeBaseUrl), { ...init, headers });
   } catch {
+    // If primary network fetch failed and we have a fallback, try the fallback
+    if (API_FALLBACK && activeBaseUrl !== API_FALLBACK) {
+      try {
+        const fallbackRes = await fetch(resolveApiUrl(path, API_FALLBACK), { ...init, headers });
+        if (fallbackRes.ok || fallbackRes.status < 500) {
+          activeBaseUrl = API_FALLBACK;
+          res = fallbackRes;
+        }
+      } catch {
+        // Fallback failed too
+      }
+    }
+  }
+
+  // Also check if primary returned a server gateway error (502, 503, 504)
+  if (res && res.status >= 502 && API_FALLBACK && activeBaseUrl !== API_FALLBACK) {
+    try {
+      const fallbackRes = await fetch(resolveApiUrl(path, API_FALLBACK), { ...init, headers });
+      if (fallbackRes.ok || fallbackRes.status < 500) {
+        activeBaseUrl = API_FALLBACK;
+        res = fallbackRes;
+      }
+    } catch {
+      // Keep original response
+    }
+  }
+
+  if (!res) {
     throw new ApiError(0, "offline", true);
   }
+
   if (!res.ok) {
     try {
       throw apiErrorFromBody(res.status, await res.json(), res.headers.get("x-archive-offline") === "1");
@@ -55,7 +104,7 @@ export const api = {
     request<T>(path, { method: "PUT", body: JSON.stringify(body) }, token),
 };
 
-export const fileUrl = (id: number) => `/api/visitor/files/${id}`;
+export const fileUrl = (id: number) => resolveApiUrl(`/api/visitor/files/${id}`);
 
 export interface ArticleRef {
   number: string;
@@ -170,6 +219,11 @@ export interface Hit {
     rights_line?: string;
     credit?: string | null;
     item_type?: string;
+    creator?: string | null;
+    date_text?: string | null;
+    subjects?: string[];
+    people?: string[];
+    places?: string[];
     articles?: ArticleRef[];
   };
 }

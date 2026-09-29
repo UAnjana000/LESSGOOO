@@ -64,4 +64,4 @@ USER archive
 EXPOSE 8000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=10 \
   CMD curl -fsS http://localhost:8000/api/health || exit 1
-CMD ["uvicorn", "archive.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "alembic upgrade head && python -m archive.cli bootstrap && uvicorn archive.api.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips='*'"]

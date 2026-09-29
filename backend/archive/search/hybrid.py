@@ -175,6 +175,8 @@ def load_hits(db: Session, ids: list[int]) -> dict[int, Hit]:
             extra={"edition": item.edition, "volume": item.volume, "is_fixture": item.is_fixture,
                    "translation_of_id": p.translation_of_id, "item_type": item.item_type,
                    "rights_line": item.rights.attribution, "credit": photo_credit(photo),
+                   "creator": item.creator, "date_text": item.date_text,
+                   "subjects": item.subjects or [], "people": item.people or [], "places": item.places or [],
                    "image_file_id": page.delivery_file_id if page is not None and page.doc_class == "photograph"
                    else None,
                    "articles": articles.get(p.id, [])},

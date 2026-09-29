@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError, type AskResult } from "../api";
 import { useSession } from "../state";
-import { AddToList, CitationLink, ContentText, FixtureChip, KindChip, useDocumentTitle, VerifiedChip } from "../components/Bits";
+import { AddToList, CitationLink, ContentText, FixtureChip, KindChip, Loading, useDocumentTitle, VerifiedChip } from "../components/Bits";
 import { VoiceQuestion } from "../components/VoiceQuestion";
 import { mergeTranscript } from "../voice";
 
@@ -51,10 +51,12 @@ export function Ask() {
 
   const numberOf = (pid: number) => (result?.citations.findIndex((c) => c.passage_id === pid) ?? -1) + 1;
 
+  const hasUsed = Boolean(asked || result || s.askHistory.length > 0);
+
   return (
     <div className="page" style={{ maxWidth: 1000 }}>
       <h1>{t("askTitle")}</h1>
-      <p className="muted" style={{ maxWidth: "70ch" }}>{t("askLead")}</p>
+      {!hasUsed && <p className="muted" style={{ maxWidth: "70ch" }}>{t("askLead")}</p>}
       {!s.online && <div className="notice">{t("askOffline")}</div>}
       {s.config && !s.config.ask_model_connected && <div className="notice">{t("askNoModel")}</div>}
 
@@ -78,13 +80,18 @@ export function Ask() {
       </form>
       <VoiceQuestion
         disabled={busy}
+        hideNote={hasUsed}
         onText={(text) => {
           setQuestion((q) => mergeTranscript(q, text, 500));
           input.current?.focus();
         }}
       />
 
-      <p role="status" className="muted" style={{ marginTop: busy ? 16 : 0 }}>{busy ? t("askThinking") : ""}</p>
+      {busy && (
+        <div style={{ marginTop: 20 }}>
+          <Loading card label={t("askThinking")} />
+        </div>
+      )}
       <div aria-live="polite" aria-busy={busy}>
         {result && asked && (
           <article className="answer">
@@ -121,8 +128,15 @@ function AnswerBody({ result, numberOf }: { result: AskResult; numberOf: (pid: n
   if (r.outcome === "insufficient") {
     return (
       <>
-        <p className="notice">{r.message ?? t("askInsufficient")}</p>
-        {r.citations.length > 0 && <Sources result={r} heading={t("askRelated")} />}
+        <div className="banner warn" style={{ borderRadius: "var(--radius)", margin: "14px 0" }}>
+          <div>
+            <strong>{r.message ?? t("askInsufficient")}</strong>
+            <p style={{ margin: "4px 0 0", fontSize: "var(--step--1)" }}>
+              {t("askInsufficientNote")}
+            </p>
+          </div>
+        </div>
+        {r.citations.length > 0 && <Sources result={r} heading={t("askRelated")} showExcerpt />}
       </>
     );
   }
@@ -153,7 +167,7 @@ function AnswerBody({ result, numberOf }: { result: AskResult; numberOf: (pid: n
         ))}
       </div>
       <p className="muted" style={{ fontSize: "var(--step--1)", marginTop: 12 }}>{t("claimNote")}</p>
-      <Sources result={r} heading={t("sources")} />
+      <Sources result={r} heading={t("sources")} showExcerpt />
     </>
   );
 }
@@ -161,28 +175,40 @@ function AnswerBody({ result, numberOf }: { result: AskResult; numberOf: (pid: n
 function Sources({ result, heading, showExcerpt = true }: { result: AskResult; heading: string; showExcerpt?: boolean }) {
   const { t } = useSession();
   return (
-    <section aria-labelledby="sources-h">
-      <h3 id="sources-h" style={{ marginTop: 20 }}>{heading}</h3>
-      <ol className="sources">
+    <details className="sources-dropdown" open>
+      <summary id="sources-h" aria-label={heading}>
+        <span>{heading} ({result.citations.length})</span>
+      </summary>
+      <ol className="sources" style={{ listStyle: "none", padding: 0, margin: "16px 0 0", display: "flex", flexDirection: "column", gap: 14 }}>
         {result.citations.map((c, i) => (
-          <li key={c.passage_id} id={`src-${c.passage_id}`} tabIndex={-1}>
-            <div className="row">
-              <span className="n" aria-hidden="true">{i + 1}</span>
-              <Link className="title-link" to={c.deep_link}><strong><ContentText text={c.title} /></strong></Link>
+          <li key={c.passage_id} id={`src-${c.passage_id}`} tabIndex={-1} className="result" style={{ padding: "16px 20px" }}>
+            <div className="row" style={{ alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+              <span className="n" aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, borderRadius: "50%", background: "var(--indigo)", color: "#fff", fontSize: "0.8rem", fontWeight: 700 }}>
+                {i + 1}
+              </span>
+              <Link className="title-link" to={c.deep_link} style={{ fontSize: "var(--step-0)", fontWeight: 600 }}>
+                <ContentText text={c.title} />
+              </Link>
               <span className="spacer" />
               <KindChip label={c.kind_label} />
               <VerifiedChip verified={c.quote_verified} />
               <FixtureChip show={c.is_fixture} />
             </div>
-            {showExcerpt && <blockquote><ContentText text={c.excerpt} /></blockquote>}
-            <span className="cite">{t("citation")}: {c.label}</span>
-            <div className="row" style={{ marginTop: 8 }}>
+            {showExcerpt && c.excerpt && (
+              <blockquote style={{ borderLeft: "3px solid var(--indigo)", paddingLeft: "14px", margin: "8px 0", color: "var(--ink)", fontStyle: "normal" }}>
+                <ContentText text={c.excerpt} />
+              </blockquote>
+            )}
+            <span className="cite" style={{ gridColumn: "1 / -1", marginTop: "4px" }}>
+              {t("citation")}: {c.label}
+            </span>
+            <div className="row" style={{ marginTop: 8, gridColumn: "1 / -1" }}>
               <Link className="btn small" to={c.deep_link}>{t("openItem")}</Link>
               <AddToList entry={{ item_id: c.item_id, title: c.title, passage_id: c.passage_id, citation: c.label }} />
             </div>
           </li>
         ))}
       </ol>
-    </section>
+    </details>
   );
 }

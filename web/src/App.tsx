@@ -8,6 +8,7 @@ import { Search } from "./pages/Search";
 import { Ask } from "./pages/Ask";
 import { Basket, KnowledgeMap, SharedList, Stories, Story, Timeline } from "./pages/Explore";
 import { Signage } from "./pages/Signage";
+import { KioskMode } from "./pages/Kiosk";
 import { NotFound } from "./pages/NotFound";
 
 const staff = () => import("./staff/Staff");
@@ -59,6 +60,7 @@ export const routes: RouteObject[] = [
   },
   { path: "/c/:token", element: <SharedList /> },
   { path: "/display", element: <Signage /> },
+  { path: "/kiosk", element: <KioskMode /> },
   {
     path: "/staff",
     element: <StaffRoot />,
