@@ -60,9 +60,9 @@ export function Signage() {
         <div className="slide" key={i}>
           <div>
             <div className="date" lang={s.kicker.lang}>{s.kicker.text}</div>
-            <h2 style={{ color: "#fff", fontSize: "2.6vw", marginTop: "2vh" }} lang={s.title.lang}>{s.title.text}</h2>
+            <h2 style={{ fontSize: "2.6vw", marginTop: "2vh" }} lang={s.title.lang}>{s.title.text}</h2>
             <p lang={s.body.lang}>{s.body.text}</p>
-            <p style={{ color: "#c9a24a", fontSize: "1.2vw" }}>{t("citation")}: {s.citation}</p>
+            <p style={{ color: "var(--brass-ink)", fontSize: "1.2vw" }}>{t("citation")}: {s.citation}</p>
           </div>
           <div>{s.image && <img src={fileUrl(s.image)} alt={t("imageOf", { title: s.title.text })} />}</div>
         </div>
