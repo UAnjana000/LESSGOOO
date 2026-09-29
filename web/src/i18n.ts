@@ -270,6 +270,8 @@ const en = {
   mapSuggested: "Popular starting entities:",
   mapFilterPlaceholder: "Filter directory names…",
   mapFilterLabel: "Filter directory names",
+  noResultsFiltered: "No results with these filters. Clear filters to see all matches.",
+  pageNotInItem: "Page {n} is not in this item; showing the first page.",
   ...staffEn,
 };
 export type Key = keyof typeof en;
@@ -546,6 +548,8 @@ const hi: Record<Key, string> = {
   mapSuggested: "लोकप्रिय शुरुआती नाम:",
   mapFilterPlaceholder: "नाम सूची फ़िल्टर करें…",
   mapFilterLabel: "निर्देशिका नाम फ़िल्टर करें",
+  noResultsFiltered: "इन फ़िल्टरों के साथ कोई परिणाम नहीं मिला। सभी परिणाम देखने के लिए फ़िल्टर हटाएँ।",
+  pageNotInItem: "पृष्ठ {n} इस सामग्री में नहीं है; पहला पृष्ठ दिखाया जा रहा है।",
   ...staffHi,
 };
 
@@ -809,6 +813,8 @@ const mr: Record<Key, string> = {
   mapSuggested: "लोकप्रिय सुरुवातीची नावे:",
   mapFilterPlaceholder: "यादीतील नावे फिल्टर करा…",
   mapFilterLabel: "निर्देशिका नावे फिल्टर करा",
+  noResultsFiltered: "या फिल्टरसह कोणतेही निकाल नाहीत. सर्व निकाल पाहण्यासाठी फिल्टर काढा.",
+  pageNotInItem: "पान {n} या साहित्यात नाही; पहिले पान दाखवत आहोत.",
   ...staffMr,
 };
 
