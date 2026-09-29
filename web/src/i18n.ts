@@ -157,6 +157,9 @@ const en = {
   remove: "Remove",
   collectionTitle: "Your saved list",
   collectionExpired: "This link has expired. Links from the archive screen work for 24 hours.",
+  collectionNotFound: "This link does not exist. Check the QR code, or make a new list on the archive screen.",
+  pageNotFound: "Page not found",
+  pageNotFoundBody: "There is no page at this address. Go to the home page, or search the archive.",
   collectionRemoved: "{n} items are no longer available and were removed.",
   offlineBanner: "Offline: showing items saved on this screen.",
   leaseExpired: "Saved items have expired on this screen. Reconnect to the archive server to refresh them.",
@@ -429,6 +432,9 @@ const hi: Record<Key, string> = {
   remove: "हटाएँ",
   collectionTitle: "आपकी सहेजी गई सूची",
   collectionExpired: "यह लिंक समाप्त हो गया है। अभिलेखागार स्क्रीन के लिंक 24 घंटे चलते हैं।",
+  collectionNotFound: "यह लिंक मौजूद नहीं है। QR कोड जाँचें, या अभिलेखागार स्क्रीन पर नई सूची बनाएँ।",
+  pageNotFound: "पृष्ठ नहीं मिला",
+  pageNotFoundBody: "इस पते पर कोई पृष्ठ नहीं है। मुखपृष्ठ पर जाएँ, या अभिलेखागार में खोजें।",
   collectionRemoved: "{n} सामग्री अब उपलब्ध नहीं है और हटा दी गई।",
   offlineBanner: "ऑफ़लाइन: इस स्क्रीन पर सहेजी गई सामग्री दिखाई जा रही है।",
   leaseExpired: "इस स्क्रीन पर सहेजी गई सामग्री की अवधि समाप्त हो गई। ताज़ा करने के लिए सर्वर से फिर जुड़ें।",
@@ -688,6 +694,9 @@ const mr: Record<Key, string> = {
   remove: "काढा",
   collectionTitle: "तुमची जतन केलेली यादी",
   collectionExpired: "हा दुवा कालबाह्य झाला आहे. संग्रह स्क्रीनवरील दुवे 24 तास चालतात.",
+  collectionNotFound: "हा दुवा अस्तित्वात नाही. QR कोड तपासा, किंवा संग्रह स्क्रीनवर नवीन यादी बनवा.",
+  pageNotFound: "पान सापडले नाही",
+  pageNotFoundBody: "या पत्त्यावर कोणतेही पान नाही. मुखपृष्ठावर जा, किंवा संग्रहात शोधा.",
   collectionRemoved: "{n} साहित्य आता उपलब्ध नाही आणि काढले गेले.",
   offlineBanner: "ऑफलाइन: या स्क्रीनवर जतन केलेले साहित्य दाखवत आहे.",
   leaseExpired: "या स्क्रीनवर जतन केलेल्या साहित्याची मुदत संपली. ताजे करण्यासाठी सर्व्हरशी पुन्हा जोडा.",
@@ -802,8 +811,17 @@ const mr: Record<Key, string> = {
 
 export const STRINGS: Record<Lang, Record<Key, string>> = { en, hi, mr };
 
+// English nouns change for a count of one; the Hindi and Marathi phrasing of these strings does not.
+const EN_ONE: Partial<Record<Key, string>> = {
+  itemsCount: "{n} item",
+  results: "{n} result",
+  debatesCount: "{n} debate passage",
+  collectionRemoved: "{n} item is no longer available and was removed.",
+};
+
 export function translate(lang: Lang, key: Key, vars?: Record<string, string | number>): string {
-  let s: string = STRINGS[lang][key] ?? STRINGS.en[key] ?? key;
+  const one = lang === "en" && vars?.n === 1 ? EN_ONE[key] : undefined;
+  let s: string = one ?? STRINGS[lang][key] ?? STRINGS.en[key] ?? key;
   for (const [k, v] of Object.entries(vars ?? {})) {
     s = s.replace(`{${k}}`, typeof v === "number" ? new Intl.NumberFormat(`${lang}-IN`).format(v) : v);
   }

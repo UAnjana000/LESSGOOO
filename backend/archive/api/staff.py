@@ -988,11 +988,22 @@ def audit_verify(db: DB, user: Admin) -> dict[str, Any]:
     return {"chain_ok": ok, "events_checked": n}
 
 
+def _job_summary(j: Job) -> dict[str, Any]:
+    return {"id": j.id, "kind": j.kind, "status": j.status, "attempts": j.attempts, "payload": j.payload,
+            "error": j.last_error, "result": j.result, "updated_at": j.updated_at.isoformat()}
+
+
 @router.get("/jobs")
 def jobs(db: DB, user: Staff) -> list[dict[str, Any]]:
-    return [{"id": j.id, "kind": j.kind, "status": j.status, "attempts": j.attempts, "payload": j.payload,
-             "error": j.last_error, "result": j.result, "updated_at": j.updated_at.isoformat()}
-            for j in db.execute(select(Job).order_by(Job.id.desc()).limit(100)).scalars()]
+    return [_job_summary(j) for j in db.execute(select(Job).order_by(Job.id.desc()).limit(100)).scalars()]
+
+
+@router.get("/jobs/{job_id}")
+def job_detail(job_id: int, db: DB, user: Staff) -> dict[str, Any]:
+    job = db.get(Job, job_id)
+    if job is None:
+        raise HTTPException(404, "job not found")
+    return _job_summary(job)
 
 
 @router.get("/stats")

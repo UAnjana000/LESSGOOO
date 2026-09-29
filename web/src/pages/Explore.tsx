@@ -491,7 +491,7 @@ export function SharedList() {
       <h1>{t("collectionTitle")}</h1>
       <p className="muted">{t("archiveName")}</p>
       {c.loading && <Loading center />}
-      {c.error && (c.error.status === 410 ? <p className="notice bad" role="alert">{t("collectionExpired")}</p> : <ErrorState error={c.error} />)}
+      {c.error && (c.error.status === 410 ? <p className="notice bad" role="alert">{t("collectionExpired")}</p> : <ErrorState error={c.error} notFound={t("collectionNotFound")} />)}
       {c.data && (
         <>
           {c.data.removed_count > 0 && <p className="notice">{t("collectionRemoved", { n: c.data.removed_count })}</p>}

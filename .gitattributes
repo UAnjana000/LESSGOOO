@@ -1,3 +1,5 @@
 # Fixture files are checksummed in fixtures/manifests; line-ending conversion would corrupt them.
 fixtures/files/** binary
 *.pdf binary
+# Shell scripts run with bash, which rejects CRLF line endings, including in Git Bash on Windows.
+*.sh text eol=lf
