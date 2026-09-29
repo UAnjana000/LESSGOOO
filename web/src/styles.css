@@ -2442,9 +2442,9 @@ dialog.idle-warning .btn { min-height: 56px; }
 
 /* ---------- signage ---------- */
 .signage {
-  height: 100%;
+  height: 100vh;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   background: var(--paper);
   color: var(--ink);
   padding: 5vh 5vw;
@@ -2452,16 +2452,44 @@ dialog.idle-warning .btn { min-height: 56px; }
 }
 .signage h1 { font: 700 2.2vw/1.1 var(--read); color: var(--ink); padding-bottom: 2vh; border-bottom: 0.35vh solid var(--ink); }
 .signage h1::before { content: ""; display: block; width: 5vw; height: 0.8vh; background: var(--indigo); margin-bottom: 1.6vh; }
-.signage .slide { display: grid; grid-template-columns: 1fr 1fr; gap: 5vw; align-items: center; animation: slide-in 600ms var(--ease) both; }
+.signage .slide { display: grid; grid-template-columns: 1fr 1fr; gap: 5vw; align-items: center; min-height: 0; overflow: hidden; animation: slide-in 600ms var(--ease) both; }
+.signage .slide > * { min-height: 0; max-height: 100%; overflow: hidden; }
+
 @keyframes slide-in {
   from { opacity: 0; transform: translateY(1.5vh); }
   to { opacity: 1; transform: none; }
 }
-.signage .slide .date { color: var(--indigo); font: 700 6vw/1 var(--read); }
-.signage .slide h2 { color: var(--ink); font-family: var(--read); font-weight: 700; }
-.signage .slide p { font-size: 1.8vw; line-height: 1.5; color: var(--ink-2); max-width: 40ch; }
-.signage .slide img { max-height: 62vh; max-width: 100%; border-radius: var(--radius); background: #ffffff; border: 1px solid var(--rule-strong); box-shadow: var(--shadow-2); }
-.signage footer { display: flex; justify-content: space-between; color: var(--ink-2); font-size: 1.2vw; border-top: 1px solid var(--rule); padding-top: 2vh; }
+/* Long titles and captions are clamped to whole lines so nothing is cut mid-line or pushed off-screen. */
+.signage .slide .date,
+.signage .slide .kicker,
+.signage .slide h2,
+.signage .slide p { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+.signage .slide .date { color: var(--indigo); font: 700 min(6vw, 10vh)/1.1 var(--read); -webkit-line-clamp: 2; }
+.signage .slide .kicker { color: var(--indigo); font: 700 min(2.4vw, 3.2vh)/1.3 var(--read); -webkit-line-clamp: 2; }
+.signage .slide h2 { margin-top: 2vh; color: var(--ink); font: 700 min(2.6vw, 4.2vh)/1.25 var(--read); -webkit-line-clamp: 3; }
+.signage .slide p { font-size: min(1.8vw, 2.8vh); line-height: 1.5; color: var(--ink-2); max-width: 40ch; -webkit-line-clamp: 5; }
+.signage .slide p.source { color: var(--brass-ink); font-size: min(1.2vw, 1.9vh); -webkit-line-clamp: 2; }
+.signage .slide .art { display: flex; justify-content: center; height: 100%; }
+.signage .slide img { max-height: 100%; max-width: 100%; object-fit: contain; border-radius: var(--radius); background: #ffffff; border: 1px solid var(--rule-strong); box-shadow: var(--shadow-2); }
+.signage .signage-idle { grid-row: 1 / 3; display: flex; flex-direction: column; justify-content: flex-end; padding-bottom: 4vh; }
+.signage .signage-idle .attract-title { padding: 0; border: 0; font: 700 min(6vw, 8vh)/1.06 var(--read); }
+.signage .signage-idle .attract-title::before { width: 96px; height: 8px; margin-bottom: 32px; }
+.signage .signage-idle .attract-lead { font-size: min(2.4vw, 3.2vh); }
+.signage .slide .art:empty { display: none; }
+/* Portrait displays: text above the image, each in its own row, with type sized to the narrow width. */
+@media (orientation: portrait) {
+  .signage h1 { font-size: 3.4vw; }
+  .signage .slide { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); align-content: center; gap: 3vh; }
+  .signage .slide:has(> .art:empty) { grid-template-rows: auto; }
+  .signage .slide .date { font-size: 9vw; }
+  .signage .slide .kicker { font-size: 3.6vw; }
+  .signage .slide h2 { font-size: 4.4vw; }
+  .signage .slide p { font-size: 3vw; max-width: none; -webkit-line-clamp: 4; }
+  .signage .slide p.source { font-size: 2.2vw; }
+  .signage .signage-idle .attract-title { font-size: 9vw; }
+  .signage .signage-idle .attract-lead { font-size: 3.6vw; }
+}
+.signage footer { display: flex; justify-content: space-between; color: var(--ink-2); font-size: max(1.2vw, 1.2vh); border-top: 1px solid var(--rule); padding-top: 2vh; }
 
 /* ---------- staff (denser: scoped type steps) ---------- */
 .staff {

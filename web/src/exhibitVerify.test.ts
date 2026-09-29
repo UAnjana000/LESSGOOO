@@ -63,6 +63,12 @@ describe("offline serving rules", () => {
     expect(servable(p, "/api/visitor/items/42", idx, beforeExpiry)).toBe(false);
     expect(servable(p, "/api/visitor/search", idx, beforeExpiry)).toBe(false);
   });
+
+  it("applies the same rules to IIIF images of a delivery file", () => {
+    expect(servable(p, "/iiif/9/info.json", idx, beforeExpiry)).toBe(true);
+    expect(servable(p, "/iiif/9/full/max/0/default.jpg", idx, afterExpiry)).toBe(false);
+    expect(servable(p, "/iiif/77/info.json", idx, beforeExpiry)).toBe(false);
+  });
 });
 
 describe("offline navigation fallback", () => {

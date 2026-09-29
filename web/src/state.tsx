@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { api, type AskResult, type VisitorConfig } from "./api";
+import { api, REACHABILITY_EVENT, type AskResult, type VisitorConfig } from "./api";
 import { translate, type Key, type Lang } from "./i18n";
 
 export interface BasketEntry {
@@ -79,6 +79,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const sessionRef = useRef(initial.sessionId);
   const [config, setConfig] = useState<VisitorConfig | null>(null);
   const [online, setOnline] = useState(navigator.onLine);
+  const [reachable, setReachable] = useState(true);
 
   useEffect(() => {
     sessionStorage.setItem(KEY, JSON.stringify({ lang, textScale, contrast, basket, askHistory, askLast, sessionId }));
@@ -93,12 +94,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const up = () => setOnline(true);
     const down = () => setOnline(false);
+    const server = (e: Event) => setReachable((e as CustomEvent<boolean>).detail);
     window.addEventListener("online", up);
     window.addEventListener("offline", down);
+    window.addEventListener(REACHABILITY_EVENT, server);
     api.get<VisitorConfig>("/api/visitor/config").then(setConfig).catch(() => setConfig(null));
     return () => {
       window.removeEventListener("online", up);
       window.removeEventListener("offline", down);
+      window.removeEventListener(REACHABILITY_EVENT, server);
     };
   }, []);
 
@@ -134,7 +138,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     isCurrentSession: (id) => id === sessionRef.current,
     finish,
     config,
-    online,
+    online: online && reachable,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
