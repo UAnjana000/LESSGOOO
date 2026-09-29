@@ -12,7 +12,7 @@ services:
     dockerfilePath: ./backend/Dockerfile
     plan: starter # Starter ($7/mo) recommended for ML embeddings, or Standard
     region: oregon
-    healthCheckPath: /api/health/ready
+    healthCheckPath: /api/health
     envVars:
       - key: ARCHIVE_ENVIRONMENT
         value: production
