@@ -27,7 +27,7 @@ services:
       - key: ARCHIVE_BOOTSTRAP_ADMIN_PASSWORD
         generateValue: true
       - key: ARCHIVE_CORS_ORIGINS
-        value: "*" # Or specify your frontend URL, e.g. https://ambedkar-archive-web.onrender.com
+        value: '["*"]' # Or specify your frontend URL, e.g. https://ambedkar-archive-web.onrender.com
       - key: PORT
         value: "8000"
 

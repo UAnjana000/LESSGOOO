@@ -131,9 +131,9 @@ class Settings(BaseSettings):
     old_version_grace_hours: int = 72
 
     log_level: str = "INFO"
-    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
+    cors_origins: list[str] | str = Field(default_factory=lambda: ["http://localhost:5173"])
 
-    @field_validator("cors_origins", mode="before")
+    @field_validator("cors_origins", mode="after")
     @classmethod
     def _normalize_cors_origins(cls, v: object) -> list[str]:
         if isinstance(v, str):
@@ -141,7 +141,9 @@ class Settings(BaseSettings):
             if v.startswith("[") and v.endswith("]"):
                 import json
                 try:
-                    return json.loads(v)
+                    parsed = json.loads(v)
+                    if isinstance(parsed, list):
+                        return [str(x) for x in parsed]
                 except Exception:
                     pass
             return [x.strip() for x in v.split(",") if x.strip()]
