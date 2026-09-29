@@ -28,6 +28,10 @@ services:
         generateValue: true
       - key: ARCHIVE_CORS_ORIGINS
         value: '["*"]' # Or specify your frontend URL, e.g. https://ambedkar-archive-web.onrender.com
+      - key: ARCHIVE_EMBEDDING_BACKEND
+        value: hash # Lightweight 384-d embedder for 512MB RAM compatibility
+      - key: ARCHIVE_RERANKER_BACKEND
+        value: lexical # Lightweight overlap reranker for 512MB RAM compatibility
       - key: PORT
         value: "8000"
 
