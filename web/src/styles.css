@@ -2986,9 +2986,11 @@ details > summary { min-height: 48px; display: flex; align-items: center; font-w
   bottom: 0;
   left: 0;
   right: 0;
-  background: var(--paper-warm);
-  border-top: 3px solid var(--indigo);
-  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.2);
+  background-color: #1e2532 !important;
+  background: #1e2532 !important;
+  opacity: 1 !important;
+  border-top: 3px solid var(--gold, #c9a24a);
+  box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.5);
   padding: 12px 16px 20px;
   z-index: 9999;
   display: flex;
@@ -3000,7 +3002,7 @@ details > summary { min-height: 48px; display: flex; align-items: center; font-w
   justify-content: space-between;
   align-items: center;
   padding-bottom: 6px;
-  border-bottom: 1px solid var(--rule);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
 }
 .vk-script-toggles {
   display: flex;
@@ -3025,10 +3027,10 @@ details > summary { min-height: 48px; display: flex; align-items: center; font-w
   min-height: 48px;
   padding: 8px 12px;
   font: 600 var(--step-0) var(--ui);
-  background: #ffffff;
-  border: 1px solid var(--rule-strong);
+  background: #2d3748;
+  border: 1px solid #4a5568;
   border-radius: var(--radius);
-  color: var(--ink);
+  color: #ffffff;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3037,9 +3039,10 @@ details > summary { min-height: 48px; display: flex; align-items: center; font-w
   touch-action: manipulation;
   transition: background 80ms ease, transform 80ms ease;
 }
-.vk-key:active {
-  background: var(--indigo-soft);
-  color: var(--indigo);
+.vk-key:hover, .vk-key:active {
+  background: var(--indigo);
+  border-color: #6a82fb;
+  color: #ffffff;
   transform: scale(0.96);
 }
 .vk-space-key {
@@ -3072,12 +3075,13 @@ details > summary { min-height: 48px; display: flex; align-items: center; font-w
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 20px;
+  padding: 8px 16px;
   background: var(--ink);
   color: #ffffff;
   border-bottom: 3px solid var(--gold);
-  gap: 16px;
+  gap: 12px;
   flex-shrink: 0;
+  min-height: 60px;
 }
 .kiosk-header-left {
   display: flex;
@@ -3103,52 +3107,67 @@ details > summary { min-height: 48px; display: flex; align-items: center; font-w
 }
 .kiosk-dock {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: stretch;
   flex: 1 1 auto;
   justify-content: center;
   max-width: 1040px;
+  min-width: 0;
 }
 .kiosk-nav-btn {
   flex: 1 1 0;
-  width: 130px;
-  min-width: 110px;
-  max-width: 150px;
+  min-width: 76px;
+  max-width: 135px;
   height: 52px;
-  padding: 6px 8px;
+  padding: 4px 6px;
   display: inline-flex;
-  flex-direction: row;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 2px;
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 6px;
   color: #ffffff;
-  font: 600 var(--step--1) var(--ui);
   cursor: pointer;
-  white-space: nowrap;
-  text-align: center;
   box-sizing: border-box;
+  position: relative;
+  overflow: hidden;
   transition: background 120ms ease, border-color 120ms ease;
 }
 .kiosk-nav-btn .dock-icon {
-  font-size: 1.1em;
+  font-size: 1.15rem;
+  line-height: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
+.kiosk-nav-btn .kiosk-nav-label {
+  font: 600 0.72rem/1.2 var(--ui);
+  color: #ffffff;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  display: block;
+  padding: 0 2px;
+}
 .kiosk-nav-btn.active, .kiosk-nav-btn:hover {
   background: var(--indigo);
-  border-color: var(--indigo);
+  border-color: #6a82fb;
 }
 .kiosk-badge {
+  position: absolute;
+  top: 2px;
+  right: 4px;
   background: var(--gold);
   color: var(--ink);
   font-weight: 700;
-  font-size: var(--step--2);
-  padding: 2px 6px;
+  font-size: 0.65rem;
+  padding: 1px 5px;
   border-radius: 10px;
+  line-height: 1.2;
 }
 .kiosk-header-right {
   display: flex;

@@ -112,7 +112,7 @@ export function KioskMode() {
             aria-pressed={activeTab === "search"}
           >
             <span className="dock-icon" aria-hidden="true">🔍</span>
-            <span>{t("searchButton")}</span>
+            <span className="kiosk-nav-label">{t("searchButton")}</span>
           </button>
 
           <button
@@ -122,7 +122,7 @@ export function KioskMode() {
             aria-pressed={activeTab === "ask"}
           >
             <span className="dock-icon" aria-hidden="true">💬</span>
-            <span>{t("askTitle")}</span>
+            <span className="kiosk-nav-label">{t("askTitle")}</span>
           </button>
 
           <button
@@ -132,7 +132,7 @@ export function KioskMode() {
             aria-pressed={activeTab === "stories"}
           >
             <span className="dock-icon" aria-hidden="true">📖</span>
-            <span>{t("storiesTitle")}</span>
+            <span className="kiosk-nav-label">{t("storiesTitle")}</span>
           </button>
 
           <button
@@ -142,7 +142,7 @@ export function KioskMode() {
             aria-pressed={activeTab === "timeline"}
           >
             <span className="dock-icon" aria-hidden="true">⏳</span>
-            <span>{t("timelineTitle")}</span>
+            <span className="kiosk-nav-label">{t("timelineTitle")}</span>
           </button>
 
           <button
@@ -152,7 +152,7 @@ export function KioskMode() {
             aria-pressed={activeTab === "constitution"}
           >
             <span className="dock-icon" aria-hidden="true">📜</span>
-            <span>{t("constitutionTitle")}</span>
+            <span className="kiosk-nav-label">{t("constitutionTitle")}</span>
           </button>
 
           <button
@@ -162,7 +162,7 @@ export function KioskMode() {
             aria-pressed={activeTab === "map"}
           >
             <span className="dock-icon" aria-hidden="true">🌐</span>
-            <span>{t("mapTitle")}</span>
+            <span className="kiosk-nav-label">{t("mapTitle")}</span>
           </button>
 
           <button
@@ -172,7 +172,7 @@ export function KioskMode() {
             aria-pressed={activeTab === "list"}
           >
             <span className="dock-icon" aria-hidden="true">🔖</span>
-            <span>{t("basketTitle")}</span>
+            <span className="kiosk-nav-label">{t("basketTitle")}</span>
             {basket.length > 0 && <span className="kiosk-badge">{basket.length}</span>}
           </button>
         </nav>
