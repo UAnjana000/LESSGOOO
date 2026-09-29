@@ -1,10 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "cleanUrls": true,
   "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
+    { "source": "/api/:path*", "destination": "https://api.apparatuscertified.tech/api/:path*" },
+    { "source": "/iiif/:path*", "destination": "https://api.apparatuscertified.tech/iiif/:path*" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
