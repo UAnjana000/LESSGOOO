@@ -101,7 +101,8 @@ class TestReviewedSummaries:
         review.review_derivative(db, draft, "approve", "archivist@test")
         db.commit()
         body = client.get(f"/api/visitor/items/{item.id}").json()
-        assert body["summaries"] == [{"language": "en", "text": "Unreviewed AI draft.", "label": "Reviewed summary",
+        assert body["summaries"] == [{"language": "en", "text": "Unreviewed AI draft.",
+                                      "label": "AI-drafted summary, reviewed by archive staff",
                                       "quote_verified": False}]
         assert calls == []
 
