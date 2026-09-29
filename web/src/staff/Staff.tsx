@@ -33,16 +33,28 @@ function errText(e: unknown): string {
   return String(e);
 }
 
+// A queued worker job finishes after the request that queued it, so poll until it settles (null on timeout).
+async function waitForJob(jobId: number, token: string, timeoutMs = 300_000): Promise<Json | null> {
+  const until = Date.now() + timeoutMs;
+  while (Date.now() < until) {
+    const job = await api.get<Json>(`/api/staff/jobs/${jobId}`, token);
+    if (job.status === "done" || job.status === "failed") return job;
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+  return null;
+}
+
 function useAction() {
   const { token } = useStaff();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  const run = async (fn: (token: string) => Promise<unknown>, okText: string | null, after?: () => void) => {
+  const run = async <R,>(fn: (token: string) => Promise<R>, okText: string | null | ((result: R) => string), after?: () => void) => {
     setBusy(true);
     setMsg(null);
     try {
-      await fn(token!);
-      if (okText) setMsg({ ok: true, text: okText });
+      const result = await fn(token!);
+      const text = typeof okText === "function" ? okText(result) : okText;
+      if (text) setMsg({ ok: true, text });
       after?.();
     } catch (e) {
       setMsg({ ok: false, text: errText(e) });
@@ -464,6 +476,19 @@ export function StaffPage() {
     else nav("/staff/review", { state: { flash: done } });
   };
   const recordQuote = (tk: string) => api.post(`/api/staff/pages/${id}/verify-quotes`, { confirm: true }, tk);
+  // The retry runs on the worker; reload only once it has settled, or the page shows the old text.
+  const retrySarvam = () =>
+    run(
+      async (tk) => {
+        const { job_id } = await api.post<{ job_id: number }>(`/api/staff/pages/${id}/retry-sarvam`, {}, tk);
+        const job = await waitForJob(job_id, tk);
+        page.reload();
+        if (job === null) throw new ApiError(0, t("stSarvamStillRunning"));
+        if (job.status === "failed") throw new ApiError(0, t("stSarvamFailed", { error: String(job.error ?? "") }));
+        return String((job.result as Json | null)?.status ?? "");
+      },
+      (outcome) => t("stSarvamDone", { outcome }),
+    );
   const act = (action: string, body: Json = {}) =>
     run(async (tk) => {
       await api.post(`/api/staff/pages/${id}/review`, { action, ...body }, tk);
@@ -507,7 +532,7 @@ export function StaffPage() {
             <button type="button" className="btn secondary" disabled={busy} onClick={() => act("escalate", { reason: "needs second opinion" })}>{t("stEscalate")}</button>
             <button type="button" className="btn danger" disabled={busy} onClick={() => act("reject", { reason: "unusable capture" })}>{t("stRejectPage")}</button>
             {(status === "sarvam_pending" || status === "needs_full_review") && Boolean(d.external_processing_allowed) && (
-              <button type="button" className="btn secondary" disabled={busy} onClick={() => run((tk) => api.post(`/api/staff/pages/${id}/retry-sarvam`, {}, tk), t("stSarvamQueued"), page.reload)}>{t("stRetrySarvam")}</button>
+              <button type="button" className="btn secondary" disabled={busy} onClick={retrySarvam}>{t("stRetrySarvam")}</button>
             )}
           </div>
           <div className="sheet stack" style={{ padding: 14 }}>
