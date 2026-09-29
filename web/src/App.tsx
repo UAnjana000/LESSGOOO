@@ -8,6 +8,7 @@ import { Search } from "./pages/Search";
 import { Ask } from "./pages/Ask";
 import { Basket, KnowledgeMap, SharedList, Stories, Story, Timeline } from "./pages/Explore";
 import { Signage } from "./pages/Signage";
+import { NotFound } from "./pages/NotFound";
 
 const staff = () => import("./staff/Staff");
 function named<M>(load: () => Promise<M>, name: keyof M): ComponentType {
@@ -53,6 +54,7 @@ export const routes: RouteObject[] = [
       { path: "constitution", element: <Constitution /> },
       { path: "constitution/:number", element: <ConstitutionArticlePage /> },
       { path: "list", element: <Basket /> },
+      { path: "*", element: <NotFound /> },
     ],
   },
   { path: "/c/:token", element: <SharedList /> },

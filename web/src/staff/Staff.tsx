@@ -513,7 +513,7 @@ export function StaffPage() {
       <div className="row" style={{ marginBottom: 12 }}>
         <span className="chip">{t("stChipStatus", { v: status })}</span>
         <span className="chip">{t("stChipRoute", { v: String(d.ocr_route) })}</span>
-        <span className="chip">{t("stChipGate", { v: gate, ver: String(d.gate_version ?? "") })}</span>
+        <span className="chip">{d.gate_version ? t("stChipGate", { v: gate, ver: String(d.gate_version) }) : t("stChipGateNoVersion", { v: gate })}</span>
         <span className={`chip${d.quote_verified ? " verified" : ""}`}>{d.quote_verified ? t("stQuoteVerified") : t("stNotQuoteVerified")}</span>
         <span className="chip">{d.external_processing_allowed ? t("stExternalAllowed") : t("stExternalNotAllowed")}</span>
       </div>

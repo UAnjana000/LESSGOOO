@@ -178,7 +178,10 @@ export function KnowledgeMap() {
                       onClick={() => setSel(n.id === sel ? null : n.id)}>
                       <circle className="hit" r={24} />
                       <circle r={n.type === "person" ? 13 : 10} />
-                      <text x={18} y={6}>{pickText(n.labels, lang)}</text>
+                      {/* Labels on the right half run leftwards so they stay inside the drawing. */}
+                      {p.x > layout.W / 2
+                        ? <text x={-18} y={6} textAnchor="end">{pickText(n.labels, lang)}</text>
+                        : <text x={18} y={6}>{pickText(n.labels, lang)}</text>}
                     </g>
                   );
                 })}
@@ -322,7 +325,7 @@ export function SharedList() {
       <h1>{t("collectionTitle")}</h1>
       <p className="muted">{t("archiveName")}</p>
       {c.loading && <Loading />}
-      {c.error && (c.error.status === 410 ? <p className="notice">{t("collectionExpired")}</p> : <ErrorState error={c.error} />)}
+      {c.error && (c.error.status === 410 ? <p className="notice">{t("collectionExpired")}</p> : <ErrorState error={c.error} notFound={t("collectionNotFound")} />)}
       {c.data && (
         <>
           {c.data.removed_count > 0 && <p className="notice">{t("collectionRemoved", { n: c.data.removed_count })}</p>}

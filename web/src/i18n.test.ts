@@ -56,6 +56,13 @@ describe("interface strings", () => {
     expect(translate("en", "noResults", { q: "tank" })).toContain("“tank”");
   });
 
+  it("uses the English singular for a count of one", () => {
+    expect(translate("en", "itemsCount", { n: 1 })).toBe("1 item");
+    expect(translate("en", "itemsCount", { n: 2 })).toBe("2 items");
+    expect(translate("en", "results", { n: 1 })).toBe("1 result");
+    expect(translate("hi", "itemsCount", { n: 1 })).toBe(STRINGS.hi.itemsCount.replace("{n}", "1"));
+  });
+
   it("labels synthetic narration and machine translation honestly in every language", () => {
     for (const lang of LANG_CODES) {
       expect(STRINGS[lang].synthNarration.length).toBeGreaterThan(10);
