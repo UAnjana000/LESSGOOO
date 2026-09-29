@@ -71,6 +71,10 @@ services:
     restart: unless-stopped
 
   worker:
+    build:
+      context: ./backend
+      args:
+        PREFETCH_MODELS: ${PREFETCH_MODELS:-1}
     image: ambedkar-archive/api:local
     command: ["python", "-m", "archive.worker"]
     env_file:
