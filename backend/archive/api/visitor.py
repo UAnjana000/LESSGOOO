@@ -514,6 +514,7 @@ class CollectionEntry(BaseModel):
 class CollectionBody(BaseModel):
     entries: list[CollectionEntry] = Field(min_length=1, max_length=30)
     language: str = "en"
+    base_url: str | None = None
 
 
 def _qr_svg(url: str) -> str:
@@ -534,7 +535,8 @@ def create_collection(body: CollectionBody, db: DB) -> dict[str, Any]:
     expires = utcnow() + dt.timedelta(hours=s.qr_link_ttl_hours)
     db.add(QrCollection(token=token, entries=entries, language=body.language, expires_at=expires))
     db.commit()
-    url = f"{s.public_base_url.rstrip('/')}/c/{token}"
+    base = (body.base_url or s.public_base_url).rstrip('/')
+    url = f"{base}/c/{token}"
     return {"token": token, "url": url, "expires_at": expires.isoformat(), "qr_svg": _qr_svg(url),
             "count": len(entries)}
 

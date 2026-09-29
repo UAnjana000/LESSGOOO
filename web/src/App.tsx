@@ -8,6 +8,7 @@ import { Search } from "./pages/Search";
 import { Ask } from "./pages/Ask";
 import { Basket, KnowledgeMap, SharedList, Stories, Story, Timeline } from "./pages/Explore";
 import { Signage } from "./pages/Signage";
+import { KioskMode } from "./pages/Kiosk";
 
 const staff = () => import("./staff/Staff");
 function named<M>(load: () => Promise<M>, name: keyof M): ComponentType {
@@ -57,6 +58,7 @@ export const routes: RouteObject[] = [
   },
   { path: "/c/:token", element: <SharedList /> },
   { path: "/display", element: <Signage /> },
+  { path: "/kiosk", element: <KioskMode /> },
   {
     path: "/staff",
     element: <StaffRoot />,

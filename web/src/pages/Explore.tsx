@@ -351,6 +351,7 @@ export function Basket() {
   const [qr, setQr] = useState<CollectionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [making, setMaking] = useState(false);
+  const [copied, setCopied] = useState(false);
   const hours = qr ? Math.round((Date.parse(qr.expires_at) - Date.now()) / 3_600_000) : 0;
   const make = async () => {
     setError(null);
@@ -359,7 +360,11 @@ export function Basket() {
       const res = await fetch("/api/visitor/collections", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ entries: s.basket.map((b) => ({ item_id: b.item_id, passage_id: b.passage_id, page: b.page, start_ms: b.start_ms })), language: s.lang }),
+        body: JSON.stringify({
+          entries: s.basket.map((b) => ({ item_id: b.item_id, passage_id: b.passage_id, page: b.page, start_ms: b.start_ms })),
+          language: s.lang,
+          base_url: typeof window !== "undefined" ? window.location.origin : undefined,
+        }),
       });
       if (!res.ok) throw new Error(String(res.status));
       setQr(await res.json());
@@ -369,12 +374,23 @@ export function Basket() {
       setMaking(false);
     }
   };
+
+  const copyLink = async () => {
+    if (!qr) return;
+    const link = qr.url || `${window.location.origin}/c/${qr.token}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {}
+  };
+
   return (
     <Page title={t("basketTitle")}>
       {s.basket.length === 0 && <p className="empty-state">{t("basketEmpty")}</p>}
       {s.basket.length > 0 && (
         <>
-          <ul className="results">
+          <ul className="results screen-only">
             {s.basket.map((b) => (
               <li key={`${b.item_id}-${b.passage_id}-${b.page}-${b.start_ms}`} className="result">
                 <div>
@@ -387,23 +403,74 @@ export function Basket() {
               </li>
             ))}
           </ul>
-          <div className="row" style={{ marginTop: 20 }}>
-            <button type="button" className="btn" onClick={make} disabled={making}>
+          <div className="row screen-only basket-actions-bar" style={{ marginTop: 20, gap: 12, flexWrap: "wrap" }}>
+            <button type="button" className="btn primary" onClick={() => window.print()}>
+              <span aria-hidden="true">📄 </span>
+              {t("downloadBooklet")}
+            </button>
+            <button type="button" className="btn secondary" onClick={make} disabled={making}>
               {making ? <Loading inline size="sm" label={t("qrMaking")} /> : t("basketMakeQr")}
             </button>
           </div>
-          <div role="status">
+          <div role="status" className="screen-only">
             {qr && (
               <div className="qr-panel">
                 <div className="qr" dangerouslySetInnerHTML={{ __html: qr.qr_svg }} role="img" aria-label={t("qrAlt")} />
                 <div>
                   <p style={{ fontSize: "var(--step-1)" }}>{t("basketQrLead", { h: hours })}</p>
                   <p className="muted">{t("expires")}: {new Date(qr.expires_at).toLocaleString(`${s.lang}-IN`)}</p>
+                  <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    <a
+                      href={qr.url || `/c/${qr.token}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn secondary small"
+                    >
+                      {t("openCollectionLink")}
+                    </a>
+                    <button type="button" className="btn quiet small" onClick={copyLink}>
+                      {copied ? t("linkCopied") : t("copyLink")}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
           </div>
-          {error && <p className="notice bad" role="alert">{error}</p>}
+          {error && <p className="notice bad screen-only" role="alert">{error}</p>}
+
+          {/* Printable Memorial Booklet Guide */}
+          <section className="memorial-booklet-sheet print-only" aria-label={t("memorialBookletSubtitle")}>
+            <header className="booklet-header">
+              <h1 className="booklet-institution">{t("memorialBookletHeader")}</h1>
+              <p className="booklet-subtitle">{t("memorialBookletSubtitle")}</p>
+              <div className="booklet-meta-grid">
+                <div><span>{t("visitDate")}: </span><strong>{new Date().toLocaleDateString(`${s.lang}-IN`, { dateStyle: "long" })}</strong></div>
+                <div><span>{t("sessionRef")}: </span><strong>#{s.sessionId.slice(0, 8)}</strong></div>
+                <div><span>{t("itemsCount", { n: s.basket.length })}</span></div>
+              </div>
+            </header>
+
+            <hr className="booklet-rule" />
+
+            <div className="booklet-entries-list">
+              {s.basket.map((b, idx) => (
+                <article key={idx} className="booklet-entry">
+                  <div className="booklet-entry-num">{(idx + 1).toString().padStart(2, "0")}</div>
+                  <div className="booklet-entry-content">
+                    <h2 className="booklet-entry-title">{b.title}</h2>
+                    <span className="booklet-entry-cite">{b.citation}</span>
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            {qr && (
+              <footer className="booklet-footer">
+                <div className="booklet-qr" dangerouslySetInnerHTML={{ __html: qr.qr_svg }} />
+                <p className="booklet-qr-note">{t("scanToView")}</p>
+              </footer>
+            )}
+          </section>
         </>
       )}
     </Page>

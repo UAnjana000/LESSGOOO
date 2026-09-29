@@ -113,7 +113,8 @@ export function Story() {
 
   const synthRef = useRef<SpeechSynthesisUtterance | null>(null);
   const audioElemRef = useRef<HTMLAudioElement | null>(null);
-  const timerRef = useRef<number | null>(null);
+  const lastActiveRef = useRef<number>(Date.now());
+  const advanceTimeoutRef = useRef<number | null>(null);
 
   useDocumentTitle(d ? pickText(d.titles, lang) : t("storiesTitle"));
 
@@ -121,8 +122,37 @@ export function Story() {
   const currentBlock = blocks[activeIdx] ?? null;
   const total = blocks.length;
 
+  // Track visitor inactivity - auto start Guided Tour at 15s inactivity
+  useEffect(() => {
+    const handleActivity = () => {
+      lastActiveRef.current = Date.now();
+    };
+
+    window.addEventListener("pointerdown", handleActivity, { passive: true });
+    window.addEventListener("keydown", handleActivity, { passive: true });
+    window.addEventListener("touchstart", handleActivity, { passive: true });
+
+    const interval = window.setInterval(() => {
+      const idleTime = Date.now() - lastActiveRef.current;
+      if (idleTime >= 15000 && !autoplay && mode === "walkthrough" && total > 0) {
+        setAutoplay(true);
+      }
+    }, 1000);
+
+    return () => {
+      window.removeEventListener("pointerdown", handleActivity);
+      window.removeEventListener("keydown", handleActivity);
+      window.removeEventListener("touchstart", handleActivity);
+      clearInterval(interval);
+    };
+  }, [autoplay, mode, total]);
+
   // Stop audio on unmount or slide change
   const stopNarration = () => {
+    if (advanceTimeoutRef.current) {
+      clearTimeout(advanceTimeoutRef.current);
+      advanceTimeoutRef.current = null;
+    }
     if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
@@ -138,27 +168,7 @@ export function Story() {
     stopNarration();
   }, [activeIdx, mode]);
 
-  // Autoplay progression timer
-  useEffect(() => {
-    if (!autoplay || mode !== "walkthrough" || total === 0) {
-      if (timerRef.current) clearInterval(timerRef.current);
-      return;
-    }
-    timerRef.current = window.setInterval(() => {
-      setActiveIdx((prev) => (prev + 1) % total);
-    }, 12000);
-
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [autoplay, mode, total]);
-
-  const toggleNarration = () => {
-    if (isPlayingAudio) {
-      stopNarration();
-      return;
-    }
-
+  const startNarration = () => {
     const narrationFileId = d?.narration_file_ids?.[lang] ?? d?.narration_file_ids?.en;
     if (narrationFileId && audioElemRef.current) {
       audioElemRef.current.play().catch(() => {});
@@ -187,15 +197,50 @@ export function Story() {
       u.onend = () => {
         setIsPlayingAudio(false);
         setAudioProgress(100);
+        if (autoplay && total > 0) {
+          if (advanceTimeoutRef.current) clearTimeout(advanceTimeoutRef.current);
+          advanceTimeoutRef.current = window.setTimeout(() => {
+            setActiveIdx((prev) => (prev + 1) % total);
+          }, 3000);
+        }
       };
       u.onerror = () => {
         setIsPlayingAudio(false);
         setAudioProgress(0);
+        if (autoplay && total > 0) {
+          if (advanceTimeoutRef.current) clearTimeout(advanceTimeoutRef.current);
+          advanceTimeoutRef.current = window.setTimeout(() => {
+            setActiveIdx((prev) => (prev + 1) % total);
+          }, 8000);
+        }
       };
 
       synthRef.current = u;
       window.speechSynthesis.speak(u);
+    } else if (autoplay && total > 0) {
+      if (advanceTimeoutRef.current) clearTimeout(advanceTimeoutRef.current);
+      advanceTimeoutRef.current = window.setTimeout(() => {
+        setActiveIdx((prev) => (prev + 1) % total);
+      }, 10000);
     }
+  };
+
+  // Synchronized autoplay: trigger narration for chapter in autoplay mode
+  useEffect(() => {
+    if (!autoplay || mode !== "walkthrough" || total === 0) return;
+    const tId = window.setTimeout(() => {
+      startNarration();
+    }, 450);
+    return () => clearTimeout(tId);
+  }, [autoplay, activeIdx, mode]);
+
+  const toggleNarration = () => {
+    lastActiveRef.current = Date.now();
+    if (isPlayingAudio) {
+      stopNarration();
+      return;
+    }
+    startNarration();
   };
 
   const narrationFile = d?.narration_file_ids?.[lang] ?? d?.narration_file_ids?.en;
@@ -209,6 +254,12 @@ export function Story() {
         </Link>
 
         <div className="story-mode-toggle" role="group" aria-label={t("storiesTitle")}>
+          {autoplay && (
+            <span className="guided-tour-badge" role="status">
+              <span className="pulsing-dot" aria-hidden="true" />
+              {t("guidedTourActive")}
+            </span>
+          )}
           <button
             type="button"
             className={`btn ${mode === "walkthrough" ? "primary" : "secondary"}`}
@@ -253,6 +304,12 @@ export function Story() {
               onEnded={() => {
                 setIsPlayingAudio(false);
                 setAudioProgress(100);
+                if (autoplay && total > 0) {
+                  if (advanceTimeoutRef.current) clearTimeout(advanceTimeoutRef.current);
+                  advanceTimeoutRef.current = window.setTimeout(() => {
+                    setActiveIdx((prev) => (prev + 1) % total);
+                  }, 3000);
+                }
               }}
               onTimeUpdate={(e) => {
                 const el = e.currentTarget;
