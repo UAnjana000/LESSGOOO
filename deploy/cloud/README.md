@@ -8,7 +8,7 @@ directly, so large intake uploads do not pass through Vercel.
 | Part | Where | Address |
 | --- | --- | --- |
 | Website | Vercel | `https://<project>.vercel.app` |
-| API, worker, database, files | Azure VM (B2s, 4 GB) | `https://ambedkar-archive.centralindia.cloudapp.azure.com` |
+| API, worker, database, files | Azure VM (B2s, 4 GB) | `https://ambedkar-archive.indiasouthcentral.cloudapp.azure.com` |
 
 The VM address is set in `web/vercel.json`. If you choose a different DNS label in step 1, change both
 rewrite destinations there.
@@ -27,7 +27,7 @@ Virtual machines → Create → Azure virtual machine:
 
 | Setting | Value |
 | --- | --- |
-| Region | Central India |
+| Region | India South Central (allowed by the subscription policy) |
 | Image | Ubuntu Server 24.04 LTS (x64) |
 | Size | B2s (2 vCPU, 4 GiB) |
 | Authentication | SSH public key, username `azureuser`; download the private key (`.pem`) |
@@ -40,7 +40,7 @@ After it is created: open the VM's public IP address resource → Configuration 
 ## 2. Prepare the VM
 
 ```bash
-ssh -i ~/Downloads/<key>.pem azureuser@ambedkar-archive.centralindia.cloudapp.azure.com
+ssh -i ~/Downloads/<key>.pem azureuser@ambedkar-archive.indiasouthcentral.cloudapp.azure.com
 curl -fsSL https://raw.githubusercontent.com/UAnjana000/LESSGOOO/main/deploy/cloud/setup-server.sh | bash
 exit   # log in again so the docker group applies
 ```
@@ -51,14 +51,14 @@ On the demo machine, from the repository root (Git Bash):
 
 ```bash
 bash deploy/cloud/export-local-data.sh ../archive-bundle
-scp -i ~/Downloads/<key>.pem .env azureuser@ambedkar-archive.centralindia.cloudapp.azure.com:archive/.env
-scp -i ~/Downloads/<key>.pem -r ../archive-bundle azureuser@ambedkar-archive.centralindia.cloudapp.azure.com:
+scp -i ~/Downloads/<key>.pem .env azureuser@ambedkar-archive.indiasouthcentral.cloudapp.azure.com:archive/.env
+scp -i ~/Downloads/<key>.pem -r ../archive-bundle azureuser@ambedkar-archive.indiasouthcentral.cloudapp.azure.com:
 ```
 
 On the VM, edit `~/archive/.env` and set:
 
 ```
-SITE_ADDRESS=ambedkar-archive.centralindia.cloudapp.azure.com
+SITE_ADDRESS=ambedkar-archive.indiasouthcentral.cloudapp.azure.com
 ARCHIVE_PUBLIC_BASE_URL=https://<project>.vercel.app
 HTTP_PORT=80
 HTTPS_PORT=443

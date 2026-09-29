@@ -5,8 +5,8 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://ambedkar-archive.centralindia.cloudapp.azure.com/api/:path*" },
-    { "source": "/iiif/:path*", "destination": "https://ambedkar-archive.centralindia.cloudapp.azure.com/iiif/:path*" },
+    { "source": "/api/:path*", "destination": "https://ambedkar-archive.indiasouthcentral.cloudapp.azure.com/api/:path*" },
+    { "source": "/iiif/:path*", "destination": "https://ambedkar-archive.indiasouthcentral.cloudapp.azure.com/iiif/:path*" },
     { "source": "/((?!assets/).*)", "destination": "/index.html" }
   ],
   "headers": [
