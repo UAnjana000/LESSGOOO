@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { fileUrl, type Hit, type ItemCard, type TimelineEvent } from "../api";
+import { type Hit, type ItemCard, type TimelineEvent } from "../api";
 import type { Key } from "../i18n";
 import { basketLink } from "../basket";
 import { formatMs, useApi } from "../hooks";
 import { useSession } from "../state";
-import { ContentText, ErrorState, FixtureChip, KindChip, LangText, LanguageSwitch, Loading, Page, pickText, useDocumentTitle, VerifiedChip } from "../components/Bits";
+import { ContentText, ErrorState, FixtureChip, LangText, LanguageSwitch, Loading, Page, pickText, useDocumentTitle } from "../components/Bits";
 import { GraphView, getNodeColor } from "../components/GraphView";
 
 const MAJOR_MILESTONE_YEARS = new Set([
@@ -113,82 +113,7 @@ export function Timeline() {
   );
 }
 
-export function Stories() {
-  const { t } = useSession();
-  const st = useApi<{ slug: string; titles: Record<string, string>; blocks: number }[]>("/api/visitor/stories");
-  return (
-    <Page title={t("storiesTitle")}>
-      {st.loading && <Loading center />}
-      {st.error && <ErrorState error={st.error} retry={st.reload} />}
-      {st.data?.length === 0 && <p className="empty-state">{t("storiesEmpty")}</p>}
-      {!!st.data?.length && (
-        <div className="story-strip">
-          {st.data.map((s) => (
-            <Link key={s.slug} to={`/stories/${s.slug}`} className="story-card">
-              <LangText map={s.titles} />
-              <span>{t("itemsCount", { n: s.blocks })}</span>
-            </Link>
-          ))}
-        </div>
-      )}
-    </Page>
-  );
-}
-
-interface StoryData {
-  slug: string;
-  titles: Record<string, string>;
-  blocks: { item: ItemCard; captions: Record<string, string>; image_file_id: number | null; passage: Hit | null; citation: string; deep_link: string }[];
-  narration_file_ids: Record<string, number>;
-  narration_label: string;
-}
-
-export function Story() {
-  const { slug } = useParams();
-  const { t, lang } = useSession();
-  const st = useApi<StoryData>(`/api/visitor/stories/${slug}`);
-  const d = st.data;
-  const narration = d?.narration_file_ids[lang] ?? d?.narration_file_ids.en;
-  useDocumentTitle(d ? pickText(d.titles, lang) : t("storiesTitle"));
-  return (
-    <div className="page">
-      {st.loading && <Loading center />}
-      {st.error && <ErrorState error={st.error} retry={st.reload} />}
-      {d && (
-        <>
-          <h1><LangText map={d.titles} /></h1>
-          {narration && (
-            <div className="stack" style={{ gap: 4, maxWidth: 560 }}>
-              <span className="muted">{t("listen")}: {t("synthNarration")}</span>
-              <audio controls preload="none" src={fileUrl(narration)} aria-label={`${t("listen")}: ${t("synthNarration")}`} />
-            </div>
-          )}
-          {d.blocks.map((b, i) => (
-            <section key={i} className="story-block">
-              <div>
-                {b.image_file_id ? <img src={fileUrl(b.image_file_id)} alt={t("imageOf", { title: b.item.title })} loading="lazy" /> : null}
-              </div>
-              <div className="stack">
-                <p style={{ fontSize: "var(--step-1)", fontFamily: "var(--read)" }}><LangText map={b.captions} /></p>
-                {b.passage && (
-                  <>
-                    <div className="chips"><KindChip label={b.passage.kind_label} /><VerifiedChip verified={b.passage.quote_verified} /></div>
-                    <blockquote className="passage" lang={b.passage.language} style={{ margin: 0 }}>{b.passage.text}</blockquote>
-                  </>
-                )}
-                <span className="cite">{t("citation")}: {b.citation}</span>
-                <div className="row">
-                  <Link className="btn small" to={b.deep_link}>{t("openItem")}</Link>
-                  <FixtureChip show={b.item.is_fixture} />
-                </div>
-              </div>
-            </section>
-          ))}
-        </>
-      )}
-    </div>
-  );
-}
+export { Stories, Story } from "./Stories";
 
 interface MapData {
   nodes: { id: number; type: string; labels: Record<string, string>; description: string | null; item_ids: number[] }[];

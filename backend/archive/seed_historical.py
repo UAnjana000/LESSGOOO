@@ -36,6 +36,7 @@ from archive.models import (
     Passage,
     PublicationState,
     RightsRecord,
+    Story,
     TimelineEvent,
     Translation,
     utcnow,
@@ -534,6 +535,409 @@ HISTORICAL_CONSTITUTION_LINKS = [
     ("item-baws-annihilation-caste", 2, "14", "Equality before law and eradication of social inequality"),
 ]
 
+HISTORICAL_STORIES = [
+    {
+        "slug": "mahad-satyagraha-1927",
+        "titles": {
+            "en": "The Mahad Satyagraha (1927): The Water of Liberty",
+            "hi": "महाड़ सत्याग्रह (1927): मुक्ति का जल",
+            "mr": "महाडचा सत्याग्रह (१९२७): मुक्तीचे पाणी",
+        },
+        "duration": "8 min read • 4 audio recordings",
+        "theme": {
+            "en": "Civil rights, the burning of the Manusmriti, and the assertion of human dignity at Chavadar Tank.",
+            "hi": "नागरिक अधिकार, मनुस्मृति दहन और चवदार तालाब पर मानवीय गरिमा की घोषणा।",
+            "mr": "नागरी हक्क, मनुस्मृती दहन आणि चवदार तळ्यावर मानवी प्रतिष्ठेची घोषणा.",
+        },
+        "blocks": [
+            {
+                "item_key": "item-baws-biography",
+                "page_sequence": 2,
+                "year": "1927",
+                "chapter_title": {
+                    "en": "The March to Chavadar Tank",
+                    "hi": "चवदार तालाब की ऐतिहासिक यात्रा",
+                    "mr": "चवदार तळ्याकडे ऐतिहासिक कूच",
+                },
+                "captions": {
+                    "en": "On 20 March 1927, Dr. Ambedkar led thousands of delegates to the public Chavadar Tank in Mahad to drink water, asserting civic equality.",
+                    "hi": "20 मार्च 1927 को डॉ. आंबेडकर ने नागरिक समानता स्थापित करने हेतु महाड़ के चवदार तालाब पर ऐतिहासिक सत्याग्रह का नेतृत्व किया।",
+                    "mr": "२० मार्च १९२७ रोजी डॉ. आंबेडकरांनी नागरी समतेचा हक्क बजावण्यासाठी महाडच्या चवदार तळ्यावर ऐतिहासिक सत्याग्रहाचे नेतृत्व केले.",
+                },
+                "quote_text": {
+                    "en": "We are not going to the Chavadar Tank merely to drink water. We are going to establish our human rights.",
+                    "hi": "हम केवल पानी पीने के लिए चवदार तालाब नहीं जा रहे हैं। हम अपने मानवीय अधिकारों को स्थापित करने जा रहे हैं।",
+                    "mr": "आपण चवदार तळ्यावर केवळ पाणी पिण्यासाठी जात नाही आहोत. आपण आपले मानवी हक्क प्रस्थापित करण्यासाठी जात आहोत.",
+                },
+                "citation": "BAWS Vol. 17, Part 1: Dr. Babasaheb Ambedkar and His Egalitarian Revolution",
+            },
+            {
+                "item_key": "item-baws-annihilation-caste",
+                "page_sequence": 1,
+                "year": "1927",
+                "chapter_title": {
+                    "en": "Assertion of Human Dignity",
+                    "hi": "मानवीय गरिमा का उद्घोष",
+                    "mr": "मानवी प्रतिष्ठेचा निर्धार",
+                },
+                "captions": {
+                    "en": "The struggle at Mahad was fundamentally an awakening of self-respect, demonstrating that civic rights are inherent to human existence.",
+                    "hi": "महाड़ का आंदोलन केवल पानी के लिए नहीं बल्कि मनुष्य के आत्मसम्मान और सामाजिक चेतना का महाजागरण था।",
+                    "mr": "महाडचा लढा केवळ पाण्यासाठी नसून तो मानवी स्वाभिमान आणि समतेच्या पुनर्स्थापनेचा महासंग्राम होता.",
+                },
+                "quote_text": {
+                    "en": "Lost rights are never regained by appeals to the conscience of the usurpers, but by relentless struggle.",
+                    "hi": "खोए हुए अधिकार कभी अन्यायी के विवेक से वापस नहीं मिलते, बल्कि अथक संघर्ष से ही प्राप्त होते हैं।",
+                    "mr": "गमावलेले हक्क कधीही दुसऱ्याच्या दयेने परत मिळत नाहीत, तर ते अथक संघर्षानेच मिळवावे लागतात.",
+                },
+                "citation": "Bahishkrit Bharat Editorial, 1927 / BAWS Vol. 1",
+            },
+            {
+                "item_key": "item-baws-states-minorities",
+                "page_sequence": 2,
+                "year": "1927",
+                "chapter_title": {
+                    "en": "The Burning of the Manusmriti",
+                    "hi": "मनुस्मृति दहन: समानता का संकल्प",
+                    "mr": "मनुस्मृती दहन: समतेचा संकल्प",
+                },
+                "captions": {
+                    "en": "On 25 December 1927, during the second Mahad conference, the Manusmriti was consigned to flames as a decisive rejection of institutionalized caste injustice.",
+                    "hi": "25 दिसंबर 1927 को महाड़ में मनुस्मृति का दहन किया गया, जो जन्म आधारित भेदभाव और विषमता के विरुद्ध स्पष्ट शंखनाद था।",
+                    "mr": "२५ डिसेंबर १९२७ रोजी महाड येथे मनुस्मृतीचे दहन करण्यात आले, जे जन्मजात विषमतेविरुद्धचे निर्णायक पाऊल होते.",
+                },
+                "quote_text": {
+                    "en": "The bonfire of the Manusmriti was not a mere symbolic act; it was a declaration of war against injustice, inequality, and human degradation.",
+                    "hi": "मनुस्मृति का दहन मात्र कोई प्रतीकात्मक कृत्य नहीं था; यह अन्याय, असमानता और मानवीय अपमान के विरुद्ध उद्घोष था।",
+                    "mr": "मनुस्मृतीचे दहन ही केवळ प्रतिकात्मक कृती नव्हती; ती अन्याय, विषमता आणि मानवी अधोगतीविरुद्धची घोषणा होती.",
+                },
+                "citation": "Mahad Conference Proceedings, December 1927 / BAWS Vol. 17",
+            },
+            {
+                "item_key": "item-baws-biography",
+                "page_sequence": 2,
+                "year": "1937",
+                "chapter_title": {
+                    "en": "The Legal Victory and Civil Precedent",
+                    "hi": "न्यायालयीन विजय एवं नागरिक नज़ीर",
+                    "mr": "न्यायालयीन विजय आणि नागरी पायंडा",
+                },
+                "captions": {
+                    "en": "A decade of relentless court battle culminated on 17 March 1937 when the Bombay High Court upheld the right of all communities to draw water from Chavadar Tank.",
+                    "hi": "एक दशक के कानूनी संघर्ष के बाद 17 मार्च 1937 को बॉम्बे हाईकोर्ट ने चवदार तालाब से पानी लेने के सभी नागरिकों के अधिकार की पुष्टि की।",
+                    "mr": "दहा वर्षांच्या न्यायालयीन लढ्यानंतर १७ मार्च १९३७ रोजी मुंबई उच्च न्यायालयाने चवदार तळ्याचे पाणी भरण्याच्या सर्वसमावेशक हक्काचा निकाल दिला.",
+                },
+                "quote_text": {
+                    "en": "Equality in civic life is the bedrock of democracy. Water is nature's gift to all life, beyond the reach of caste boundaries.",
+                    "hi": "नागरिक जीवन में समानता लोकतंत्र की आधारशिला है। पानी प्रकृति का उपहार है, जो जाति की सीमाओं से परे है।",
+                    "mr": "नागरी जीवनातील समता हा लोकशाहीचा पाया आहे. पाणी ही निसर्गाची देणगी असून ती जातीच्या बंधनांपलीकडची आहे.",
+                },
+                "citation": "Bombay High Court Ruling, Mahad Tank Appeal (1937)",
+            },
+        ],
+    },
+    {
+        "slug": "architect-of-the-republic",
+        "titles": {
+            "en": "Architect of the Republic: The Drafting of the Constitution (1947–1950)",
+            "hi": "गणतंत्र के शिल्पकार: संविधान का निर्माण (1947–1950)",
+            "mr": "प्रजासत्ताकाचे शिल्पकार: संविधान निर्मिती (१९४७–१९५०)",
+        },
+        "duration": "10 min read • 4 audio recordings",
+        "theme": {
+            "en": "The Drafting Committee, debates on Article 17, Article 32, and the historic Final Speech on contradictions.",
+            "hi": "मसौदा समिति, अनुच्छेद 17 व 32 पर ऐतिहासिक बहस और अंतर्विरोधों पर अंतिम भाषण।",
+            "mr": "मसुदा समिती, कलम १७ व ३२ वरील वादविवाद आणि अंतर्विरोधांवरील ऐतिहासिक भाषण.",
+        },
+        "blocks": [
+            {
+                "item_key": "item-cad-draft-presentation",
+                "page_sequence": 1,
+                "year": "1947",
+                "chapter_title": {
+                    "en": "Chairing the Drafting Committee",
+                    "hi": "मसौदा समिति की अध्यक्षता",
+                    "mr": "मसुदा समितीचे अध्यक्षपद",
+                },
+                "captions": {
+                    "en": "Appointed Chairman of the Drafting Committee on 29 August 1947, Dr. Ambedkar steered the formulation of India's democratic covenant.",
+                    "hi": "29 अगस्त 1947 को मसौदा समिति के अध्यक्ष नियुक्त होकर डॉ. आंबेडकर ने भारत के लोकतांत्रिक संविधान का निर्माण किया।",
+                    "mr": "२९ ऑगस्ट १९४७ रोजी मसुदा समितीच्या अध्यक्षपदी निवड होऊन डॉ. आंबेडकरांनी भारताच्या लोकशाही संविधानाची आखणी केली.",
+                },
+                "quote_text": {
+                    "en": "I entered the Constituent Assembly with no greater ambition than to safeguard the interests of my people. I was called upon to shoulder the greatest responsibility of drafting the Constitution.",
+                    "hi": "मैं संविधान सभा में अपने वंचित समाज के हितों की रक्षा करने आया था, किंतु मुझे संविधान निर्माण की सर्वोच्च जिम्मेदारी सौंपी गई।",
+                    "mr": "मी संविधान सभेत केवळ माझ्या बांधवांच्या हक्कांचे रक्षण करण्यासाठी आलो होतो, पण माझ्यावर संपूर्ण देशाच्या संविधान निर्मितीची महान जबाबदारी सोपवली गेली.",
+                },
+                "citation": "Constituent Assembly Debates (CAD), Vol. VII, 4 November 1948",
+            },
+            {
+                "item_key": "item-cad-draft-presentation",
+                "page_sequence": 2,
+                "year": "1948",
+                "chapter_title": {
+                    "en": "Introducing the Draft Constitution",
+                    "hi": "संविधान के प्रारूप की प्रस्तुति",
+                    "mr": "संविधानाच्या मसुद्याचे सादरीकरण",
+                },
+                "captions": {
+                    "en": "Presenting the Draft Constitution on 4 November 1948, Dr. Ambedkar articulated the foundational principles of constitutional morality.",
+                    "hi": "4 नवंबर 1948 को प्रारूप प्रस्तुत करते हुए डॉ. आंबेडकर ने संवैधानिक नैतिकता के मूलभूत सिद्धांतों को रेखांकित किया।",
+                    "mr": "४ नोव्हेंबर १९४८ रोजी संविधानाचा मसुदा मांडताना डॉ. आंबेडकरांनी घटनात्मक नैतिकतेच्या तत्त्वांवर भर दिला.",
+                },
+                "quote_text": {
+                    "en": "Constitutional morality is not a natural sentiment. It has to be cultivated. We must realize that our people have yet to learn it.",
+                    "hi": "संवैधानिक नैतिकता कोई प्राकृतिक भावना नहीं है। इसे विकसित करना होता है। हमें यह समझना होगा कि हमारे समाज को इसे अभी सीखना है।",
+                    "mr": "घटनात्मक नैतिकता ही उपजत भावना नसते, तिची जोपासना करावी लागते. आपल्या जनतेला ती अजून आत्मसात करायची आहे.",
+                },
+                "citation": "CAD Vol. VII, Motion Introducing the Draft Constitution",
+            },
+            {
+                "item_key": "item-cad-article-32",
+                "page_sequence": 1,
+                "year": "1948",
+                "chapter_title": {
+                    "en": "Article 32: The Soul of the Constitution",
+                    "hi": "अनुच्छेद 32: संविधान की आत्मा और हृदय",
+                    "mr": "कलम ३२: संविधानाचा आत्मा व हृदय",
+                },
+                "captions": {
+                    "en": "In the debate on 9 December 1948, Dr. Ambedkar underscored that rights without judicial enforcement remedies are meaningless declarations.",
+                    "hi": "9 दिसंबर 1948 की बहस में डॉ. आंबेडकर ने स्पष्ट किया कि न्यायिक उपचार के बिना मौलिक अधिकार केवल कागजी घोषणा बनकर रह जाएंगे।",
+                    "mr": "९ डिसेंबर १९४८ च्या चर्चेत डॉ. आंबेडकरांनी नमूद केले की न्यायालयीन संरक्षणाशिवाय मूलभूत हक्क निरर्थक ठरतील.",
+                },
+                "quote_text": {
+                    "en": "If I was asked to name any particular article in this Constitution as the most important—an article without which this Constitution would be a nullity—I could not refer to any other article except this one. It is the very soul of the Constitution and the very heart of it.",
+                    "hi": "यदि मुझसे कोई पूछे कि इस संविधान का सबसे महत्वपूर्ण अनुच्छेद कौन सा है, जिसके बिना यह संविधान व्यर्थ होगा, तो मैं केवल इसी अनुच्छेद का नाम लूँगा। यह संविधान की आत्मा और उसका हृदय है।",
+                    "mr": "या संविधानातील सर्वात महत्त्वाचे कलम कोणते असे मला विचारल्यास, ज्याशिवाय संविधान निष्प्रभ ठरेल, तर मी केवळ याच कलमाचा उल्लेख करेन. ते संविधानाचा आत्मा आणि हृदय आहे.",
+                },
+                "citation": "CAD Vol. VII, Debate on Draft Article 25 (Article 32), 9 December 1948",
+            },
+            {
+                "item_key": "item-cad-closing-grammar-anarchy",
+                "page_sequence": 2,
+                "year": "1949",
+                "chapter_title": {
+                    "en": "The Grammar of Anarchy & Final Warning",
+                    "hi": "अराजकता का व्याकरण एवं अंतिम चेतावनी",
+                    "mr": "अराजकतेचे व्याकरण आणि अंतिम इशारा",
+                },
+                "captions": {
+                    "en": "In his final address on 25 November 1949, Dr. Ambedkar issued an enduring warning on the peril of unresolved socio-economic inequality in a political democracy.",
+                    "hi": "25 नवंबर 1949 को अपने समापन भाषण में डॉ. आंबेडकर ने राजनीतिक लोकतंत्र में सामाजिक-आर्थिक असमानता के संकट पर ऐतिहासिक चेतावनी दी।",
+                    "mr": "२५ नोव्हेंबर १९४९ च्या अखेरच्या भाषणात डॉ. आंबेडकरांनी राजकीय लोकशाहीतील सामाजिक-आर्थिक विषमतेच्या धोक्यांविषयी ऐतिहासिक इशारा दिला.",
+                },
+                "quote_text": {
+                    "en": "On the 26th of January 1950, we are going to enter into a life of contradictions. In politics we will have equality and in social and economic life we will have inequality. We must remove this contradiction at the earliest possible moment or else those who suffer from inequality will blow up the structure of democracy.",
+                    "hi": "26 जनवरी 1950 को हम अंतर्विरोधों के एक नए जीवन में प्रवेश करने जा रहे हैं। राजनीति में हमारे पास समानता होगी, किंतु सामाजिक और आर्थिक जीवन में असमानता। हमें इस अंतर्विरोध को शीघ्र दूर करना होगा, अन्यथा असमानता के शिकार लोग लोकतंत्र के इस ढांचे को ध्वस्त कर देंगे।",
+                    "mr": "२६ जानेवारी १९५० रोजी आपण अंतर्विरोधांनी भरलेल्या जीवनात प्रवेश करणार आहोत. राजकारणात आपल्याकडे समानता असेल, पण सामाजिक आणि आर्थिक जीवनात विषमता असेल. ही विषमता आपण लवकरात लवकर दूर केली पाहिजे, नाहीतर विषमतेचे बळी या लोकशाहीचा डोलारा उद्ध्वस्त करतील.",
+                },
+                "citation": "CAD Vol. XI, Closing Speech on Adoption of the Constitution, 25 November 1949",
+            },
+        ],
+    },
+    {
+        "slug": "columbia-and-london-years",
+        "titles": {
+            "en": "The Columbia & London Years: Intellectual Foundations (1913–1923)",
+            "hi": "कोलंबिया और लंदन के वर्ष: बौद्धिक नींव (1913–1923)",
+            "mr": "कोलंबिया व लंडनची वर्षे: बौद्धिक पाया (१९१३–१९२३)",
+        },
+        "duration": "7 min read • 4 audio recordings",
+        "theme": {
+            "en": "Studies under John Dewey, the thesis on The Problem of the Rupee, and bar admission at Gray's Inn.",
+            "hi": "जॉन ड्यूई के सान्निध्य में अध्ययन, रुपये की समस्या पर शोध प्रबंध और ग्रेज़ इन में बार की सदस्यता।",
+            "mr": "जॉन ड्युई यांच्या मार्गदर्शनाखाली शिक्षण, द प्रॉब्लेम ऑफ द रुपी हा प्रबंध आणि ग्रेज इनमध्ये बॅरिस्टर पदवी.",
+        },
+        "blocks": [
+            {
+                "item_key": "item-baws-biography",
+                "page_sequence": 1,
+                "year": "1913",
+                "chapter_title": {
+                    "en": "Arrival at Columbia University",
+                    "hi": "कोलंबिया विश्वविद्यालय में पदार्पण",
+                    "mr": "कोलंबिया विद्यापीठातील शिक्षण",
+                },
+                "captions": {
+                    "en": "In July 1913, Dr. Ambedkar entered Columbia University under the mentorship of John Dewey and Edwin Seligman, absorbing pragmatic philosophy and democratic theory.",
+                    "hi": "जुलाई 1913 में डॉ. आंबेडकर कोलंबिया विश्वविद्यालय पहुँचे, जहाँ जॉन ड्यूई और सेलिगमैन के मार्गदर्शन में उन्होंने आधुनिक दर्शन और लोकतंत्र का अध्ययन किया।",
+                    "mr": "जुलै १९१३ मध्ये कोलंबिया विद्यापीठात दाखल होऊन त्यांनी जॉन ड्युई यांच्या मार्गदर्शनाखाली लोकशाही विचार आणि सामाजिक तत्त्वज्ञानाचा अभ्यास केला.",
+                },
+                "quote_text": {
+                    "en": "My best friends were books. The freedom of thinking and living in America broadened my horizon and gave me the resolve to liberate my society.",
+                    "hi": "मेरी सबसे अच्छी मित्र पुस्तकें थीं। अमेरिका के मुक्त वातावरण ने मेरे दृष्टिकोण को व्यापक बनाया और मुझे अपने समाज को मुक्त कराने का संकल्प दिया।",
+                    "mr": "पुस्तके हेच माझे सर्वात जवळचे मित्र होते. अमेरिकेतील वैचारिक स्वातंत्र्याने माझी दृष्टी व्यापक केली आणि समाजाला मुक्त करण्याचा संकल्प दृढ केला.",
+                },
+                "citation": "BAWS Vol. 17: Dr. B. R. Ambedkar's Student Letters, 1913–1916",
+            },
+            {
+                "item_key": "item-baws-annihilation-caste",
+                "page_sequence": 1,
+                "year": "1916",
+                "chapter_title": {
+                    "en": "Castes in India: Genesis & Mechanism",
+                    "hi": "भारत में जातियाँ: उत्पत्ति एवं तंत्र",
+                    "mr": "भारतातील जाती: उत्पत्ती आणि रचना",
+                },
+                "captions": {
+                    "en": "In May 1916, Dr. Ambedkar presented his seminal sociological thesis 'Castes in India', demonstrating that endogamy is the cornerstone of the caste hierarchy.",
+                    "hi": "मई 1916 में डॉ. आंबेडकर ने अपना शोध पत्र 'भारत में जातियाँ' प्रस्तुत किया, जिसमें उन्होंने सजातीय विवाह को जाति व्यवस्था की मुख्य धुरी सिद्ध किया।",
+                    "mr": "मे १९१६ मध्ये डॉ. आंबेडकरांनी 'भारतातील जाती' हा शोधनिबंध मांडून आंतरविवाह बंदी हाच जातीव्यवस्थेचा पाया असल्याचे सिद्ध केले.",
+                },
+                "quote_text": {
+                    "en": "Caste is an artificial chopping up of the population into fixed compartments, preserved through the strict enclosure of endogamy.",
+                    "hi": "जाति जनसंख्या का कृत्रिम विभाजन है, जिसे सजातीय विवाह की कठोर सीमाओं के माध्यम से सुरक्षित रखा गया है।",
+                    "mr": "जातीव्यवस्था ही समाजाची कृत्रिम विभागणी असून ती आंतरविवाह बंदीच्या माध्यमातून टिकवून ठेवली गेली आहे.",
+                },
+                "citation": "Castes in India: Their Mechanism, Genesis and Development (1916)",
+            },
+            {
+                "item_key": "item-baws-biography",
+                "page_sequence": 1,
+                "year": "1921",
+                "chapter_title": {
+                    "en": "London School of Economics & Gray's Inn",
+                    "hi": "लंदन स्कूल ऑफ इकोनॉमिक्स एवं ग्रेज़ इन",
+                    "mr": "लंडन स्कूल ऑफ इकॉनॉमिक्स आणि ग्रेज इन",
+                },
+                "captions": {
+                    "en": "Concurrently mastering monetary economics at the LSE and British common law at Gray's Inn, Dr. Ambedkar attained world-class scholarship.",
+                    "hi": "एलएसई में मौद्रिक अर्थशास्त्र और ग्रेज़ इन में कानून की पढ़ाई करते हुए डॉ. आंबेडकर ने अद्वितीय विद्वत्ता अर्जित की।",
+                    "mr": "लंडन स्कूल ऑफ इकॉनॉमिक्समध्ये अर्थशास्त्र आणि ग्रेज इनमध्ये कायद्याचे शिक्षण घेत डॉ. आंबेडकरांनी जागतिक दर्जाचे ज्ञान संपादन केले.",
+                },
+                "quote_text": {
+                    "en": "Cultivation of mind should be the ultimate aim of human existence. Education is the greatest weapon for human emancipation.",
+                    "hi": "मन का विकास मानव अस्तित्व का अंतिम लक्ष्य होना चाहिए। शिक्षा मानवीय मुक्ति का सबसे बड़ा साधन है।",
+                    "mr": "बुद्धीचा विकास हेच मानवी जीवनाचे अंतिम ध्येय असले पाहिजे. शिक्षण हे मानवी मुक्तीचे सर्वात मोठे हत्यार आहे.",
+                },
+                "citation": "LSE Academic Records & Gray's Inn Bar Register, 1920–1923",
+            },
+            {
+                "item_key": "item-baws-states-minorities",
+                "page_sequence": 1,
+                "year": "1923",
+                "chapter_title": {
+                    "en": "The Problem of the Rupee",
+                    "hi": "द प्रॉब्लम ऑफ द रुपी: केंद्रीय बैंक की नींव",
+                    "mr": "द प्रॉब्लेम ऑफ द रुपी: मध्यवर्ती बँकेचा पाया",
+                },
+                "captions": {
+                    "en": "Published in London in 1923, his D.Sc. thesis 'The Problem of the Rupee' served as economic blueprint for the formation of the Reserve Bank of India.",
+                    "hi": "1923 में लंदन से प्रकाशित उनका शोध ग्रंथ 'द प्रॉब्लम ऑफ द रुपी' भारतीय रिज़र्व बैंक की स्थापना की वैचारिक आधारशिला बना।",
+                    "mr": "१९२३ मध्ये प्रसिद्ध झालेला त्यांचा प्रबंध 'द प्रॉब्लेम ऑफ द रुपी' हा रिझर्व्ह बँक ऑफ इंडियाच्या स्थापनेचा आधार ठरला.",
+                },
+                "quote_text": {
+                    "en": "A currency system must guarantee internal price stability and protect the purchasing power of the working poor.",
+                    "hi": "मुद्रा प्रणाली को आंतरिक मूल्य स्थिरता सुनिश्चित करनी चाहिए और श्रमजीवी वर्ग की क्रय शक्ति की रक्षा करनी चाहिए।",
+                    "mr": "चलन व्यवस्थेने अंतर्गत भावस्थैर्य राखले पाहिजे आणि कष्टकरी जनतेच्या क्रयशक्तीचे रक्षण केले पाहिजे.",
+                },
+                "citation": "The Problem of the Rupee: Its Origin and Its Solution (London, 1923)",
+            },
+        ],
+    },
+    {
+        "slug": "deekshabhoomi-conversion-1956",
+        "titles": {
+            "en": "The Great Conversion at Deekshabhoomi (1956)",
+            "hi": "दीक्षाभूमि में महान धर्मपरिवर्तन (1956)",
+            "mr": "दीक्षाभूमीवरील महाधम्मचक्र प्रवर्तन (१९५६)",
+        },
+        "duration": "9 min read • 4 audio recordings",
+        "theme": {
+            "en": "The 22 Vows, the renunciation of caste discrimination, and the embrace of the Buddha and His Dhamma.",
+            "hi": "22 प्रतिज्ञाएं, जातिगत भेदभाव का त्याग और बुद्ध तथा उनके धम्म का अंगीकार।",
+            "mr": "२२ प्रतिज्ञा, जातीभेदाचा त्याग आणि बुद्ध आणि त्यांच्या धम्माचा स्वीकार.",
+        },
+        "blocks": [
+            {
+                "item_key": "item-baws-annihilation-caste",
+                "page_sequence": 2,
+                "year": "1935",
+                "chapter_title": {
+                    "en": "The Yeola Declaration",
+                    "hi": "येवला घोषणा: आत्मसम्मान का मार्ग",
+                    "mr": "येवला घोषणा: स्वाभिमानाचा मार्ग",
+                },
+                "captions": {
+                    "en": "At the Yeola conference on 13 October 1935, Dr. Ambedkar made his historic declaration to liberate his people from caste humiliation.",
+                    "hi": "13 अक्टूबर 1935 को येवला सम्मेलन में डॉ. आंबेडकर ने जातिगत अपमान से मुक्ति हेतु ऐतिहासिक घोषणा की।",
+                    "mr": "१३ ऑक्टोबर १९३५ रोजी येवला परिषदेत डॉ. आंबेडकरांनी जातीच्या विषमतेतून मुक्त होण्यासाठी ऐतिहासिक घोषणा केली.",
+                },
+                "quote_text": {
+                    "en": "Even though I was born a Hindu, which was beyond my control, I solemnly assure you that I will not die a Hindu.",
+                    "hi": "यद्यपि मैं एक हिंदू के रूप में पैदा हुआ, जो मेरे वश में नहीं था, किंतु मैं आपको विश्वास दिलाता हूँ कि मैं हिंदू के रूप में मरूँगा नहीं।",
+                    "mr": "जरी मी हिंदू म्हणून जन्मलो असलो, तरी तो माझ्या हातात नव्हता; पण मी तुम्हाला खात्री देतो की मी हिंदू म्हणून मरणार नाही.",
+                },
+                "citation": "Yeola Depressed Classes Conference Address, October 1935",
+            },
+            {
+                "item_key": "item-baws-biography",
+                "page_sequence": 2,
+                "year": "1956",
+                "chapter_title": {
+                    "en": "The Historic Gathering at Nagpur",
+                    "hi": "नागपुर का ऐतिहासिक महाकुंभ",
+                    "mr": "नागपूरची ऐतिहासिक महाधम्मपरिषद",
+                },
+                "captions": {
+                    "en": "On 14 October 1956 at Deekshabhoomi, half a million people embraced the Buddhist Dhamma rooted in reason, compassion, and human equality.",
+                    "hi": "14 अक्टूबर 1956 को दीक्षाभूमि नागपुर पर पाँच लाख से अधिक लोगों ने तर्क, करुणा और समता पर आधारित बौद्ध धम्म ग्रहण किया।",
+                    "mr": "१४ ऑक्टोबर १९५६ रोजी नागपूरच्या दीक्षाभूमीवर लाखो बांधवांनी प्रज्ञा, करुणा आणि समतेवर आधारित बौद्ध धम्माची दीक्षा घेतली.",
+                },
+                "quote_text": {
+                    "en": "Religion must be based on morality, equality, and liberty. Buddhism is grounded not on divine revelation, but on reason, compassion, and human fraternity.",
+                    "hi": "धर्म का आधार नैतिकता, समानता और स्वतंत्रता होना चाहिए। बौद्ध धर्म किसी दैवीय रहस्य पर नहीं, बल्कि तर्क, करुणा और बंधुत्व पर आधारित है।",
+                    "mr": "धर्माचा पाया नैतिकता, समता आणि स्वातंत्र्य यावरच आधारलेला असावा. बौद्ध धम्म हा दैववादावर नव्हे तर तर्क, करुणा आणि बंधुभावावर आधारलेला आहे.",
+                },
+                "citation": "Nagpur Deekshabhoomi Address, 15 October 1956 / BAWS Vol. 17",
+            },
+            {
+                "item_key": "item-baws-states-minorities",
+                "page_sequence": 2,
+                "year": "1956",
+                "chapter_title": {
+                    "en": "The 22 Vows of Emancipation",
+                    "hi": "मुक्ति की 22 प्रतिज्ञाएं",
+                    "mr": "मुक्तीच्या २२ प्रतिज्ञा",
+                },
+                "captions": {
+                    "en": "Administering the 22 Vows, Dr. Ambedkar guided his followers to renounce discriminatory rites and embrace ethical, rational, and enlightened lives.",
+                    "hi": "22 प्रतिज्ञाएं दिलाते हुए डॉ. आंबेडकर ने समाज को अंधविश्वास और असमानता त्यागकर नैतिक एवं प्रबुद्ध जीवन जीने का मार्ग दिखाया।",
+                    "mr": "२२ प्रतिज्ञा देऊन डॉ. आंबेडकरांनी अनुयायांना विषमतेचा त्याग करून नैतिक, विवेकवादी आणि प्रबुद्ध जीवन जगण्याचा संदेश दिला.",
+                },
+                "quote_text": {
+                    "en": "I shall believe in the equality of man. I shall endeavor to establish equality. I shall follow the Noble Eightfold Path of the Buddha.",
+                    "hi": "मैं मनुष्य की समानता में विश्वास रखूँगा। मैं समानता स्थापित करने का प्रयास करूँगा। मैं बुद्ध के आर्य अष्टांगिक मार्ग का अनुसरण करूँगा।",
+                    "mr": "मी सर्व मानवांना समान मानेन. मी समता प्रस्थापित करण्याचा प्रयत्न करेन. मी बुद्धाच्या अष्टांगिक मार्गाचे पालन करेन.",
+                },
+                "citation": "The 22 Vows (Deeksha Pledge), Nagpur, 14 October 1956",
+            },
+            {
+                "item_key": "item-baws-biography",
+                "page_sequence": 1,
+                "year": "1956",
+                "chapter_title": {
+                    "en": "The Buddha and His Dhamma",
+                    "hi": "द बुद्ध एंड हिज़ धम्म",
+                    "mr": "द बुद्ध अँड हिज धम्म",
+                },
+                "captions": {
+                    "en": "His culminating treatise 'The Buddha and His Dhamma' reinterpreted Buddhist philosophy as an ethical foundation for modern constitutional democracy.",
+                    "hi": "उनका महान ग्रंथ 'द बुद्ध एंड हिज़ धम्म' बुद्ध के दर्शन को आधुनिक संवैधानिक लोकतंत्र के नैतिक आधार के रूप में प्रस्तुत करता है।",
+                    "mr": "'द बुद्ध अँड हिज धम्म' हा त्यांचा ग्रंथ बुद्ध विचारांना आधुनिक घटनात्मक लोकशाहीचा नैतिक आधार म्हणून मांडतो.",
+                },
+                "quote_text": {
+                    "en": "Dhamma is righteousness, which means right relations between man and man in all spheres of life.",
+                    "hi": "धम्म सदाचार है, जिसका अर्थ है जीवन के सभी क्षेत्रों में मनुष्य का मनुष्य के साथ उचित और न्यायपूर्ण संबंध।",
+                    "mr": "धम्म म्हणजे सदाचार, ज्याचा अर्थ जीवनाच्या प्रत्येक क्षेत्रात माणसाने माणसाशी माणसासारखे वागणे होय.",
+                },
+                "citation": "The Buddha and His Dhamma (BAWS Vol. 11)",
+            },
+        ],
+    },
+]
+
 
 def seed_historical_corpus(db: Session) -> dict[str, Any]:
     """Seed authentic texts, rights records, passages, embeddings, and relations."""
@@ -798,6 +1202,43 @@ def seed_historical_corpus(db: Session) -> dict[str, Any]:
             approved_by=ACTOR,
             status="approved",
         ))
+
+    # 6. Curated Memorial Stories
+    report["stories"] = 0
+    for s_spec in HISTORICAL_STORIES:
+        blocks = []
+        for b in s_spec["blocks"]:
+            it = item_map.get(b["item_key"])
+            if not it:
+                continue
+            blocks.append({
+                "item_id": it.id,
+                "page_sequence": b.get("page_sequence", 1),
+                "chapter_title": b["chapter_title"],
+                "year": b["year"],
+                "captions": b["captions"],
+                "quote_text": b["quote_text"],
+                "citation": b["citation"],
+                "duration": s_spec.get("duration"),
+                "theme": s_spec.get("theme"),
+            })
+        st = db.execute(select(Story).where(Story.slug == s_spec["slug"])).scalar_one_or_none()
+        if st is None:
+            st = Story(
+                slug=s_spec["slug"],
+                titles=s_spec["titles"],
+                blocks=blocks,
+                curator=ACTOR,
+                status="approved",
+            )
+            db.add(st)
+            report["stories"] += 1
+        else:
+            st.titles = s_spec["titles"]
+            st.blocks = blocks
+            st.status = "approved"
+            report["stories"] += 1
+        db.flush()
 
     bump_index_version(db)
     audit.record(db, ACTOR, "corpus.seed_historical", "archival_item", "*", detail=report)
