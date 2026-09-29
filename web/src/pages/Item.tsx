@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api, ApiError, fileUrl, type ItemDetail, type PassageView } from "../api";
 import { derivativeLabel, type Key } from "../i18n";
+import { itemCitation } from "../basket";
 import { formatMs, useApi } from "../hooks";
 import { useSession } from "../state";
 import { AddToList, ArticleLinks, ContentText, ErrorState, FacetLinks, FixtureChip, KindChip, Loading, useDocumentTitle, VerifiedChip } from "../components/Bits";
@@ -9,6 +10,9 @@ import { ScanViewer } from "../components/ScanViewer";
 import { IconChevronLeft, IconChevronRight, IconPlay } from "../components/Icons";
 
 type Tab = "original" | "reviewed";
+
+/** Above this many pages the pager is a drop-down instead of one button per page. */
+const PAGER_CHIPS_MAX = 12;
 
 function MachineTranslation({ passage, enabled }: { passage: PassageView; enabled: boolean }) {
   const { t, lang, config } = useSession();
@@ -159,20 +163,28 @@ function Media({ item, startMs, targetPassage }: { item: ItemDetail; startMs: nu
 }
 
 export function Item() {
-  const { id } = useParams();
+  const { id = "" } = useParams();
   const { t, lang } = useSession();
   const [params, setParams] = useSearchParams();
-  const item = useApi<ItemDetail>(`/api/visitor/items/${id}?lang=${lang}`);
-  const pageSeq = Number(params.get("page") ?? 1);
+  // The API rejects a non-numeric id (422), and retrying cannot fix the address.
+  const validId = /^\d+$/.test(id);
+  const item = useApi<ItemDetail>(validId ? `/api/visitor/items/${id}?lang=${lang}` : null);
+  const pageParam = params.get("page");
   const targetPassage = params.get("passage") ? Number(params.get("passage")) : null;
   const startMs = params.get("t") ? Number(params.get("t")) : null;
   const d = item.data;
-  const page = useMemo(() => d?.pages.find((p) => p.sequence === pageSeq) ?? d?.pages[0], [d, pageSeq]);
+  // ?page= is the page sequence; the printed page label the reader shows ("Page 1210") is accepted too.
+  const requested = useMemo(
+    () => (pageParam === null ? undefined : d?.pages.find((p) => p.sequence === Number(pageParam)) ?? d?.pages.find((p) => p.label === pageParam)),
+    [d, pageParam],
+  );
+  const page = requested ?? d?.pages[0];
+  const missingPage = pageParam !== null && Boolean(d?.pages.length) && !requested;
   const hasReviewed = Boolean(page?.passages.some((p) => p.translations[lang]));
   const targetIsTranslation = Boolean(page?.passages.some((p) => Object.values(p.translations).some((x) => x.passage_id === targetPassage)));
   const [tab, setTab] = useState<Tab>("original");
   useEffect(() => setTab(hasReviewed && targetIsTranslation ? "reviewed" : "original"), [hasReviewed, targetIsTranslation]);
-  useDocumentTitle(d?.title);
+  useDocumentTitle(!validId || item.error ? t("notAvailable") : d?.title);
 
   const pageIndex = d && page ? d.pages.indexOf(page) : -1;
   const prevPage = pageIndex > 0 ? d!.pages[pageIndex - 1] : undefined;
@@ -180,7 +192,8 @@ export function Item() {
   const prevBtn = useRef<HTMLButtonElement>(null);
   const nextBtn = useRef<HTMLButtonElement>(null);
   const pendingFocus = useRef<HTMLButtonElement | null>(null);
-  const goToPage = (seq: number) => setParams({ page: String(seq) }, { replace: true });
+  // A history entry per page, so Back returns to the page the visitor was reading.
+  const goToPage = (seq: number) => setParams({ page: String(seq) });
   // A focused button that becomes disabled drops focus to <body>, so hand it to the other arrow.
   const step = (dir: -1 | 1) => {
     const to = dir < 0 ? prevPage : nextPage;
@@ -209,8 +222,16 @@ export function Item() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  if (!validId || item.error) {
+    return (
+      <div className="page">
+        <h1>{t("notAvailable")}</h1>
+        <ErrorState error={item.error ?? new ApiError(404, "Invalid item id")} retry={item.reload} notFound={t("pageNotFoundBody")} />
+        <Link className="link-target" to="/search">{t("back")}</Link>
+      </div>
+    );
+  }
   if (item.loading && !d) return <div className="page"><Loading /></div>;
-  if (item.error) return <div className="page"><ErrorState error={item.error} retry={item.reload} /><Link className="link-target" to="/search">{t("back")}</Link></div>;
   if (!d) return null;
 
   const targetBoxes = page?.passages.find((p) => p.id === targetPassage)?.bboxes;
@@ -224,17 +245,17 @@ export function Item() {
         <div>
           <h1><ContentText text={d.title} /></h1>
           <div className="meta">
-            {d.date_text && <span>{d.date_text}{d.date_certainty !== "exact" ? ` (${t("dateApprox")})` : ""}</span>}
-            {d.creator && <span>{d.creator}</span>}
+            {d.date_text && <span><ContentText text={d.date_text} />{d.date_certainty !== "exact" ? ` (${t("dateApprox")})` : ""}</span>}
+            {d.creator && <ContentText text={d.creator} />}
             <span>{t(`col_${d.collection}` as Key)}</span>
-            {d.edition && <span>{d.edition}</span>}
+            {d.edition && <ContentText text={d.edition} />}
           </div>
           <div className="chips" style={{ marginTop: 8 }}>
             <FixtureChip show={d.is_fixture} />
             {d.online_only && <span className="chip">{t("onlineOnly")}</span>}
           </div>
         </div>
-        <AddToList entry={{ item_id: d.id, title: d.title, citation: d.title }} />
+        <AddToList entry={{ item_id: d.id, title: d.title, citation: itemCitation(d) }} />
       </header>
 
       {summary && (
@@ -250,13 +271,21 @@ export function Item() {
 
       {page && (
         <>
+          {missingPage && <p className="notice" role="status">{t("pageNotInItem", { n: pageParam })}</p>}
           {d.pages.length > 1 && (
             <nav className="pager-step" aria-label={t("pages")} style={{ marginBottom: 14 }}>
               <button ref={prevBtn} type="button" className="btn secondary step-btn prev" disabled={!prevPage} onClick={() => step(-1)}>
                 <IconChevronLeft /><span>{t("prevPage")}</span>
               </button>
               <div className="pager">
-                {d.pages.map((p) => (
+                {d.pages.length > PAGER_CHIPS_MAX ? (
+                  <>
+                    <label htmlFor="page-select" className="visually-hidden">{t("pages")}</label>
+                    <select id="page-select" value={page.sequence} onChange={(e) => goToPage(Number(e.target.value))}>
+                      {d.pages.map((p) => <option key={p.id} value={p.sequence}>{t("page", { n: p.label })}</option>)}
+                    </select>
+                  </>
+                ) : d.pages.map((p) => (
                   <button key={p.id} type="button" className="btn secondary small" aria-current={p.sequence === page.sequence ? "true" : undefined}
                     onClick={() => goToPage(p.sequence)}>
                     {t("page", { n: p.label })}
@@ -312,7 +341,7 @@ export function Item() {
                 </div>
                 {page.articles?.length > 0 && <div style={{ marginTop: 20 }}><ArticleLinks articles={page.articles} /></div>}
               </div>
-              <span className="cite">{t("citation")}: {page.citation}</span>
+              <span className="cite">{t("citation")}: <ContentText text={page.citation} /></span>
             </section>
           </div>
         </>

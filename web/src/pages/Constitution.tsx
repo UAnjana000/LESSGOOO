@@ -45,7 +45,12 @@ export function ConstitutionArticlePage() {
     <div className="page">
       <p><Link className="link-target" to="/constitution">{t("allArticles")}</Link></p>
       {art.loading && !d && <Loading />}
-      {art.error && <ErrorState error={art.error} retry={art.reload} notFound={t("articleNotFound")} />}
+      {art.error && (
+        <>
+          <h1>{t("article", { n: number })}</h1>
+          <ErrorState error={art.error} retry={art.reload} notFound={t("articleNotFound")} />
+        </>
+      )}
       {d && (
         <>
           <h1>
@@ -60,7 +65,7 @@ export function ConstitutionArticlePage() {
                 <div>
                   <h2 style={{ fontSize: "var(--step-1)", margin: 0 }}><Link to={e.deep_link}><ContentText text={e.item.title} /></Link></h2>
                   <div className="meta">
-                    {e.item.date_text && <span>{e.item.date_text}</span>}
+                    {e.item.date_text && <ContentText text={e.item.date_text} />}
                     {e.item.volume && <ContentText text={e.item.volume} />}
                   </div>
                 </div>
@@ -75,7 +80,7 @@ export function ConstitutionArticlePage() {
                     <span className="muted">{t("curatorNote")}: </span><ContentText text={e.note} />
                   </p>
                 )}
-                <span className="cite" style={{ gridColumn: "1 / -1" }}>{t("citation")}: {e.citation}</span>
+                <span className="cite" style={{ gridColumn: "1 / -1" }}>{t("citation")}: <ContentText text={e.citation} /></span>
                 <div className="row" style={{ gridColumn: "1 / -1" }}>
                   <Link className="btn" to={e.deep_link}>{t("openOriginal")}</Link>
                   <AddToList entry={{

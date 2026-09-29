@@ -4,7 +4,7 @@ import { fileUrl, type Facets, type Hit, type ItemCard } from "../api";
 import { LANGS, type Key } from "../i18n";
 import { formatMs, useApi } from "../hooks";
 import { useSession } from "../state";
-import { browsePath, hasFilters, ITEM_TYPES, searchPath } from "../filters";
+import { browsePath, hasFilters, ITEM_TYPES, MAX_QUERY, searchPath } from "../filters";
 import { AddToList, ArticleLinks, ContentText, ErrorState, FixtureChip, KindChip, Loading, useDocumentTitle, VerifiedChip } from "../components/Bits";
 
 const langName = (code: string) => LANGS.find((l) => l.code === code)?.name ?? code.toUpperCase();
@@ -51,7 +51,7 @@ function HitCard({ h }: { h: Hit }) {
         </dl>
       )}
       <span className="cite" style={{ gridColumn: "1 / -1" }}>
-        {t("citation")}: {h.citation}
+        {t("citation")}: <ContentText text={h.citation} />
       </span>
       {(h.extra?.articles?.length ?? 0) > 0 && <div style={{ gridColumn: "1 / -1" }}><ArticleLinks articles={h.extra.articles} /></div>}
       <div className="row" style={{ gridColumn: "1 / -1" }}>
@@ -78,8 +78,8 @@ function ItemCardView({ it }: { it: ItemCard }) {
         <div style={{ minWidth: 0 }}>
           <h2 style={{ fontSize: "var(--step-1)", margin: 0 }}><Link to={`/item/${it.id}`}><ContentText text={it.title} /></Link></h2>
           <div className="meta">
-            {it.date_text && <span>{it.date_text}</span>}
-            {it.creator && <span>{it.creator}</span>}
+            {it.date_text && <ContentText text={it.date_text} />}
+            {it.creator && <ContentText text={it.creator} />}
             <span>{t(`col_${it.collection}` as Key)}</span>
           </div>
           {photo && <p className="card-caption">{photo.caption}</p>}
@@ -106,13 +106,14 @@ export function Search() {
   const browse = useApi<ItemCard[]>(searchUrl ? null : browsePath(params));
   const facets = useApi<Facets>("/api/visitor/facets");
 
+  // Each query and filter change is its own history entry, so Back returns to the previous results.
   const setFilter = (k: string, v: string) => {
     const next = new URLSearchParams(params);
     if (v) next.set(k, v);
     else next.delete(k);
-    setParams(next, { replace: true });
+    if (next.toString() !== params.toString()) setParams(next);
   };
-  const clearFilters = () => setParams(q ? { q } : {}, { replace: true });
+  const clearFilters = () => setParams(q ? { q } : {});
   const submit = (e: FormEvent) => {
     e.preventDefault();
     setFilter("q", draft.trim());
@@ -129,7 +130,7 @@ export function Search() {
         <label htmlFor="q" className="visually-hidden">
           {t("searchPlaceholder")}
         </label>
-        <input id="q" type="search" value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={t("searchPlaceholder")} autoComplete="off" enterKeyHint="search" />
+        <input id="q" type="search" value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={t("searchPlaceholder")} autoComplete="off" enterKeyHint="search" maxLength={MAX_QUERY} />
         <button type="submit" className="btn">
           {t("searchButton")}
         </button>
@@ -170,11 +171,11 @@ export function Search() {
           <>
             <label>
               {t("dateFrom")}
-              <input type="date" value={params.get("date_from") ?? ""} onChange={(e) => setFilter("date_from", e.target.value)} />
+              <input type="date" value={params.get("date_from") ?? ""} max={params.get("date_to") ?? undefined} onChange={(e) => setFilter("date_from", e.target.value)} />
             </label>
             <label>
               {t("dateTo")}
-              <input type="date" value={params.get("date_to") ?? ""} onChange={(e) => setFilter("date_to", e.target.value)} />
+              <input type="date" value={params.get("date_to") ?? ""} min={params.get("date_from") ?? undefined} onChange={(e) => setFilter("date_to", e.target.value)} />
             </label>
           </>
         )}
@@ -190,7 +191,7 @@ export function Search() {
       {searchUrl && search.data && (
         <>
           <p role="status" className="muted">
-            {search.data.results.length ? t("results", { n: search.data.results.length }) : t("noResults", { q })}
+            {search.data.results.length ? t("results", { n: search.data.results.length }) : hasFilters(params) ? t("noResultsFiltered") : t("noResults", { q })}
           </p>
           <ul className="results">
             {search.data.results.map((h) => <HitCard key={h.passage_id} h={h} />)}

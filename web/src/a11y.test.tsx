@@ -335,6 +335,49 @@ describe("item reader previous and next page arrows", () => {
     expect(prev().textContent).toBe(p);
     expect(next().textContent).toBe(n);
   });
+
+  it("opens a page by its printed label and says when ?page= names no page of the item", async () => {
+    await mount("/item/1?page=4", ".step-btn");
+    expect(current()).toBe("Page 4");
+    expect(document.querySelector(".notice")).toBeNull();
+    await act(async () => root?.unmount());
+    host?.remove();
+
+    await mount("/item/1?page=77", ".step-btn");
+    expect(current()).toBe("Page 3");
+    expect(document.querySelector(".notice[role=status]")?.textContent).toBe("Page 77 is not in this item; showing the first page.");
+  });
+
+  it("uses a labelled drop-down instead of one button per page for long items", async () => {
+    const item = structuredClone(await (await fakeFetch("/api/visitor/items/1?lang=en")).json());
+    item.pages = Array.from({ length: 13 }, (_, i) => ({ ...item.pages[1], id: 500 + i, sequence: i + 1, label: String(1206 + i) }));
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const res = await fakeFetch(input, init);
+      return String(input).startsWith("/api/visitor/items/1?") ? Object.assign(res, { json: async () => item }) : res;
+    }));
+    const router = await mount("/item/1?page=1210", "#page-select");
+    const select = document.querySelector<HTMLSelectElement>("#page-select")!;
+    expect(document.querySelectorAll(".pager .btn")).toHaveLength(0);
+    expect(document.querySelector("label[for=page-select]")?.textContent).toBe("Pages");
+    expect(select.value).toBe("5");
+    expect(select.selectedOptions[0].textContent).toBe("Page 1210");
+    await act(async () => {
+      select.value = "9";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(router.state.location.search).toBe("?page=9");
+    await act(async () => router.navigate(-1));
+    expect(router.state.location.search).toBe("?page=1210");
+  });
+});
+
+describe("item reader with an address that names no item", () => {
+  it.each(["/item/abc", "/item/99"])("%s gives the page a heading, the notice and a way back, without a retry", async (path) => {
+    await mount(path, ".notice.bad");
+    expect(document.querySelector("h1")?.textContent).toBe("This item is not available.");
+    expect(document.querySelector(".notice.bad button")).toBeNull();
+    expect(document.querySelector("a.link-target")?.getAttribute("href")).toBe("/search");
+  });
 });
 
 describe("kiosk idle reset (WCAG 2.2.1)", () => {

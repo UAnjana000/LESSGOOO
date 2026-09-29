@@ -5,8 +5,11 @@ const SEARCH_KEYS = ["collection", "item_type", "lang", "date_from", "date_to", 
 /** URL key -> items endpoint key. The items endpoint takes no dates. */
 const BROWSE_KEYS: Record<string, string> = { collection: "collection", item_type: "item_type", lang: "language", subject: "subject", person: "person", place: "place" };
 
+/** The search endpoint rejects longer queries. */
+export const MAX_QUERY = 300;
+
 export function searchPath(params: URLSearchParams): string | null {
-  const q = params.get("q")?.trim();
+  const q = params.get("q")?.trim().slice(0, MAX_QUERY).trim();
   if (!q) return null;
   const qs = new URLSearchParams({ q });
   for (const k of SEARCH_KEYS) {

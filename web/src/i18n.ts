@@ -212,6 +212,8 @@ const en = {
   qrMaking: "Making your QR code…",
   mapAllNames: "All names on the map",
   imageOf: "Image from {title}",
+  noResultsFiltered: "No results with these filters. Clear filters to see all matches.",
+  pageNotInItem: "Page {n} is not in this item; showing the first page.",
   ...staffEn,
 };
 export type Key = keyof typeof en;
@@ -430,6 +432,8 @@ const hi: Record<Key, string> = {
   qrMaking: "आपका QR कोड बन रहा है…",
   mapAllNames: "मानचित्र के सभी नाम",
   imageOf: "{title} से चित्र",
+  noResultsFiltered: "इन फ़िल्टरों के साथ कोई परिणाम नहीं मिला। सभी परिणाम देखने के लिए फ़िल्टर हटाएँ।",
+  pageNotInItem: "पृष्ठ {n} इस सामग्री में नहीं है; पहला पृष्ठ दिखाया जा रहा है।",
   ...staffHi,
 };
 
@@ -635,6 +639,8 @@ const mr: Record<Key, string> = {
   qrMaking: "तुमचा QR कोड तयार होत आहे…",
   mapAllNames: "नकाशावरील सर्व नावे",
   imageOf: "{title} मधील चित्र",
+  noResultsFiltered: "या फिल्टरसह कोणतेही निकाल नाहीत. सर्व निकाल पाहण्यासाठी फिल्टर काढा.",
+  pageNotInItem: "पान {n} या साहित्यात नाही; पहिले पान दाखवत आहोत.",
   ...staffMr,
 };
 

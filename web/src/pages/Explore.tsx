@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { fileUrl, type Hit, type ItemCard, type TimelineEvent } from "../api";
 import type { Key } from "../i18n";
@@ -20,7 +20,7 @@ export function Timeline() {
           {tl.data.map((e) => (
             <li key={e.id} className={e.date_certainty !== "exact" ? "approx" : undefined}>
               <div className="date">
-                {e.date_text}
+                <ContentText text={e.date_text} />
                 {e.date_certainty !== "exact" && <span className="muted" style={{ font: "400 var(--step--1) var(--ui)", marginLeft: 10 }}>{t("dateApprox")}</span>}
               </div>
               <h2 style={{ fontSize: "var(--step-1)", margin: "4px 0" }}><LangText map={e.titles} /></h2>
@@ -78,7 +78,12 @@ export function Story() {
   return (
     <div className="page">
       {st.loading && <Loading />}
-      {st.error && <ErrorState error={st.error} retry={st.reload} />}
+      {st.error && (
+        <>
+          <h1>{t("storiesTitle")}</h1>
+          <ErrorState error={st.error} retry={st.reload} />
+        </>
+      )}
       {d && (
         <>
           <h1><LangText map={d.titles} /></h1>
@@ -101,7 +106,7 @@ export function Story() {
                     <blockquote className="passage" lang={b.passage.language} style={{ margin: 0 }}>{b.passage.text}</blockquote>
                   </>
                 )}
-                <span className="cite">{t("citation")}: {b.citation}</span>
+                <span className="cite">{t("citation")}: <ContentText text={b.citation} /></span>
                 <div className="row">
                   <Link className="btn small" to={b.deep_link}>{t("openItem")}</Link>
                   <FixtureChip show={b.item.is_fixture} />
@@ -249,6 +254,11 @@ export function Basket() {
   const [qr, setQr] = useState<CollectionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [making, setMaking] = useState(false);
+  // The code encodes the list as it was; any change to the list makes it stale.
+  useEffect(() => {
+    setQr(null);
+    setError(null);
+  }, [s.basket]);
   const hours = qr ? Math.round((Date.parse(qr.expires_at) - Date.now()) / 3_600_000) : 0;
   const make = async () => {
     setError(null);
@@ -277,7 +287,7 @@ export function Basket() {
               <li key={`${b.item_id}-${b.passage_id}-${b.page}-${b.start_ms}`} className="result">
                 <div>
                   <h2 style={{ fontSize: "var(--step-1)", margin: 0 }}><Link to={basketLink(b)}><ContentText text={b.title} /></Link></h2>
-                  <span className="cite" style={{ marginTop: 6 }}>{b.citation}</span>
+                  <span className="cite" style={{ marginTop: 6 }}><ContentText text={b.citation} /></span>
                 </div>
                 <button type="button" className="btn secondary small" onClick={() => s.removeFromBasket(b)}>
                   {t("remove")}<span className="visually-hidden">: {b.title}</span>
@@ -335,7 +345,7 @@ export function SharedList() {
                 <h2 style={{ fontSize: "var(--step-1)", margin: 0 }}><Link to={e.deep_link}><ContentText text={e.item.title} /></Link></h2>
                 {e.start_ms != null && <span className="meta">{t("atTime", { time: formatMs(e.start_ms) })}</span>}
                 {e.passage && <blockquote lang={e.passage.language}>{e.passage.text}</blockquote>}
-                <span className="cite">{t("citation")}: {e.citation}</span>
+                <span className="cite">{t("citation")}: <ContentText text={e.citation} /></span>
                 <span className="muted" style={{ fontSize: "var(--step--1)" }}>{t("rights")}: {e.rights_line}</span>
                 <FixtureChip show={e.item.is_fixture} />
               </li>
