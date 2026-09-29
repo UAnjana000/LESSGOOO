@@ -39,3 +39,44 @@ export function metadataBody(f: MetadataForm): Record<string, unknown> {
   body.reason = f.reason.trim();
   return body;
 }
+
+type Detail = { loc?: unknown[]; msg?: string; message?: string; problems?: string[]; files?: FileNote[] };
+export interface FileNote { name?: string; status?: string; detail?: string | null }
+
+/** Per-file intake outcome, e.g. "a.pdf: duplicate (already stored as file 12)". */
+export function fileNotes(files: FileNote[] | undefined): string {
+  return (files ?? []).map((f) => `${f.name ?? "?"}: ${f.status ?? "?"}${f.detail ? ` (${f.detail})` : ""}`).join("; ");
+}
+
+/** Readable text for an API error detail: validation errors as "<field>: <msg>", structured details with their problems or file notes. */
+export function detailText(detail: unknown): string {
+  if (Array.isArray(detail)) {
+    return detail.map((p: string | Detail) => {
+      if (typeof p === "string") return p;
+      const field = Array.isArray(p.loc) && p.loc.length ? p.loc[p.loc.length - 1] : null;
+      const msg = p.msg ?? JSON.stringify(p);
+      return field == null ? msg : `${String(field)}: ${msg}`;
+    }).join("; ");
+  }
+  if (detail && typeof detail === "object") {
+    const d = detail as Detail;
+    const parts = [d.message ?? "", (d.problems ?? []).join("; "), fileNotes(d.files)];
+    return parts.filter(Boolean).join(" ") || JSON.stringify(detail);
+  }
+  return String(detail);
+}
+
+const RIGHTS_OPTIONAL = ["source_url", "edition", "volume", "pages", "training_basis", "notes"] as const;
+
+/** Body for POST /api/staff/rights: blank optional text as null, so saving an entry does not turn null into "". */
+export function rightsBody<F extends Record<string, unknown>>(f: F): Record<string, unknown> {
+  const body: Record<string, unknown> = { ...f };
+  for (const k of RIGHTS_OPTIONAL) body[k] = typeof f[k] === "string" ? (f[k] as string).trim() || null : f[k] ?? null;
+  return body;
+}
+
+/** Permissions a rights edit moves away from "allowed": the server then withdraws published items (display) or flags datasets (training). */
+export function rightsDowngrades(before: Record<string, unknown> | undefined, after: Record<string, unknown>): ("display_permission" | "training_permission")[] {
+  if (!before) return [];
+  return (["display_permission", "training_permission"] as const).filter((k) => before[k] === "allowed" && after[k] !== "allowed");
+}
