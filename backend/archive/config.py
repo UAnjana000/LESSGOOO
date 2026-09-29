@@ -6,7 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,6 +15,17 @@ class Settings(BaseSettings):
 
     environment: Literal["dev", "test", "demo", "production"] = "dev"
     database_url: str = "postgresql+psycopg://archive:archive@localhost:5432/archive"
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def _normalize_database_url(cls, v: object) -> str:
+        if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("postgres://"):
+                return "postgresql+psycopg://" + v[len("postgres://") :]
+            elif v.startswith("postgresql://") and not v.startswith("postgresql+"):
+                return "postgresql+psycopg://" + v[len("postgresql://") :]
+        return str(v)
 
     # Storage: preservation masters live on a separate volume from delivery copies and derivatives.
     preservation_root: Path = Path("./data/preservation")
@@ -121,6 +132,22 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def _normalize_cors_origins(cls, v: object) -> list[str]:
+        if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("[") and v.endswith("]"):
+                import json
+                try:
+                    return json.loads(v)
+                except Exception:
+                    pass
+            return [x.strip() for x in v.split(",") if x.strip()]
+        if isinstance(v, (list, tuple, set)):
+            return [str(x) for x in v]
+        return ["http://localhost:5173"]
 
     @property
     def langfuse_enabled(self) -> bool:

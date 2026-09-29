@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { api, ApiError } from "../api";
+import { api, ApiError, resolveApiUrl } from "../api";
 
 export interface StaffUser {
   email: string;
@@ -66,7 +66,7 @@ export function useAuthedObjectUrl(path: string | null): string | null {
     if (!path || !token) return;
     let revoke: string | null = null;
     let live = true;
-    fetch(path, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(resolveApiUrl(path), { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => (r.ok ? r.blob() : Promise.reject(r.status)))
       .then((b) => {
         if (!live) return;

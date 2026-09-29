@@ -1,0 +1,49 @@
+# Render Blueprint configuration for Dr. B. R. Ambedkar Digital Heritage Archive
+# Use by creating a "New Blueprint Instance" on dashboard.render.com and connecting this repository.
+
+services:
+  # ---------------------------------------------------------------------------
+  # 1. Backend FastAPI Service
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: ambedkar-archive-api
+    runtime: docker
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
+    plan: starter # Starter ($7/mo) recommended for ML embeddings, or Standard
+    region: oregon
+    healthCheckPath: /api/health/ready
+    envVars:
+      - key: ARCHIVE_ENVIRONMENT
+        value: production
+      - key: ARCHIVE_DATABASE_URL
+        sync: false # Set to your PostgreSQL connection string (Supabase, Neon, or Render PostgreSQL with pgvector)
+      - key: ARCHIVE_PUBLIC_BASE_URL
+        sync: false # e.g. https://ambedkar-archive-api.onrender.com
+      - key: ARCHIVE_JWT_SECRET
+        generateValue: true
+      - key: ARCHIVE_BOOTSTRAP_ADMIN_EMAIL
+        value: admin@archive.org
+      - key: ARCHIVE_BOOTSTRAP_ADMIN_PASSWORD
+        generateValue: true
+      - key: ARCHIVE_CORS_ORIGINS
+        value: "*" # Or specify your frontend URL, e.g. https://ambedkar-archive-web.onrender.com
+      - key: PORT
+        value: "8000"
+
+  # ---------------------------------------------------------------------------
+  # 2. Frontend React / Vite Static Site
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: ambedkar-archive-web
+    runtime: static
+    rootDir: web
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        sync: false # Point to https://ambedkar-archive-api.onrender.com
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

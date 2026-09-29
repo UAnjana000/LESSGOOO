@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, apiErrorFromBody } from "./api";
+import { api, ApiError, apiErrorFromBody, resolveApiUrl } from "./api";
 
 export interface Loaded<T> {
   data: T | null;
@@ -21,7 +21,7 @@ export function useApi<T>(path: string | null, token?: string | null): Loaded<T>
     let live = true;
     setLoading(true);
     setError(null);
-    fetch(path, token ? { headers: { Authorization: `Bearer ${token}` } } : {})
+    fetch(resolveApiUrl(path), token ? { headers: { Authorization: `Bearer ${token}` } } : {})
       .then(async (res) => {
         const fromCache = res.headers.get("x-archive-offline") === "1";
         if (!res.ok) {

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { type Hit, type ItemCard, type TimelineEvent } from "../api";
+import { api, type Hit, type ItemCard, type TimelineEvent } from "../api";
 import type { Key } from "../i18n";
 import { basketLink } from "../basket";
 import { formatMs, useApi } from "../hooks";
@@ -357,17 +357,12 @@ export function Basket() {
     setError(null);
     setMaking(true);
     try {
-      const res = await fetch("/api/visitor/collections", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          entries: s.basket.map((b) => ({ item_id: b.item_id, passage_id: b.passage_id, page: b.page, start_ms: b.start_ms })),
-          language: s.lang,
-          base_url: typeof window !== "undefined" ? window.location.origin : undefined,
-        }),
+      const data = await api.post<CollectionResult>("/api/visitor/collections", {
+        entries: s.basket.map((b) => ({ item_id: b.item_id, passage_id: b.passage_id, page: b.page, start_ms: b.start_ms })),
+        language: s.lang,
+        base_url: typeof window !== "undefined" ? window.location.origin : undefined,
       });
-      if (!res.ok) throw new Error(String(res.status));
-      setQr(await res.json());
+      setQr(data);
     } catch {
       setError(s.online ? t("errorGeneric") : t("qrOffline"));
     } finally {

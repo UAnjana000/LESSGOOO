@@ -25,13 +25,22 @@ export function apiErrorFromBody(status: number, body: unknown, offline: boolean
   return new ApiError(status, detail || "error", offline, category);
 }
 
+export const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
+
+export function resolveApiUrl(path: string): string {
+  if (!path || path.startsWith("http://") || path.startsWith("https://") || path.startsWith("blob:") || path.startsWith("data:")) {
+    return path;
+  }
+  return `${API_BASE}${path.startsWith("/") ? "" : "/"}${path}`;
+}
+
 async function request<T>(path: string, init: RequestInit = {}, token?: string | null): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body && !(init.body instanceof FormData)) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
   let res: Response;
   try {
-    res = await fetch(path, { ...init, headers });
+    res = await fetch(resolveApiUrl(path), { ...init, headers });
   } catch {
     throw new ApiError(0, "offline", true);
   }
@@ -55,7 +64,7 @@ export const api = {
     request<T>(path, { method: "PUT", body: JSON.stringify(body) }, token),
 };
 
-export const fileUrl = (id: number) => `/api/visitor/files/${id}`;
+export const fileUrl = (id: number) => resolveApiUrl(`/api/visitor/files/${id}`);
 
 export interface ArticleRef {
   number: string;
