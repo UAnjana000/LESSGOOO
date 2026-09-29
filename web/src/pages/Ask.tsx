@@ -6,37 +6,57 @@ import { AddToList, CitationLink, ContentText, FixtureChip, KindChip, useDocumen
 import { VoiceQuestion } from "../components/VoiceQuestion";
 import { mergeTranscript } from "../voice";
 
+const MAX_QUESTION = 500;
+
 export function Ask() {
   const s = useSession();
   const { t } = s;
   const [params, setParams] = useSearchParams();
-  const [question, setQuestion] = useState(params.get("q") ?? "");
-  const [asked, setAsked] = useState<string | null>(null);
-  const [result, setResult] = useState<AskResult | null>(null);
+  const [question, setQuestion] = useState((params.get("q") ?? "").slice(0, MAX_QUESTION));
+  // The last answer of this visit comes back after Back, so it is not asked (and paid for) again.
+  const [asked, setAsked] = useState<string | null>(s.askLast?.asked ?? null);
+  const [result, setResult] = useState<AskResult | null>(s.askLast?.result ?? null);
   const [busy, setBusy] = useState(false);
   const input = useRef<HTMLTextAreaElement>(null);
   const autoAsked = useRef(false);
+  // A ref, not `busy`: a double click fires twice before the re-render, and each question is a paid call.
+  const inFlight = useRef(false);
+  const pending = useRef<AbortController | null>(null);
   useDocumentTitle(t("askTitle"));
+
+  // Leaving Ask or finishing the visit cancels the question in flight.
+  useEffect(() => () => pending.current?.abort(), [s.sessionId]);
 
   const submit = async (e?: FormEvent, override?: string) => {
     e?.preventDefault();
-    const q = (override ?? question).trim();
-    if (!q || busy) return;
+    const q = (override ?? question).trim().slice(0, MAX_QUESTION);
+    if (!q || inFlight.current) return;
+    inFlight.current = true;
+    const sessionId = s.sessionId;
+    const ctrl = new AbortController();
+    pending.current = ctrl;
     setBusy(true);
     setAsked(q);
     setResult(null);
+    s.setAskLast(null);
     try {
-      const r = await api.post<AskResult>("/api/visitor/ask", { question: q, history: s.askHistory, language: s.lang, session_id: s.sessionId });
+      const r = await api.post<AskResult>("/api/visitor/ask", { question: q, history: s.askHistory, language: s.lang, session_id: sessionId }, null, ctrl.signal);
+      // Finish was pressed while waiting: this answer belongs to the previous visitor.
+      if (ctrl.signal.aborted || !s.isCurrentSession(sessionId)) return;
       setResult(r);
+      if (r.outcome !== "rejected_input" && r.outcome !== "error") setQuestion((cur) => (cur === q ? "" : cur));
       if (r.outcome === "answered" || r.outcome === "extractive") {
         s.pushAsk({ q, a: r.sentences.map((x) => x.text).join(" ").slice(0, 300) });
+        s.setAskLast({ asked: q, result: r });
       }
     } catch (err) {
-      const offline = err instanceof ApiError && (err.offline || err.status === 503);
+      if (ctrl.signal.aborted || !s.isCurrentSession(sessionId)) return;
+      const offline = err instanceof ApiError && err.offline;
       setResult({ outcome: offline ? "offline" : "error", language: s.lang, label: null, message: null, sentences: [], citations: [], paraphrase_only: false, retried_retrieval: false });
     } finally {
+      if (pending.current === ctrl) pending.current = null;
+      inFlight.current = false;
       setBusy(false);
-      setQuestion("");
       setParams({}, { replace: true });
     }
   };
@@ -64,7 +84,7 @@ export function Ask() {
           id="ask-q"
           ref={input}
           value={question}
-          maxLength={500}
+          maxLength={MAX_QUESTION}
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
@@ -79,7 +99,7 @@ export function Ask() {
       <VoiceQuestion
         disabled={busy}
         onText={(text) => {
-          setQuestion((q) => mergeTranscript(q, text, 500));
+          setQuestion((q) => mergeTranscript(q, text, MAX_QUESTION));
           input.current?.focus();
         }}
       />
@@ -89,7 +109,7 @@ export function Ask() {
         {result && asked && (
           <article className="answer">
             <h2 style={{ fontSize: "var(--step-1)" }}>{asked}</h2>
-            <AnswerBody result={result} numberOf={numberOf} />
+            <AnswerBody result={result} numberOf={numberOf} onRetry={() => void submit(undefined, asked ?? undefined)} />
           </article>
         )}
       </div>
@@ -97,14 +117,23 @@ export function Ask() {
   );
 }
 
-function AnswerBody({ result, numberOf }: { result: AskResult; numberOf: (pid: number) => number }) {
+function AnswerBody({ result, numberOf, onRetry }: { result: AskResult; numberOf: (pid: number) => number; onRetry: () => void }) {
   const { t } = useSession();
   const r = result;
-  if (r.outcome === "offline") return <div className="notice">{t("askOffline")}</div>;
+  const retry = <button type="button" className="btn small" onClick={onRetry}>{t("retry")}</button>;
+  if (r.outcome === "offline") {
+    return (
+      <>
+        <div className="notice">{t("askOffline")}</div>
+        {retry}
+      </>
+    );
+  }
   if (r.outcome === "error") {
     return (
       <>
         <div className="notice bad">{t("errorGeneric")}</div>
+        {retry}
         {r.citations.length > 0 && <Sources result={r} heading={t("askRelated")} />}
       </>
     );
@@ -112,7 +141,7 @@ function AnswerBody({ result, numberOf }: { result: AskResult; numberOf: (pid: n
   if (r.outcome === "refused" || r.outcome === "rejected_input") {
     return (
       <>
-        <div className="label-row"><span className="chip">{t("askRefused")}</span></div>
+        <div className="label-row"><span className="chip">{t(r.reason === "too_long" ? "askTooLong" : "askRefused")}</span></div>
         <p>{r.message}</p>
         {r.citations.length > 0 && <Sources result={r} heading={t("askRelated")} />}
       </>
@@ -152,7 +181,9 @@ function AnswerBody({ result, numberOf }: { result: AskResult; numberOf: (pid: n
           </p>
         ))}
       </div>
-      <p className="muted" style={{ fontSize: "var(--step--1)", marginTop: 12 }}>{t("claimNote")}</p>
+      {r.checks?.citations_ok && r.checks.quotes_verified === r.checks.quotes && (
+        <p className="muted" style={{ fontSize: "var(--step--1)", marginTop: 12 }}>{t("claimNote")}</p>
+      )}
       <Sources result={r} heading={t("sources")} />
     </>
   );

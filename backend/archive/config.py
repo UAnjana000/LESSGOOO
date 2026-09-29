@@ -106,7 +106,7 @@ class Settings(BaseSettings):
     sufficiency_threshold_version: str = "uncalibrated-v0"
     session_turns: int = 3
     question_max_chars: int = 500
-    prompt_version: str = "ask-v1"
+    prompt_version: str = "ask-v2"
 
     # Langfuse (redacted traces only). Absent keys -> local redacted JSONL sink.
     langfuse_public_key: str = ""

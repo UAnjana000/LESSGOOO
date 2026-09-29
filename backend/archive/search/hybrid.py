@@ -174,6 +174,7 @@ def load_hits(db: Session, ids: list[int]) -> dict[int, Hit]:
             page_sequence=page.sequence if page else None, start_ms=seg.start_ms if seg else None,
             extra={"edition": item.edition, "volume": item.volume, "is_fixture": item.is_fixture,
                    "translation_of_id": p.translation_of_id, "item_type": item.item_type,
+                   "speaker": seg.speaker if seg is not None else None,
                    "rights_line": item.rights.attribution, "credit": photo_credit(photo),
                    "image_file_id": page.delivery_file_id if page is not None and page.doc_class == "photograph"
                    else None,
