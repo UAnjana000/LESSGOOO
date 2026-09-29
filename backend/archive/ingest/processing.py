@@ -270,8 +270,11 @@ def run_sarvam(db: Session, page: Page, fallback: OcrFallback, *, local_text: st
         local_text = prior[-1].text if prior else ""
     disagreement = 1 - fuzz.ratio(local_text or "", out.text) / 100
     meta["disagreement"] = round(disagreement, 4)
-    db.add(OcrResult(page_id=page.id, engine="sarvam-doc-ai", engine_version=out.engine_version, text=out.text,
-                     raw_meta=meta))
+    # The Sarvam text is the reviewer's starting point (and the "before" of the review decision).
+    for r in page.ocr_results:
+        r.selected = False
+    page.ocr_results.append(OcrResult(engine="sarvam-doc-ai", engine_version=out.engine_version, text=out.text,
+                                      raw_meta=meta, selected=True))
     page.ocr_route = OcrRoute.sarvam.value
     page.status = PageStatus.needs_full_review.value
     page.sarvam_last_error = None

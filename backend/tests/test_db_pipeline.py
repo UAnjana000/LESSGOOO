@@ -155,7 +155,8 @@ class TestOcrRouting:
         assert page.status == "needs_full_review" and page.ocr_route == "sarvam" and page.approved_text is None
         sarvam = db.execute(select(OcrResult).where(OcrResult.page_id == page.id,
                                                     OcrResult.engine == "sarvam-doc-ai")).scalar_one()
-        assert sarvam.status == "ok" and sarvam.text == "\n\n".join(real) and not sarvam.selected
+        assert sarvam.status == "ok" and sarvam.text == "\n\n".join(real) and sarvam.selected
+        assert review.candidate_text(page) == sarvam.text
         assert "disagreement" in sarvam.raw_meta and sarvam.raw_meta["images_removed"] == 7
         raw_file = db.get(FileVersion, sarvam.raw_meta["raw_file_id"])
         assert storage.read_bytes(raw_file.storage_uri).decode("utf-8") == raw

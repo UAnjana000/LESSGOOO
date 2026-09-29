@@ -110,27 +110,40 @@ def validate_item_entry(entry: dict[str, Any], rights: dict[str, dict[str, Any]]
     return errors
 
 
-def upsert_rights(db: Session, entry: dict[str, Any], actor: str) -> RightsRecord:
+RIGHTS_FIELDS = ("title", "source_url", "source_institution", "edition", "volume", "pages", "rights_holder",
+                 "basis_for_use", "display_permission", "training_permission", "training_basis",
+                 "external_processing", "evidence", "attribution", "checked_by", "notes")
+
+
+def _audit_value(v: Any) -> Any:
+    return v.isoformat() if isinstance(v, dt.date) else v
+
+
+def upsert_rights(db: Session, entry: dict[str, Any], actor: str, partial: bool = False) -> RightsRecord:
+    """Create or update a rights entry. With `partial`, an existing entry changes only the keys in `entry`
+    (a staff edit); otherwise every field is written (a manifest import restates the whole entry)."""
     rec = db.execute(select(RightsRecord).where(RightsRecord.source_key == entry["source_key"])).scalar_one_or_none()
-    fields = {k: entry.get(k) for k in (
-        "title", "source_url", "source_institution", "edition", "volume", "pages", "rights_holder",
-        "basis_for_use", "display_permission", "training_permission", "training_basis",
-        "external_processing", "evidence", "attribution", "checked_by", "notes")}
-    fields["date_checked"] = dt.date.fromisoformat(str(entry["date_checked"]))
-    fields["discovery_only"] = bool(entry.get("discovery_only", False))
-    fields["is_fixture"] = bool(entry.get("is_fixture", False))
+    partial = partial and rec is not None
+    fields = {k: entry.get(k) for k in RIGHTS_FIELDS if not partial or k in entry}
+    if not partial or "date_checked" in entry:
+        fields["date_checked"] = dt.date.fromisoformat(str(entry["date_checked"]))
+    for flag in ("discovery_only", "is_fixture"):
+        if not partial or flag in entry:
+            fields[flag] = bool(entry.get(flag, False))
     if rec is None:
         rec = RightsRecord(source_key=entry["source_key"], **fields)
         db.add(rec)
         db.flush()
         audit.record(db, actor, "rights.create", "rights_record", rec.id, detail={"source_key": rec.source_key})
     else:
-        before = {k: getattr(rec, k) for k in ("display_permission", "training_permission", "external_processing")}
-        for k, v in fields.items():
+        changed = {k: v for k, v in fields.items() if getattr(rec, k) != v}
+        before = {k: _audit_value(getattr(rec, k)) for k in changed}
+        for k, v in changed.items():
             setattr(rec, k, v)
         db.flush()
         audit.record(db, actor, "rights.update", "rights_record", rec.id,
-                     detail={"before": before, "source_key": rec.source_key})
+                     detail={"source_key": rec.source_key, "before": before,
+                             "after": {k: _audit_value(v) for k, v in changed.items()}})
     return rec
 
 
@@ -207,14 +220,17 @@ def store_original(db: Session, item: ArchivalItem, data: bytes, name: str, acto
     digest = storage.sha256_bytes(data)
     if expected_sha256 and expected_sha256.lower() != digest:
         folder = storage.quarantine(data, name, f"checksum mismatch: expected {expected_sha256}, got {digest}")
+        log.info("quarantined %s at %s", name, folder)
         audit.record(db, actor, "file.quarantine", "archival_item", item.id, detail={"name": name, "reason": "checksum"})
-        return IntakeFileResult(name, "quarantined", digest, f"checksum mismatch; quarantined at {folder}")
+        # The quarantine folder is a server path; it stays in the log, not in the client-facing note.
+        return IntakeFileResult(name, "quarantined", digest, "checksum mismatch; the file was quarantined")
     try:
         mime, ext = sniff_format(data)
     except IntakeRejected as exc:
         folder = storage.quarantine(data, name, str(exc))
+        log.info("quarantined %s at %s", name, folder)
         audit.record(db, actor, "file.quarantine", "archival_item", item.id, detail={"name": name, "reason": str(exc)})
-        return IntakeFileResult(name, "quarantined", digest, f"{exc}; quarantined at {folder}")
+        return IntakeFileResult(name, "quarantined", digest, f"{exc}; the file was quarantined")
     existing = db.execute(
         select(FileVersion).where(FileVersion.sha256 == digest, FileVersion.role == "preservation_master")
     ).scalars().first()
@@ -301,9 +317,11 @@ def intake_item(db: Session, meta: dict[str, Any], files: list[tuple[str, bytes,
             db.add(page)
             seq += 1
             result.pages_created += 1
-    if meta["doc_class"] == DocClass.photograph.value and meta.get("photo"):
-        p = meta["photo"]
-        db.add(PhotoMetadata(item_id=item.id, caption=p.get("caption", ""), people=p.get("people", []),
+    if meta["doc_class"] == DocClass.photograph.value:
+        # Always a draft caption record: photo review (and so publication) needs one, even when the upload
+        # form sent no caption. An empty caption cannot be approved.
+        p = meta.get("photo") or {}
+        db.add(PhotoMetadata(item_id=item.id, caption=p.get("caption") or "", people=p.get("people") or [],
                              place=p.get("place"), event=p.get("event"), date_text=p.get("date_text"),
                              date_certainty=p.get("date_certainty", "unknown"), photographer=p.get("photographer"),
                              source_reference=p.get("source_reference"), visible_text=p.get("visible_text"),
