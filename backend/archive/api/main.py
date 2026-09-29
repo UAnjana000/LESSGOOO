@@ -36,11 +36,21 @@ def _warm_models() -> None:
         log.exception("model warm-up failed; models will load on first use")
 
 
+def _warn_unpriced_llm() -> None:
+    """Answer cost is tokens x configured price; with both prices 0 every answer logs $0 and the daily cost
+    alert can never fire."""
+    if settings.llm_available and not settings.llm_input_cost_per_mtok and not settings.llm_output_cost_per_mtok:
+        log.warning("answer model prices are 0: set ARCHIVE_LLM_INPUT_COST_PER_MTOK and "
+                    "ARCHIVE_LLM_OUTPUT_COST_PER_MTOK, or every answer is logged as costing $0")
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     storage.ensure_roots()
+    _warn_unpriced_llm()
     threading.Thread(target=_warm_models, name="model-warmup", daemon=True).start()
     yield
+    tracing.flush()
 
 
 app = FastAPI(title="Ambedkar Digital Heritage Archive - Edge API", version=__version__,

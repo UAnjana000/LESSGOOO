@@ -81,6 +81,11 @@ MESSAGES = {
         "hi": "इस प्रश्न का उत्तर यहाँ नहीं दिया जा सकता। कृपया संग्रह की सामग्री के बारे में पूछें।",
         "mr": "या प्रश्नाचे उत्तर येथे देता येत नाही. कृपया संग्रहातील साहित्याबद्दल विचारा.",
     },
+    "too_long": {
+        "en": "This question is too long. Please shorten it to {max_chars} characters or fewer and ask again.",
+        "hi": "यह प्रश्न बहुत लंबा है। कृपया इसे {max_chars} अक्षरों या उससे कम में छोटा करके फिर से पूछें।",
+        "mr": "हा प्रश्न खूप मोठा आहे. कृपया तो {max_chars} अक्षरांपर्यंत लहान करून पुन्हा विचारा.",
+    },
     "local_only": {
         "en": "The rights terms of these passages do not allow sending them to the answer model, so no answer was "
               "written. You can read the closest approved passages here.",

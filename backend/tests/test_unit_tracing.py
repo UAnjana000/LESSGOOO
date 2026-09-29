@@ -78,6 +78,7 @@ def exported(monkeypatch, tmp_path):
 
 
 def _wire(exporter) -> tuple[str, dict]:
+    tracing.flush()  # spans export in a background batch; a trace no longer flushes on exit
     spans = exporter.get_finished_spans()
     return json.dumps([{"name": s.name, **dict(s.attributes)} for s in spans], default=str), {s.name: s for s in spans}
 
@@ -167,3 +168,46 @@ class TestLangfuseExport:
                 pass
         wire, by_name = _wire(exported)
         assert "ask" in by_name and "chat gpt" not in by_name and "LEAK" not in wire
+
+
+class TestLangfuseUnreachable:
+    def test_trace_does_not_flush_per_request(self, exported, monkeypatch):
+        calls = []
+        monkeypatch.setattr(tracing._langfuse(), "flush", lambda: calls.append(1))
+        with tracing.trace("ask", {"prompt_version": "ask-v1"}) as tr:
+            tr.span("retrieve", passage_ids=[7])
+        assert calls == []
+        tracing.flush()
+        assert calls == [1]
+
+    def test_shutdown_flush_failure_is_swallowed(self, exported, monkeypatch):
+        def boom():
+            raise ConnectionError("langfuse host unreachable")
+        monkeypatch.setattr(tracing._langfuse(), "flush", boom)
+        tracing.flush()
+
+    def test_failed_langfuse_trace_end_keeps_the_record_locally(self, exported, monkeypatch, tmp_path):
+        lf = tracing._langfuse()
+        real_start = lf.start_as_current_observation
+
+        class FailingEnd:
+            def __init__(self, cm):
+                self.cm = cm
+
+            def __enter__(self):
+                return self.cm.__enter__()
+
+            def __exit__(self, *exc):
+                self.cm.__exit__(*exc)
+                raise ConnectionError("langfuse host unreachable")
+
+        monkeypatch.setattr(lf, "start_as_current_observation", lambda **kw: FailingEnd(real_start(**kw)))
+        tracing._sink.cache_clear()
+        with tracing.trace("ask", {"prompt_version": "ask-v1"}) as tr:
+            tr.span("retrieve", passage_ids=[7])
+            tr.update(outcome="answered")
+        tracing._sink.cache_clear()
+        lines = [json.loads(x) for f in tmp_path.glob("traces-*.jsonl") for x in f.read_text().splitlines()]
+        assert [r["trace_id"] for r in lines] == [tr.id]
+        assert lines[0]["backend"].startswith("local-jsonl") and lines[0]["output"] == {"outcome": "answered"}
+        assert lines[0]["spans"][0]["passage_ids"] == [7]

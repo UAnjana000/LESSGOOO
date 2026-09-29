@@ -52,7 +52,8 @@ async function request<T>(path: string, init: RequestInit = {}, token?: string |
   let res: Response | null = null;
   try {
     res = await fetch(resolveApiUrl(path, activeBaseUrl), { ...init, headers });
-  } catch {
+  } catch (e) {
+    if (init.signal?.aborted) throw e; // the caller cancelled it: not a lost connection
     // If primary network fetch failed and we have a fallback, try the fallback
     if (API_FALLBACK && activeBaseUrl !== API_FALLBACK) {
       try {
@@ -98,8 +99,8 @@ async function request<T>(path: string, init: RequestInit = {}, token?: string |
 
 export const api = {
   get: <T>(path: string, token?: string | null) => request<T>(path, {}, token),
-  post: <T>(path: string, body: unknown, token?: string | null) =>
-    request<T>(path, { method: "POST", body: body instanceof FormData ? body : JSON.stringify(body) }, token),
+  post: <T>(path: string, body: unknown, token?: string | null, signal?: AbortSignal) =>
+    request<T>(path, { method: "POST", body: body instanceof FormData ? body : JSON.stringify(body), signal }, token),
   put: <T>(path: string, body: unknown, token?: string | null) =>
     request<T>(path, { method: "PUT", body: JSON.stringify(body) }, token),
 };
@@ -277,6 +278,10 @@ export interface AskResult {
   citations: AskCitation[];
   paraphrase_only: boolean;
   retried_retrieval: boolean;
+  /** Why a question was not accepted, e.g. "too_long". */
+  reason?: string | null;
+  /** What the server's validator checked for an answer; absent or null means no check to report. */
+  checks?: { citations_ok: boolean; quotes: number; quotes_verified: number } | null;
   claim_support_note?: string;
   cache_hit?: boolean;
   latency_ms?: number;
