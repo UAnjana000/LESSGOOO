@@ -3104,22 +3104,39 @@ details > summary { min-height: 48px; display: flex; align-items: center; font-w
 .kiosk-dock {
   display: flex;
   gap: 8px;
-  align-items: center;
+  align-items: stretch;
+  flex: 1 1 auto;
+  justify-content: center;
+  max-width: 1040px;
 }
 .kiosk-nav-btn {
-  min-height: 48px;
-  min-width: 48px;
-  padding: 6px 14px;
+  flex: 1 1 0;
+  width: 130px;
+  min-width: 110px;
+  max-width: 150px;
+  height: 52px;
+  padding: 6px 8px;
   display: inline-flex;
+  flex-direction: row;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 6px;
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 6px;
   color: #ffffff;
   font: 600 var(--step--1) var(--ui);
   cursor: pointer;
-  transition: background 120ms ease;
+  white-space: nowrap;
+  text-align: center;
+  box-sizing: border-box;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.kiosk-nav-btn .dock-icon {
+  font-size: 1.1em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .kiosk-nav-btn.active, .kiosk-nav-btn:hover {
   background: var(--indigo);

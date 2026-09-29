@@ -6,7 +6,7 @@ import { VirtualKeyboard } from "../components/VirtualKeyboard";
 import { Search } from "./Search";
 import { Ask } from "./Ask";
 import { Stories } from "./Stories";
-import { Timeline, Basket } from "./Explore";
+import { Timeline, Basket, KnowledgeMap } from "./Explore";
 
 const Constitution = lazy(async () => {
   const m = await import("./Constitution");
@@ -17,7 +17,7 @@ export function KioskMode() {
   const { t, lang, setLang, basket } = useSession();
   const navigate = useNavigate();
 
-  const [activeTab, setActiveTab] = useState<"search" | "ask" | "stories" | "timeline" | "constitution" | "list">("search");
+  const [activeTab, setActiveTab] = useState<"search" | "ask" | "stories" | "timeline" | "constitution" | "map" | "list">("search");
   const [activeInput, setActiveInput] = useState<HTMLInputElement | HTMLTextAreaElement | null>(null);
   const [showExitModal, setShowExitModal] = useState(false);
   const [pin, setPin] = useState("");
@@ -157,6 +157,16 @@ export function KioskMode() {
 
           <button
             type="button"
+            className={`kiosk-nav-btn ${activeTab === "map" ? "active" : ""}`}
+            onClick={() => setActiveTab("map")}
+            aria-pressed={activeTab === "map"}
+          >
+            <span className="dock-icon" aria-hidden="true">🌐</span>
+            <span>{t("mapTitle")}</span>
+          </button>
+
+          <button
+            type="button"
             className={`kiosk-nav-btn ${activeTab === "list" ? "active" : ""}`}
             onClick={() => setActiveTab("list")}
             aria-pressed={activeTab === "list"}
@@ -220,6 +230,7 @@ export function KioskMode() {
             <Constitution />
           </Suspense>
         )}
+        {activeTab === "map" && <KnowledgeMap />}
         {activeTab === "list" && <Basket />}
       </main>
 
