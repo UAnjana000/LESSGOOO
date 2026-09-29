@@ -90,8 +90,25 @@ build settings come from `web/vercel.json`. Every push to `main` redeploys the w
 
 ## Updating
 
-- Website only: push to `main`; Vercel redeploys.
-- Backend: on the VM, `cd ~/archive && git pull && docker compose -f docker-compose.yml -f deploy/cloud/docker-compose.cloud.yml up -d --build`.
+Every push to `main` deploys both halves: Vercel rebuilds the website, and the GitHub Actions workflow
+`.github/workflows/deploy-azure.yml` builds and tests the web app, deploys the backend to the VM, and
+checks `/api/health`. Runs are listed under the repository's Actions tab; "Run workflow" there redeploys
+without a push.
+
+Manual backend deploy, on the VM: `cd ~/archive && git pull && bash deploy/cloud/deploy.sh`.
+
+### Automatic deploys: how they are wired
+
+| Where | Name | Value |
+| --- | --- | --- |
+| GitHub secret | `AZURE_DEPLOY_KEY` | Private half of a key used only for deploying |
+| GitHub secret | `AZURE_KNOWN_HOSTS` | The VM's SSH host keys (`ssh-keyscan`), checked against a first-hand login |
+| GitHub variable | `AZURE_HOST` | `ambedkar-archive.indiasouthcentral.cloudapp.azure.com` |
+| VM `~/.ssh/authorized_keys` | the deploy key's line | `command="cd ~/archive && git pull --ff-only -q && exec bash deploy/cloud/deploy.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-ed25519 …` |
+
+The forced command means the deploy key can only pull and deploy; it cannot open a shell. To revoke it,
+delete that line on the VM and the secret on GitHub. `git pull --ff-only` refuses to deploy if someone has
+edited tracked files on the VM; keep VM-only settings in `.env`, which is not tracked.
 
 Never run `docker compose down -v`: it deletes the database and file volumes.
 
