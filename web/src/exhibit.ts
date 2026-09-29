@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { leaseValid, type ExhibitPayload } from "./exhibitVerify";
+import { isKiosk } from "./kiosk";
 
 const SYNC_EVERY_MS = 15 * 60_000;
 const DEVICE_KEY = "archive-kiosk-device";
@@ -33,6 +34,7 @@ function applyPayload(p: ExhibitPayload | null) {
   emit({ version: p.manifest_version, leaseExpiresAt: p.lease_expires_at, leaseValid: leaseValid(p), items: p.items.length });
 }
 
+/** Every visitor gets the service worker (offline app shell); only kiosks download and sync the exhibit cache. */
 export async function startExhibit(): Promise<void> {
   if (!("serviceWorker" in navigator) || import.meta.env.DEV) return;
   const reg = await navigator.serviceWorker.register("/sw.js", { type: "module", scope: "/" }).catch(() => null);
@@ -47,6 +49,8 @@ export async function startExhibit(): Promise<void> {
     }
   });
   const post = (msg: object) => (navigator.serviceWorker.controller ?? reg.active)?.postMessage(msg);
+  // Lease status only matters on kiosks; phones never sync, so an old manifest must not raise lease banners.
+  if (!isKiosk()) return;
   post({ type: "exhibit-status" });
   const sync = () => navigator.onLine && post({ type: "exhibit-sync", deviceId: deviceId() });
   sync();

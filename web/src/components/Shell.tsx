@@ -2,23 +2,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useSession } from "../state";
 import { useExhibitStatus } from "../exhibit";
+import { isKiosk } from "../kiosk";
 import { LanguageSwitch } from "./Bits";
 import { IconAsk, IconConstitution, IconHome, IconList, IconMap, IconSearch, IconStories, IconTimeline } from "./Icons";
 
 const IDLE_MS_DEFAULT = 120_000;
 /** WCAG 2.2.1: visitors get at least 20 s warning, and one simple action, before the visit is cleared. */
 export const IDLE_WARNING_MS = 30_000;
-const KIOSK_KEY = "archive-kiosk-mode";
 // "click" covers screen-reader activation, which fires a click with no key or pointer event.
 const ACTIVITY = ["pointerdown", "keydown", "click", "wheel", "touchstart", "input", "focusin", "scroll"] as const;
-
-/** Kiosk behaviour (idle reset, attract screen) applies to installed gallery screens, not visitors' phones. */
-export function isKiosk(): boolean {
-  const flag = new URLSearchParams(window.location.search).get("kiosk");
-  if (flag === "1") localStorage.setItem(KIOSK_KEY, "1");
-  if (flag === "0") localStorage.removeItem(KIOSK_KEY);
-  return localStorage.getItem(KIOSK_KEY) === "1" || window.matchMedia?.("(display-mode: fullscreen)").matches === true;
-}
 
 function openModal(d: HTMLDialogElement | null) {
   if (!d || d.open) return;
@@ -54,8 +46,9 @@ export function Shell() {
   const endRef = useRef(endVisit);
   endRef.current = endVisit;
 
+  // No idle timer over the attract screen: its own focus would count as activity and re-arm the warning.
   useEffect(() => {
-    if (!isKiosk()) return;
+    if (attract || !isKiosk()) return;
     let warnTimer = 0;
     let resetTimer = 0;
     let tick = 0;
@@ -92,7 +85,13 @@ export function Shell() {
       clear();
       ACTIVITY.forEach((e) => window.removeEventListener(e, onActivity, { capture: true }));
     };
-  }, [warnAfter]);
+  }, [warnAfter, attract]);
+
+  const dismissAttract = () => {
+    setAttract(false);
+    // <main> is still inert in this render; focus it once the attract screen has gone.
+    window.setTimeout(() => mainRef.current?.focus({ preventScroll: true }));
+  };
 
   const firstPath = useRef(true);
   useEffect(() => {
@@ -187,7 +186,7 @@ export function Shell() {
         </div>
       </dialog>
       {attract && (
-        <button type="button" className="attract" onClick={() => setAttract(false)} autoFocus>
+        <button type="button" className="attract" onClick={dismissAttract} autoFocus>
           <span className="attract-title">{t("archiveName")}</span>
           <span className="attract-lead">{t("attractTitle")}</span>
         </button>

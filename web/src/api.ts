@@ -25,6 +25,19 @@ export function apiErrorFromBody(status: number, body: unknown, offline: boolean
   return new ApiError(status, detail || "error", offline, category);
 }
 
+/**
+ * navigator.onLine only knows about the local network. Requests report whether the archive server itself
+ * answered (not the service worker's offline copy, not a gateway error) so the offline banner stays honest.
+ */
+export const REACHABILITY_EVENT = "archive-reachability";
+let lastReachable = true;
+export function reportReachable(res: Response | null): void {
+  const reachable = res !== null && res.headers.get("x-archive-offline") !== "1" && ![502, 503, 504].includes(res.status);
+  if (reachable === lastReachable) return;
+  lastReachable = reachable;
+  window.dispatchEvent(new CustomEvent(REACHABILITY_EVENT, { detail: reachable }));
+}
+
 async function request<T>(path: string, init: RequestInit = {}, token?: string | null): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body && !(init.body instanceof FormData)) headers.set("Content-Type", "application/json");
@@ -33,8 +46,10 @@ async function request<T>(path: string, init: RequestInit = {}, token?: string |
   try {
     res = await fetch(path, { ...init, headers });
   } catch {
+    reportReachable(null);
     throw new ApiError(0, "offline", true);
   }
+  reportReachable(res);
   if (!res.ok) {
     try {
       throw apiErrorFromBody(res.status, await res.json(), res.headers.get("x-archive-offline") === "1");

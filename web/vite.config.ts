@@ -21,7 +21,7 @@ export default defineConfig({
         description: "Search and read the archive's approved sources, with citations to the original pages.",
         start_url: "/",
         display: "fullscreen",
-        orientation: "landscape",
+        orientation: "any",
         background_color: "#eef1f7",
         theme_color: "#1b2a6b",
         icons: [

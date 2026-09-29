@@ -54,10 +54,16 @@ export function itemIdFromUrl(url: string): number | null {
   return m ? Number(m[1]) : null;
 }
 
+/** IIIF images are rendered from delivery files, so they belong to the same item as /api/visitor/files/{id}. */
+function fileUrlOf(path: string): string {
+  const m = path.match(/^\/iiif\/(\d+)\//);
+  return m ? `/api/visitor/files/${m[1]}` : path;
+}
+
 export function servable(p: ExhibitPayload, url: string, fileItem: Map<string, number>, now = Date.now()): boolean {
   if (!leaseValid(p, now)) return false;
   const path = new URL(url, "http://x").pathname;
-  const itemId = itemIdFromUrl(path) ?? fileItem.get(path) ?? null;
+  const itemId = itemIdFromUrl(path) ?? fileItem.get(fileUrlOf(path)) ?? null;
   if (itemId !== null) {
     if (p.withdrawn_item_ids.includes(itemId)) return false;
     return p.items.some((i) => i.item_id === itemId);

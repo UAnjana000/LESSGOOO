@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import datetime as dt
 import io
+import re
 import secrets
 from typing import Annotated, Any
 
@@ -23,6 +24,7 @@ from archive.config import get_settings
 from archive.db import get_db
 from archive.ingest.publish import current_index_version, withdrawn_item_ids
 from archive.models import (
+    AccessLevel,
     ArchivalItem,
     CollectionSetting,
     ConstitutionArticle,
@@ -113,6 +115,14 @@ def _file_visible(db: Session, file_id: int) -> FileVersion:
     if visible_item(db, fv.item_id) is None:
         raise HTTPException(404, "not available")
     return fv
+
+
+def cache_control(db: Session, item_id: int, max_age: int) -> str:
+    """Browsers may cache only fully public items; online-only content must not outlive the connection."""
+    item = db.get(ArchivalItem, item_id)
+    if item is not None and item.access_level == AccessLevel.public.value:
+        return f"public, max-age={max_age}"
+    return "private, no-store"
 
 
 @router.get("/config")
@@ -283,7 +293,7 @@ def captions(item_id: int, db: DB) -> Response:
 def file_download(file_id: int, db: DB) -> FileResponse:
     fv = _file_visible(db, file_id)
     return FileResponse(storage.resolve(fv.storage_uri), media_type=fv.format,
-                        headers={"Cache-Control": "public, max-age=3600", "ETag": fv.sha256})
+                        headers={"Cache-Control": cache_control(db, fv.item_id, 3600), "ETag": fv.sha256})
 
 
 @router.get("/search")
@@ -521,10 +531,16 @@ def get_collection(token: str, db: DB) -> dict[str, Any]:
             "removed_count": len(col.entries) - len(out)}
 
 
+# The kiosk app's generated id (web/src/exhibit.ts); anything else gets the manifest but is not recorded.
+KIOSK_DEVICE_ID = re.compile(r"kiosk-[0-9a-z]{8}")
+
+
 @router.get("/exhibit/manifest")
 def exhibit_manifest(db: DB, request: Request, device_id: str = "unregistered") -> dict[str, Any]:
-    rec = db.get(KioskSync, device_id) or KioskSync(device_id=device_id)
     manifest = exhibit.build_manifest(db, device_id)
+    if not KIOSK_DEVICE_ID.fullmatch(device_id):
+        return manifest
+    rec = db.get(KioskSync, device_id) or KioskSync(device_id=device_id)
     rec.last_sync_at = utcnow()
     rec.manifest_version = manifest["payload"]["manifest_version"]
     rec.user_agent = request.headers.get("user-agent", "")[:200]

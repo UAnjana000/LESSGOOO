@@ -378,6 +378,19 @@ describe("kiosk idle reset (WCAG 2.2.1)", () => {
     expect(document.getElementById("main")?.hasAttribute("inert")).toBe(true);
     expect(document.querySelector(".rail")?.hasAttribute("inert")).toBe(true);
     expect(document.activeElement?.classList.contains("attract")).toBe(true);
+
+    // The attract screen's own focus is not activity: no warning or reset while it waits.
+    await advance(3 * idleMs);
+    expect(warning().open).toBe(false);
+    expect(document.querySelector(".attract")).not.toBeNull();
+
+    // Touching it starts a fresh visit with focus on the page, and the idle timer again.
+    await act(async () => { document.querySelector<HTMLButtonElement>(".attract")!.click(); });
+    await advance(0);
+    expect(document.querySelector(".attract")).toBeNull();
+    expect(document.activeElement?.id).toBe("main");
+    await advance(idleMs - IDLE_WARNING_MS + 500);
+    expect(warning().open).toBe(true);
   });
 });
 

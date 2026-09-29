@@ -3,8 +3,8 @@
 // - Precaches the app shell (build output) so the kiosk UI opens without the edge server; offline
 //   navigations to visitor pages (e.g. reloading /item/3) fall back to that shell.
 // - Keeps a signed, leased exhibit cache of published, fully public items only.
-// - Network first for visitor data; cached exhibit items only when offline, only within the lease,
-//   and never for withdrawn items. Ask and staff routes are never cached.
+// - Network first for visitor data and IIIF images; cached exhibit items only when offline, only within the
+//   lease, and never for withdrawn items. Ask and staff routes are never cached.
 import { matchPrecache, precacheAndRoute } from "workbox-precaching";
 import { registerRoute } from "workbox-routing";
 import {
@@ -109,11 +109,13 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(fetch(event.request).catch(() => offlineJson({ outcome: "offline", citations: [], sentences: [] })));
     return;
   }
-  if (event.request.method !== "GET" || !url.pathname.startsWith("/api/visitor/")) return;
+  const archiveData = url.pathname.startsWith("/api/visitor/") || url.pathname.startsWith("/iiif/");
+  if (event.request.method !== "GET" || !archiveData) return;
   event.respondWith(
     (async () => {
       try {
-        return await fetch(event.request);
+        // Bypass the browser HTTP cache: offline, a stored copy would skip the lease, withdrawal and online-only checks.
+        return await fetch(event.request, { cache: "no-store" });
       } catch {
         const p = await currentManifest();
         if (!p) return offlineJson({ detail: "offline" });

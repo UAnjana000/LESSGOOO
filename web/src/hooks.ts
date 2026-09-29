@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, apiErrorFromBody } from "./api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { api, ApiError, apiErrorFromBody, reportReachable } from "./api";
 
 export interface Loaded<T> {
   data: T | null;
@@ -23,6 +23,7 @@ export function useApi<T>(path: string | null, token?: string | null): Loaded<T>
     setError(null);
     fetch(path, token ? { headers: { Authorization: `Bearer ${token}` } } : {})
       .then(async (res) => {
+        reportReachable(res);
         const fromCache = res.headers.get("x-archive-offline") === "1";
         if (!res.ok) {
           try {
@@ -39,6 +40,7 @@ export function useApi<T>(path: string | null, token?: string | null): Loaded<T>
         }
       })
       .catch((e: unknown) => {
+        if (!(e instanceof ApiError)) reportReachable(null);
         if (live) setError(e instanceof ApiError ? e : new ApiError(0, "offline", true));
       })
       .finally(() => live && setLoading(false));
@@ -48,6 +50,14 @@ export function useApi<T>(path: string | null, token?: string | null): Loaded<T>
   }, [path, token, tick]);
 
   const reload = useCallback(() => setTick((t) => t + 1), []);
+  // Errors and saved offline copies are replaced by live data as soon as the connection returns.
+  const stale = useRef(false);
+  stale.current = Boolean(error) || offline;
+  useEffect(() => {
+    const again = () => stale.current && reload();
+    window.addEventListener("online", again);
+    return () => window.removeEventListener("online", again);
+  }, [reload]);
   return { data, error, loading, offline, reload };
 }
 
