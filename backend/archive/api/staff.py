@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import difflib
 import json
+import secrets
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -42,6 +43,7 @@ from archive.models import (
     ReviewBatch,
     ReviewDecision,
     RightsRecord,
+    StaffUser,
     Story,
     SystemState,
     TimelineEvent,
@@ -51,6 +53,7 @@ from archive.models import (
 from archive.rights import external_processing_allowed
 from archive.search.hybrid import load_hits
 from archive.security import (
+    JUDGE_EMAIL,
     Admin,
     Archivist,
     Curator,
@@ -59,6 +62,7 @@ from archive.security import (
     TranslationReviewer,
     authenticate,
     create_token,
+    hash_password,
 )
 from archive.services import narration, sarvam_text, speech_to_text
 
@@ -92,6 +96,31 @@ def login(body: LoginBody, db: DB) -> dict[str, Any]:
     if user is None:
         raise HTTPException(401, "Email or password is incorrect.")
     audit.record(db, user.email, "staff.login", "staff_user", user.id)
+    db.commit()
+    return {"token": create_token(user), "user": {"email": user.email, "name": user.display_name,
+                                                 "roles": user.roles, "languages": user.languages}}
+
+
+@router.get("/judge-access")
+def judge_access() -> dict[str, bool]:
+    return {"enabled": get_settings().judge_access}
+
+
+@router.post("/login/judge")
+def login_judge(db: DB) -> dict[str, Any]:
+    """Demo only: sign in the read-only judge account without a password."""
+    if not get_settings().judge_access:
+        raise HTTPException(404, "Not found")
+    user = db.execute(select(StaffUser).where(StaffUser.email == JUDGE_EMAIL)).scalar()
+    if user is None:
+        # The random password is never shown, so this account cannot sign in through /login.
+        user = StaffUser(email=JUDGE_EMAIL, display_name="Judge (read-only)", roles=["viewer"], languages=[],
+                         password_hash=hash_password(secrets.token_urlsafe(32)))
+        db.add(user)
+        db.flush()
+    if not user.active or user.roles != ["viewer"]:
+        raise HTTPException(403, "The judge account is disabled.")
+    audit.record(db, user.email, "staff.login_judge", "staff_user", user.id)
     db.commit()
     return {"token": create_token(user), "user": {"email": user.email, "name": user.display_name,
                                                  "roles": user.roles, "languages": user.languages}}

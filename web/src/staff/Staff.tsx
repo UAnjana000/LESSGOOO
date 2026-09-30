@@ -114,12 +114,15 @@ function StaffLanguage() {
 }
 
 export function StaffLogin() {
-  const { login, token } = useStaff();
+  const { login, loginAsJudge, token } = useStaff();
   const { t } = useSession();
   const nav = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [judgeBusy, setJudgeBusy] = useState(false);
+  // Demo installations can switch on a read-only judge account; the button only shows when they have.
+  const judge = useApi<{ enabled: boolean }>("/api/staff/judge-access");
   if (token) return <Navigate to="/staff" replace />;
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -129,6 +132,18 @@ export function StaffLogin() {
       nav("/staff");
     } catch (err) {
       setError(errText(err));
+    }
+  };
+  const judgeIn = async () => {
+    setError(null);
+    setJudgeBusy(true);
+    try {
+      await loginAsJudge();
+      nav("/staff");
+    } catch (err) {
+      setError(errText(err));
+    } finally {
+      setJudgeBusy(false);
     }
   };
   return (
@@ -143,6 +158,12 @@ export function StaffLogin() {
           {error && <p className="notice bad" role="alert">{error}</p>}
           <button type="submit" className="btn">{t("stSignIn")}</button>
         </form>
+        {judge.data?.enabled && (
+          <div className="sheet stack" style={{ padding: 14, marginTop: 20 }}>
+            <p className="muted" style={{ margin: 0 }}>{t("stJudgeLead")}</p>
+            <button type="button" className="btn secondary" disabled={judgeBusy} onClick={judgeIn}>{t("stJudgeContinue")}</button>
+          </div>
+        )}
       </main>
     </div>
   );

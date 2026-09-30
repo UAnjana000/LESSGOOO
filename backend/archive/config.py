@@ -42,6 +42,8 @@ class Settings(BaseSettings):
     # Staff auth (prototype: passwords; PROD: SSO/MFA).
     jwt_secret: str = "dev-only-change-me"
     jwt_ttl_minutes: int = 480
+    # Demo only: a "continue as judge" button signs in a read-only viewer without a password.
+    judge_access: bool = False
     bootstrap_admin_email: str = "admin@archive.local"
     bootstrap_admin_password: str = ""
     # Local demo only: when set, bootstrap creates archivist/curator/translation-reviewer demo accounts.

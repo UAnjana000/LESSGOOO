@@ -16,7 +16,9 @@ from archive.config import get_settings
 from archive.db import get_db
 from archive.models import StaffUser
 
-ROLES = ("admin", "archivist", "reviewer", "curator", "translation_reviewer")
+# "viewer" passes the Staff dependency (every staff read) and no role check (every staff write).
+ROLES = ("admin", "archivist", "reviewer", "curator", "translation_reviewer", "viewer")
+JUDGE_EMAIL = "judge@demo.local"
 _hasher = PasswordHash.recommended()
 _bearer = HTTPBearer(auto_error=False)
 
@@ -64,6 +66,8 @@ def require_roles(*roles: str):
     def dep(user: Annotated[StaffUser, Depends(current_staff)]) -> StaffUser:
         if "admin" in user.roles or any(r in user.roles for r in roles):
             return user
+        if "viewer" in user.roles:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Read-only judge access: this action is disabled.")
         raise HTTPException(status.HTTP_403_FORBIDDEN, f"requires role: {', '.join(roles)}")
 
     return dep
