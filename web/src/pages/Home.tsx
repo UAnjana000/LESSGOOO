@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import type { Key } from "../i18n";
 import { useApi } from "../hooks";
 import { useSession } from "../state";
+import { MAX_QUERY } from "../filters";
 import { ErrorState, LangText, Loading, useDocumentTitle } from "../components/Bits";
 
 interface HomeData {
@@ -37,7 +38,7 @@ export function Home() {
           <label htmlFor="home-q" className="visually-hidden">
             {t("searchPlaceholder")}
           </label>
-          <input id="home-q" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("searchPlaceholder")} autoComplete="off" enterKeyHint="search" />
+          <input id="home-q" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("searchPlaceholder")} autoComplete="off" enterKeyHint="search" maxLength={MAX_QUERY} />
           <div className="row">
             <button type="submit" className="btn" style={{ flex: 1 }}>
               {t("searchButton")}

@@ -5,8 +5,8 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://api.apparatuscertified.tech/api/:path*" },
-    { "source": "/iiif/:path*", "destination": "https://api.apparatuscertified.tech/iiif/:path*" },
+    { "source": "/api/:path*", "destination": "https://ambedkar-archive.indiasouthcentral.cloudapp.azure.com/api/:path*" },
+    { "source": "/iiif/:path*", "destination": "https://ambedkar-archive.indiasouthcentral.cloudapp.azure.com/iiif/:path*" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [

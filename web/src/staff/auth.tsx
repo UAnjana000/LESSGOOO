@@ -12,6 +12,8 @@ interface Auth {
   token: string | null;
   user: StaffUser | null;
   login: (email: string, password: string) => Promise<void>;
+  /** Demo only: the read-only judge account, when the server has judge access switched on. */
+  loginAsJudge: () => Promise<void>;
   logout: () => void;
   can: (role: string) => boolean;
 }
@@ -33,14 +35,19 @@ export function StaffAuthProvider({ children }: { children: ReactNode }) {
     });
   }, [token]);
 
+  const signedIn = (r: { token: string; user: StaffUser }) => {
+    sessionStorage.setItem(KEY, r.token);
+    setToken(r.token);
+    setUser(r.user);
+  };
   const value: Auth = {
     token,
     user,
     login: async (email, password) => {
-      const r = await api.post<{ token: string; user: StaffUser }>("/api/staff/login", { email, password });
-      sessionStorage.setItem(KEY, r.token);
-      setToken(r.token);
-      setUser(r.user);
+      signedIn(await api.post<{ token: string; user: StaffUser }>("/api/staff/login", { email, password }));
+    },
+    loginAsJudge: async () => {
+      signedIn(await api.post<{ token: string; user: StaffUser }>("/api/staff/login/judge", {}));
     },
     logout: () => {
       sessionStorage.removeItem(KEY);

@@ -18,7 +18,7 @@ from PIL import Image
 from sqlalchemy.orm import Session
 
 from archive import storage
-from archive.api.visitor import _file_visible
+from archive.api.visitor import _file_visible, cache_control
 from archive.db import get_db
 
 router = APIRouter(prefix="/iiif", tags=["iiif"])
@@ -45,7 +45,7 @@ def info(file_id: int, request: Request, db: DB) -> JSONResponse:
         "tiles": [{"width": 512, "scaleFactors": [1, 2, 4, 8]}],
         "extraFormats": ["png", "webp"],
     }
-    return JSONResponse(body, headers={"Cache-Control": "public, max-age=3600"},
+    return JSONResponse(body, headers={"Cache-Control": cache_control(db, fv.item_id, 3600)},
                         media_type="application/ld+json")
 
 
@@ -116,4 +116,5 @@ def image(file_id: int, region: str, size: str, rotation: str, quality_format: s
     buf = io.BytesIO()
     pil_fmt, mime = FORMATS[fmt]
     img.save(buf, format=pil_fmt, quality=82)
-    return Response(buf.getvalue(), media_type=mime, headers={"Cache-Control": "public, max-age=86400"})
+    return Response(buf.getvalue(), media_type=mime,
+                    headers={"Cache-Control": cache_control(db, fv.item_id, 86400)})

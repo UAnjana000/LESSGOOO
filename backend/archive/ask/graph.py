@@ -63,10 +63,11 @@ Rules (always apply):
 1. Use ONLY the numbered archive passages provided. If they do not answer the question, return {"sentences": []}.
 2. Every sentence must list the passage numbers it relies on in "citations".
 3. Never attribute words or views to Dr. Ambedkar unless the cited passage contains them.
-4. Put text in double quotes ONLY when copying it verbatim from a passage marked quote_ok=true. Otherwise paraphrase without quotation marks.
-5. If passages disagree or authorship is disputed, say so and cite both.
-6. Do not speculate about present-day parties, politicians or events.
-7. Be concise: at most 4 short sentences. Write in the requested language.
+4. Put text in quotation marks (double or single) ONLY when copying it verbatim from a passage marked quote_ok=true. Otherwise paraphrase without quotation marks.
+5. Debate and meeting passages may contain several speakers. Attribute words to a person only when the passage shows that person speaking (or its "speaker:" line names them); otherwise do not name a speaker.
+6. If passages disagree or authorship is disputed, say so and cite both.
+7. Do not speculate about present-day parties, politicians or events.
+8. Be concise: at most 4 short sentences. Write in the requested language.
 Return JSON only: {"sentences": [{"text": "...", "citations": [<passage number>, ...]}]}"""
 PARAPHRASE_SUFFIX = "\nIMPORTANT: Your previous draft failed citation or quotation checks. Do not use any quotation marks. Paraphrase only."
 LANG_NAMES = {"en": "English", "hi": "Hindi", "mr": "Marathi"}
@@ -133,14 +134,17 @@ def keywordise(query: str) -> str:
 def _hit_summary(h: Hit) -> dict[str, Any]:
     return {"passage_id": h.passage_id, "item_id": h.item_id, "text": h.text, "quote_verified": h.quote_verified,
             "citation": h.citation, "deep_link": h.deep_link, "kind_label": h.kind_label, "title": h.title,
-            "rerank_score": h.rerank_score, "language": h.language, "is_fixture": h.extra.get("is_fixture")}
+            "rerank_score": h.rerank_score, "language": h.language, "is_fixture": h.extra.get("is_fixture"),
+            "speaker": h.extra.get("speaker")}
 
 
 def build_prompt(question: str, language: str, hits: list[dict[str, Any]], max_chars: int) -> str:
     blocks = []
     for h in hits:
+        # Only a recorded speaker (a transcript segment's) is named; none is ever inferred.
+        speaker = f"speaker: {h['speaker']}\n" if h.get("speaker") else ""
         blocks.append(f"[{h['passage_id']}] quote_ok={'true' if h['quote_verified'] else 'false'} "
-                      f"source: {h['citation']}\n{h['text'][:max_chars]}")
+                      f"source: {h['citation']}\n{speaker}{h['text'][:max_chars]}")
     return (f"Answer language: {LANG_NAMES.get(language, 'English')}\n\nArchive passages:\n\n"
             + "\n\n".join(blocks) + f"\n\nQuestion: {question}")
 

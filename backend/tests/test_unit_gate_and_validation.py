@@ -255,6 +255,84 @@ class TestAnswerValidation:
         assert extract_quotes('He called the fee "a sham".') == ["a sham"]
         assert not res.ok and res.has_quote_errors
 
+    @pytest.mark.parametrize("text,spans", [
+        ("He wrote 'a fee at the door keeps out' in 1936.", ["a fee at the door keeps out"]),
+        ("He wrote ‘a fee at the door keeps out’ in 1936.", ["a fee at the door keeps out"]),
+        ("'Ambedkar's reply was brief' is the record.", ["Ambedkar's reply was brief"]),
+        ("उन्होंने 'जाति का विनाश आवश्यक है' लिखा।", ["जाति का विनाश आवश्यक है"]),
+    ])
+    def test_single_quoted_spans_are_quotes(self, text, spans):
+        assert extract_quotes(text) == spans
+
+    @pytest.mark.parametrize("text", [
+        "Ambedkar's view and Gandhi's reply don't agree.",
+        "Ambedkar’s view and Gandhi’s reply don’t agree.",
+        "The members' votes and the leaders' demands differed.",
+        "A term like 'swaraj' is one word; rock 'n' roll is not a quote.",
+    ])
+    def test_apostrophes_are_not_quotes(self, text):
+        assert extract_quotes(text) == []
+
+    def test_single_quoted_words_of_another_speaker_fail_like_double_quoted(self):
+        # The QA case: a single-quoted span attributed to Dr. Ambedkar from a passage that is not quote-verified.
+        raw = json.dumps({"sentences": [{"text": "Dr. Ambedkar said 'carried by twenty-one votes to six'.",
+                                         "citations": [12]}]})
+        res = validate(raw, _retrieved())
+        assert not res.ok and res.has_quote_errors
+        assert any("not quote-verified" in e for e in res.errors)
+        invented = json.dumps({"sentences": [{"text": "He said ‘every reader must pay a fee’.", "citations": [11]}]})
+        res = validate(invented, _retrieved())
+        assert not res.ok and any("not found verbatim" in e for e in res.errors)
+
+    def test_single_quoted_verbatim_quote_from_verified_passage_passes(self):
+        raw = json.dumps({"sentences": [{"text": "He said 'keeps out precisely those who most need to enter'.",
+                                         "citations": [11]}]})
+        res = validate(raw, _retrieved())
+        assert res.ok and res.quotes[0]["verified_in"] == [11]
+
+
+class TestAskPrompt:
+    def _hit(self, **over):
+        return {"passage_id": 7, "quote_verified": False, "citation": "Debates, vol. 7", "text": "BODY", **over}
+
+    def test_recorded_speaker_is_named_and_none_is_invented(self):
+        from archive.ask.graph import build_prompt
+
+        with_speaker = build_prompt("q", "en", [self._hit(speaker="Shri H. V. Kamath")], 900)
+        assert "speaker: Shri H. V. Kamath\nBODY" in with_speaker
+        assert "speaker:" not in build_prompt("q", "en", [self._hit()], 900)
+        assert "speaker:" not in build_prompt("q", "en", [self._hit(speaker=None)], 900)
+
+    def test_system_prompt_limits_attribution_to_shown_speakers_and_any_quote_marks(self):
+        from archive.ask.graph import SYSTEM_PROMPT
+
+        assert "several speakers" in SYSTEM_PROMPT and "only when the passage shows that person speaking" in SYSTEM_PROMPT
+        assert "(double or single)" in SYSTEM_PROMPT
+
+
+class TestAskCostConfig:
+    @pytest.mark.parametrize("prices,warns", [((0.0, 0.0), True), ((0.15, 0.0), False), ((0.15, 0.6), False)])
+    def test_unpriced_answer_model_warns_at_startup(self, monkeypatch, caplog, prices, warns):
+        from archive.api import main
+
+        monkeypatch.setattr(main.settings, "llm_provider", "openai_compatible")
+        monkeypatch.setattr(main.settings, "llm_api_key", "sk-unit-test-not-a-key")
+        monkeypatch.setattr(main.settings, "llm_model", "gpt-4o-mini")
+        monkeypatch.setattr(main.settings, "llm_input_cost_per_mtok", prices[0])
+        monkeypatch.setattr(main.settings, "llm_output_cost_per_mtok", prices[1])
+        caplog.clear()
+        with caplog.at_level("WARNING", logger="archive.api"):
+            main._warn_unpriced_llm()
+        assert any("PER_MTOK" in r.getMessage() for r in caplog.records) is warns
+
+    def test_no_warning_without_an_answer_model(self, monkeypatch, caplog):
+        from archive.api import main
+
+        monkeypatch.setattr(main.settings, "llm_provider", "none")
+        with caplog.at_level("WARNING", logger="archive.api"):
+            main._warn_unpriced_llm()
+        assert not caplog.records
+
 
 class TestAskGraphShape:
     def _edges(self):

@@ -114,6 +114,18 @@ def _sink() -> _LocalSink:
     return _LocalSink(Path(get_settings().trace_root))
 
 
+def flush() -> None:
+    """Send buffered Langfuse spans. Called at API shutdown, never per request: the SDK exports in a background
+    batch, and a synchronous flush blocks the visitor for its full timeout when the Langfuse host is down.
+    (The SDK also flushes at interpreter exit, which covers the CLI and workers.)"""
+    lf = _langfuse()
+    if lf is not None:
+        try:
+            lf.flush()
+        except Exception:
+            log.warning("langfuse flush failed", exc_info=True)
+
+
 def backend_name() -> str:
     return "langfuse" if _langfuse() is not None else "local-jsonl (Langfuse keys not configured)"
 
@@ -216,8 +228,10 @@ def trace(name: str, meta: dict[str, Any] | None = None):
                 else:
                     t._lf_span.update(output=t.output)
                 cm.__exit__(None, None, None)
-                lf.flush()
             except Exception:
-                log.warning("langfuse trace end failed", exc_info=True)
-        else:
+                log.warning("langfuse trace end failed; record kept in the local sink", exc_info=True)
+                cm = None
+        if cm is None:
+            if lf is not None:
+                record["backend"] = "local-jsonl (Langfuse trace failed)"
             _sink().write(record)

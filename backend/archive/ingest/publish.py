@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 
 from archive import audit, storage
 from archive.config import get_settings
+from archive.ingest import processing
 from archive.ingest.review import item_ready_for_publication
 from archive.models import (
     AnswerCache,
@@ -246,6 +247,9 @@ def publish_item(db: Session, item: ArchivalItem, actor: str) -> dict[str, Any]:
 
 def withdraw(db: Session, item: ArchivalItem, actor: str, reason: str) -> int:
     """Single write that blocks the item at the visitor API immediately; cleanup is queued."""
+    if item.publication_state != PublicationState.published.value:
+        # A never-published item has nothing to withdraw, and a withdrawn one could not be restored or published.
+        raise PublicationError(f"only published items can be withdrawn; this item is {item.publication_state}")
     item.publication_state = PublicationState.withdrawn.value
     item.withdrawn_at = utcnow()
     item.withdrawal_reason = reason
@@ -286,7 +290,12 @@ def _recreate_delivery(db: Session, fv: FileVersion) -> None:
     if fv.deleted_at is None and path.exists():
         return
     master = db.get(FileVersion, fv.derived_from_id) if fv.derived_from_id else None
-    if fv.kind == "page_image":
+    page = db.get(Page, fv.page_id) if fv.kind == "page_image" and fv.page_id else None
+    if page is not None and page.image_file_id:
+        # Render the page as ingest did: one PDF page, or one half of a split spread, not the whole master.
+        image_bytes, _ = processing._page_image(db, page)
+        stored = storage.put_bytes(delivery_jpeg(image_bytes), "delivery", ".jpg")
+    elif fv.kind == "page_image":
         src = master or db.execute(select(FileVersion).where(
             FileVersion.item_id == fv.item_id, FileVersion.page_id == fv.page_id,
             FileVersion.role == "preservation_master")).scalars().first()
@@ -316,7 +325,7 @@ def _restore_passages(db: Session, item: ArchivalItem) -> None:
             p.embedding = vec
             p.embedding_model = embedder.name
     for p in passages:
-        p.indexed = True
+        p.indexed = p.kind != "reviewed_translation" or _translation_still_approved(db, p)
 
 
 def restore(db: Session, item: ArchivalItem, actor: str, reason: str) -> int:
@@ -335,20 +344,21 @@ def restore(db: Session, item: ArchivalItem, actor: str, reason: str) -> int:
         raise PublicationError("discovery-only source")
     deliveries = db.execute(select(FileVersion).where(
         FileVersion.item_id == item.id, FileVersion.role == "delivery")).scalars().all()
-    for fv in deliveries:
-        if fv.kind in {"page_image", "media"} or fv.derived_from_id:
-            _recreate_delivery(db, fv)
-    by_page = {fv.page_id: fv for fv in deliveries if fv.kind == "page_image" and fv.page_id}
-    for pg in item.pages:
-        if pg.delivery_file_id is None and pg.id in by_page:
-            pg.delivery_file_id = by_page[pg.id].id
-        elif pg.delivery_file_id:
-            fv = db.get(FileVersion, pg.delivery_file_id)
-            if fv is not None and fv.deleted_at is None:
-                continue
-            if fv is not None:
+    with processing.pdf_documents():
+        for fv in deliveries:
+            if fv.kind in {"page_image", "media"} or fv.derived_from_id:
                 _recreate_delivery(db, fv)
-                pg.delivery_file_id = fv.id
+        by_page = {fv.page_id: fv for fv in deliveries if fv.kind == "page_image" and fv.page_id}
+        for pg in item.pages:
+            if pg.delivery_file_id is None and pg.id in by_page:
+                pg.delivery_file_id = by_page[pg.id].id
+            elif pg.delivery_file_id:
+                fv = db.get(FileVersion, pg.delivery_file_id)
+                if fv is not None and fv.deleted_at is None:
+                    continue
+                if fv is not None:
+                    _recreate_delivery(db, fv)
+                    pg.delivery_file_id = fv.id
     _restore_passages(db, item)
     item.publication_state = PublicationState.published.value
     item.withdrawn_at = None
@@ -356,6 +366,42 @@ def restore(db: Session, item: ArchivalItem, actor: str, reason: str) -> int:
     idx = bump_index_version(db)
     audit.record(db, actor, "item.restore", "archival_item", item.id, entity_version=item.version,
                  detail={"reason": reason, "index_version": idx, "item_version_id": item.published_version_id})
+    return idx
+
+
+def _translation_passages(db: Session, tr: Translation) -> list[Passage]:
+    """Published reviewed-translation passages made from `tr` (staging copies its text beside every source
+    passage with the same text hash, in each version)."""
+    src = db.get(Passage, tr.source_passage_id) if tr.source_passage_id else None
+    if src is None:
+        return []
+    sources = select(Passage.id).where(Passage.item_id == src.item_id, Passage.text_hash == src.text_hash)
+    return list(db.execute(select(Passage).where(
+        Passage.kind == "reviewed_translation", Passage.language == tr.target_language,
+        Passage.text_hash == _text_hash(tr.text), Passage.translation_of_id.in_(sources))).scalars())
+
+
+def _translation_still_approved(db: Session, p: Passage) -> bool:
+    src = db.get(Passage, p.translation_of_id) if p.translation_of_id else None
+    if src is None:
+        return False
+    return db.execute(select(Translation.id).join(Passage, Translation.source_passage_id == Passage.id).where(
+        Translation.status == "approved", Translation.target_language == p.language, Translation.text == p.text,
+        Passage.item_id == src.item_id, Passage.text_hash == src.text_hash).limit(1)).first() is not None
+
+
+def retract_translation(db: Session, tr: Translation, actor: str) -> int | None:
+    """Take a no-longer-approved translation out of the reader and search at once, as withdrawal does for an
+    item. Returns the new index version, or None when nothing of it was published."""
+    live = [p for p in _translation_passages(db, tr) if p.indexed]
+    if not live:
+        return None
+    for p in live:
+        p.indexed = False
+    db.execute(delete(AnswerCache))
+    idx = bump_index_version(db)
+    audit.record(db, actor, "translation.retract", "translation", tr.id,
+                 detail={"passage_ids": [p.id for p in live], "index_version": idx})
     return idx
 
 

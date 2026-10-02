@@ -80,6 +80,7 @@ const en = {
   askInsufficientNote: "The archive operates under a strict anti-hallucination policy and requires direct archival proof. Below are the closest documents to explore:",
   askRelated: "Related material you can read",
   askRefused: "Refused",
+  askTooLong: "Question too long",
   askThinking: "The AI is reading archive passages…",
   askOffline: "Ask with AI needs a connection. Search and reading still work from saved items.",
   askParaphrase: "Paraphrased (the first draft failed a citation check)",
@@ -269,6 +270,8 @@ const en = {
   mapSuggested: "Popular starting entities:",
   mapFilterPlaceholder: "Filter directory names…",
   mapFilterLabel: "Filter directory names",
+  noResultsFiltered: "No results with these filters. Clear filters to see all matches.",
+  pageNotInItem: "Page {n} is not in this item; showing the first page.",
   ...staffEn,
 };
 export type Key = keyof typeof en;
@@ -355,6 +358,7 @@ const hi: Record<Key, string> = {
   askInsufficientNote: "अभिलेखागार सीधे दस्तावेजी प्रमाण पर आधारित है। नीचे संबंधित उपलब्ध ऐतिहासिक संदर्भ दिए गए हैं:",
   askRelated: "संबंधित सामग्री जिसे आप पढ़ सकते हैं",
   askRefused: "अस्वीकृत",
+  askTooLong: "प्रश्न बहुत लंबा है",
   askThinking: "AI अभिलेखागार के अंश पढ़ रहा है…",
   askOffline: "AI से पूछने के लिए कनेक्शन चाहिए। खोज और पढ़ना सहेजी गई सामग्री से चलते रहेंगे।",
   askParaphrase: "सार रूप में (पहला मसौदा उद्धरण जाँच में विफल रहा)",
@@ -544,6 +548,8 @@ const hi: Record<Key, string> = {
   mapSuggested: "लोकप्रिय शुरुआती नाम:",
   mapFilterPlaceholder: "नाम सूची फ़िल्टर करें…",
   mapFilterLabel: "निर्देशिका नाम फ़िल्टर करें",
+  noResultsFiltered: "इन फ़िल्टरों के साथ कोई परिणाम नहीं मिला। सभी परिणाम देखने के लिए फ़िल्टर हटाएँ।",
+  pageNotInItem: "पृष्ठ {n} इस सामग्री में नहीं है; पहला पृष्ठ दिखाया जा रहा है।",
   ...staffHi,
 };
 
@@ -617,6 +623,7 @@ const mr: Record<Key, string> = {
   askInsufficientNote: "संग्रह थेट पुराव्यावर आधारित उत्तरे देतो. खाली संबंधित ऐतिहासिक संदर्भ उपलब्ध आहेत:",
   askRelated: "तुम्ही वाचू शकता असे संबंधित साहित्य",
   askRefused: "नाकारले",
+  askTooLong: "प्रश्न खूप मोठा आहे",
   askThinking: "AI संग्रहातील उतारे वाचत आहे…",
   askOffline: "AI ला विचारण्यासाठी जोडणी हवी. शोध आणि वाचन जतन केलेल्या साहित्यावरून चालू राहील.",
   askParaphrase: "आशय रूपात (पहिला मसुदा संदर्भ तपासणीत अयशस्वी झाला)",
@@ -806,6 +813,8 @@ const mr: Record<Key, string> = {
   mapSuggested: "लोकप्रिय सुरुवातीची नावे:",
   mapFilterPlaceholder: "यादीतील नावे फिल्टर करा…",
   mapFilterLabel: "निर्देशिका नावे फिल्टर करा",
+  noResultsFiltered: "या फिल्टरसह कोणतेही निकाल नाहीत. सर्व निकाल पाहण्यासाठी फिल्टर काढा.",
+  pageNotInItem: "पान {n} या साहित्यात नाही; पहिले पान दाखवत आहोत.",
   ...staffMr,
 };
 

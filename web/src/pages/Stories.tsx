@@ -280,7 +280,12 @@ export function Story() {
       </div>
 
       {st.loading && <Loading center />}
-      {st.error && <ErrorState error={st.error} retry={st.reload} />}
+      {st.error && (
+        <>
+          <h1>{t("storiesTitle")}</h1>
+          <ErrorState error={st.error} retry={st.reload} />
+        </>
+      )}
 
       {d && (
         <>

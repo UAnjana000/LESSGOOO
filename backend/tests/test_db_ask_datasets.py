@@ -45,6 +45,9 @@ class FakeLLM:
         elif mode == "misquote":
             body = {"sentences": [{"text": 'The source says "every reader must pay a fee at the door".',
                                    "citations": [first]}]}
+        elif mode == "single_misquote":  # another speaker's words in single quotes, not in the passage
+            body = {"sentences": [{"text": "Dr. Ambedkar said 'every reader must pay a fee at the door'.",
+                                   "citations": [first]}]}
         elif mode == "verbatim_quote":
             body = {"sentences": [{"text": 'The source says "charged no fee for reading within the rooms".',
                                    "citations": [first]}]}
@@ -80,7 +83,7 @@ class TestAskGraph:
         assert res["citations"][0]["item_id"] == archive["fee"].id
         assert res["citations"][0]["deep_link"].startswith(f"/item/{archive['fee'].id}?page=1")
         log = db.get(AnswerLog, res["answer_id"])
-        assert log.passages_retrieved and log.prompt_version == "ask-v1" and log.tokens_out == 30
+        assert log.passages_retrieved and log.prompt_version == "ask-v2" and log.tokens_out == 30
 
     def test_prompt_contains_only_capped_passages_and_stable_system_prefix(self, db, archive):
         llm = FakeLLM(["valid"])
@@ -112,6 +115,7 @@ class TestAskGraph:
         res = ask(db, Q, [], "en", "session-0006", llm=llm)
         assert res["outcome"] == "answered"
         assert res["citations"][0]["quoted_spans"] and res["citations"][0]["quote_verified"]
+        assert res["checks"] == {"citations_ok": True, "quotes": 1, "quotes_verified": 1}
 
     def test_model_reporting_no_support_abstains(self, db, archive):
         res = ask(db, Q, [], "en", "session-0007", llm=FakeLLM(["empty"]))
@@ -164,6 +168,42 @@ class TestAskGraph:
         res = ask(db, "Why was that?", [{"q": "Did the reading room charge a fee for reading?", "a": "No."}],
                   "en", "session-0015", llm=llm)
         assert res["rewritten_query"] and "reading" in res["rewritten_query"]
+
+    def test_single_quoted_misquote_is_checked_like_a_double_quoted_one(self, db, archive):
+        llm = FakeLLM(["single_misquote", "single_misquote"])
+        res = ask(db, Q, [], "en", "session-0017", llm=llm)
+        assert res["outcome"] == "insufficient" and llm.calls == 2 and res["sentences"] == []
+
+    def test_answer_reports_what_was_checked(self, db, archive):
+        res = ask(db, Q, [], "en", "session-0018", llm=FakeLLM(["valid"]))
+        assert res["checks"] == {"citations_ok": True, "quotes": 0, "quotes_verified": 0}
+        refused = ask(db, "Which party would Ambedkar vote for in the next election?", [], "en", "session-0019",
+                      llm=FakeLLM(["valid"]))
+        assert refused["checks"] is None
+
+    def test_too_long_question_gets_its_own_message(self, db, archive):
+        llm = FakeLLM(["valid"])
+        res = ask(db, "x" * 501, [], "en", "session-0020", llm=llm)
+        assert res["outcome"] == "rejected_input" and res["reason"] == "too_long" and llm.calls == 0
+        assert "too long" in res["message"] and "500" in res["message"]
+        hi = ask(db, "x" * 501, [], "hi", "session-0021", llm=llm)
+        assert "500" in hi["message"] and "{" not in hi["message"]
+
+    def test_standalone_follow_up_uses_the_answer_cache(self, db, archive):
+        llm = FakeLLM(["valid"])
+        history = [{"q": "What did the committee buy for the reading room?", "a": "A lamp."}]
+        first = ask(db, Q, history, "en", "session-0022", llm=llm)
+        assert first["outcome"] == "answered" and not first["rewritten_query"] and not first["retried_retrieval"]
+        second = ask(db, Q, history, "en", "session-0023", llm=llm)
+        third = ask(db, Q, [], "en", "session-0024", llm=llm)
+        assert second["cache_hit"] and third["cache_hit"] and llm.calls == 1
+
+    def test_rewritten_follow_up_bypasses_the_answer_cache(self, db, archive):
+        llm = FakeLLM(["valid"])
+        history = [{"q": Q, "a": "No."}]
+        first = ask(db, "Why was that?", history, "en", "session-0025", llm=llm)
+        second = ask(db, "Why was that?", history, "en", "session-0026", llm=llm)
+        assert first["rewritten_query"] and not second["cache_hit"] and llm.calls == 2
 
     def test_weak_long_follow_up_retries_once_with_history_context(self, db, archive):
         # 8 tokens, no pronoun: the first-pass rewrite does not fire and retrieval is weak on its own.

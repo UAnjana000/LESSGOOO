@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { browsePath, facetLink, hasFilters, searchPath } from "./filters";
+import { browsePath, facetLink, hasFilters, MAX_QUERY, searchPath } from "./filters";
 
 const p = (s: string) => new URLSearchParams(s);
 
@@ -19,6 +19,12 @@ describe("searchPath", () => {
 
   it("drops empty and unknown parameters", () => {
     expect(searchPath(p("q=tank&collection=&page=3&kiosk=1"))).toBe("/api/visitor/search?q=tank");
+  });
+
+  it("trims the query and clamps it to the length the API accepts", () => {
+    expect(searchPath(p("q=%20%20tank%20"))).toBe("/api/visitor/search?q=tank");
+    const q = new URLSearchParams(searchPath(p(`q=${"a".repeat(MAX_QUERY + 50)}`))!.split("?")[1]).get("q")!;
+    expect(q).toHaveLength(MAX_QUERY);
   });
 });
 

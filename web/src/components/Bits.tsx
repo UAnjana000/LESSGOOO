@@ -104,20 +104,23 @@ const WITHDRAWN_CATEGORIES = new Set(["withdrawn", "rights", "takedown"]);
 export function ErrorState({ error, retry, notFound, message }: { error?: ApiError | null; retry?: () => void; notFound?: string; message?: string }) {
   const { t } = useSession();
   const withdrawn = error?.status === 410 && Boolean(error?.reasonCategory && WITHDRAWN_CATEGORIES.has(error.reasonCategory));
+  // 422 is an address that cannot name an item (e.g. /item/abc): as final as a 404.
+  const gone = error?.status === 404 || error?.status === 410 || error?.status === 422;
+  // Offline, the service worker answers 404 for items this screen may not keep (online-only, expired, withdrawn).
   const msg = message
     ? message
     : withdrawn
       ? t("withdrawnNotice")
-      : error?.status === 404 || error?.status === 410
-        ? notFound ?? t("notAvailable")
-        : error?.offline
-          ? t("offlineBanner")
+      : error?.offline
+        ? error.status === 404 ? t("onlineOnly") : t("offlineBanner")
+        : gone
+          ? notFound ?? t("notAvailable")
           : t("errorGeneric");
   return (
     <div className="notice bad" role="alert">
       <div className="row" style={{ alignItems: "center", gap: 12 }}>
         <p style={{ margin: 0, flex: 1 }}>{msg}</p>
-        {retry && error && error.status !== 404 && error.status !== 410 && (
+        {retry && error && (error.offline || !gone) && (
           <button type="button" className="btn secondary small" onClick={retry}>
             {t("retry")}
           </button>

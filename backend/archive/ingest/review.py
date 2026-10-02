@@ -38,6 +38,7 @@ class ReviewError(ValueError):
 
 
 REVIEW_ACTIONS = frozenset({"approve", "correct", "reject"})
+AI_REVIEWED_SUMMARY_LABEL = "AI-drafted summary, reviewed by archive staff"
 
 
 def _decision(db: Session, target_type: str, target_id: int, action: str, reviewer: str, role: str,
@@ -251,6 +252,8 @@ def review_photo(db: Session, photo: PhotoMetadata, action: str, reviewer: str, 
                   "source_reference"):
             if k in updates:
                 setattr(photo, k, updates[k])
+    if action in {"approve", "correct"} and not (photo.caption or "").strip():
+        raise ReviewError("a caption cannot be empty; write one before approving")
     photo.review_status = "approved" if action in {"approve", "correct"} else "rejected"
     photo.reviewed_by = reviewer
     _decision(db, "photo_metadata", photo.item_id, action, reviewer, role, before=before, after=photo.caption,
@@ -267,12 +270,27 @@ def review_photo(db: Session, photo: PhotoMetadata, action: str, reviewer: str, 
     return photo
 
 
+# Archivists and admins review any language; a translation reviewer only the languages they are named for.
+ANY_LANGUAGE_ROLES = frozenset({"archivist", "admin"})
+
+
+def _check_review_transition(status: str, action: str, pending: str) -> None:
+    """Approve/correct only a pending item; reject a pending one or retract an approved one. Anything else
+    (approving twice, reviving a rejection) is a repeat decision."""
+    if status == pending or (action == "reject" and status == "approved"):
+        return
+    raise ReviewError(f"already reviewed ({status})")
+
+
 def review_translation(db: Session, tr: Translation, action: str, reviewer: str, reviewer_languages: list[str],
-                       text: str | None = None, seeded: bool = False) -> Translation:
+                       text: str | None = None, seeded: bool = False,
+                       role: str = "translation_reviewer") -> Translation:
     if action not in REVIEW_ACTIONS:
         raise ReviewError(f"unknown action '{action}'")
-    if tr.target_language not in reviewer_languages:
+    if role not in ANY_LANGUAGE_ROLES and tr.target_language not in reviewer_languages:
         raise ReviewError(f"reviewer is not a named reviewer for '{tr.target_language}'")
+    _check_review_transition(tr.status, action, "unreviewed")
+    was_approved = tr.status == "approved"
     before = tr.text
     if action == "correct":
         if not text:
@@ -281,8 +299,11 @@ def review_translation(db: Session, tr: Translation, action: str, reviewer: str,
         tr.version += 1
     tr.status = "approved" if action in {"approve", "correct"} else "rejected"
     tr.reviewer = reviewer
-    _decision(db, "translation", tr.id, action, reviewer, "translation_reviewer", before=before, after=tr.text,
-              seeded=seeded)
+    _decision(db, "translation", tr.id, action, reviewer, role, before=before, after=tr.text, seeded=seeded)
+    if was_approved:
+        from archive.ingest.publish import retract_translation  # publish imports this module
+
+        retract_translation(db, tr, reviewer)
     return tr
 
 
@@ -290,9 +311,11 @@ def review_derivative(db: Session, d: Derivative, action: str, reviewer: str, te
                       seeded: bool = False, role: str = "archivist", reason: str | None = None,
                       label: str | None = None) -> Derivative:
     """`label` replaces "Reviewed summary" on approval when the approver is not an archivist
-    (an agent-drafted summary must not claim human review)."""
+    (an agent-drafted summary must not claim human review). A model-drafted summary approved by staff says so.
+    Approving a summary supersedes the item's earlier approved summary in the same language."""
     if action not in REVIEW_ACTIONS:
         raise ReviewError(f"unknown action '{action}'")
+    _check_review_transition(d.status, action, "draft")
     before = d.content
     if action == "correct":
         if not text:
@@ -301,7 +324,12 @@ def review_derivative(db: Session, d: Derivative, action: str, reviewer: str, te
     d.status = "approved" if action in {"approve", "correct"} else "rejected"
     d.reviewed_by = reviewer
     if d.kind == "summary" and d.status == "approved":
-        d.label_shown = label or "Reviewed summary"
+        d.label_shown = label or ("Reviewed summary" if d.generator.startswith("human:") else AI_REVIEWED_SUMMARY_LABEL)
+        for old in db.execute(select(Derivative).where(
+                Derivative.kind == "summary", Derivative.item_id == d.item_id, Derivative.language == d.language,
+                Derivative.status == "approved", Derivative.id != d.id)).scalars():
+            old.status = "superseded"
+            audit.record(db, reviewer, "summary.supersede", "derivative", old.id, detail={"superseded_by": d.id})
     _decision(db, "derivative", d.id, action, reviewer, role, before=before, after=d.content, reason=reason,
               seeded=seeded)
     return d

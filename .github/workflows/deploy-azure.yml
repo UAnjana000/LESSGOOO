@@ -1,0 +1,56 @@
+# Every push to main: build and test the web app, then deploy the backend to the Azure VM and check it.
+# Vercel deploys the website from the same push on its own. Setup: deploy/cloud/README.md ("Automatic deploys").
+name: Deploy to Azure
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-azure
+  cancel-in-progress: false
+
+jobs:
+  web-checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: npx vitest run
+
+  deploy:
+    needs: web-checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      HOST: ${{ vars.AZURE_HOST }}
+    steps:
+      - name: Deploy over SSH
+        env:
+          DEPLOY_KEY: ${{ secrets.AZURE_DEPLOY_KEY }}
+          KNOWN_HOSTS: ${{ secrets.AZURE_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/deploy
+          chmod 600 ~/.ssh/deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          # The key's forced command on the VM runs the deploy; no remote command is sent.
+          ssh -i ~/.ssh/deploy -o ServerAliveInterval=30 "azureuser@$HOST"
+
+      - name: Check the live API
+        run: |
+          for _ in $(seq 1 12); do
+            curl -fsS "https://$HOST/api/health" && exit 0
+            sleep 10
+          done
+          exit 1

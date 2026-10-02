@@ -105,6 +105,8 @@ def narrate(db: Session, passage: Passage, language: str, actor: str,
     item = db.get(ArchivalItem, passage.item_id)
     if item is None or item.publication_state == PublicationState.withdrawn.value or not passage.indexed:
         raise NarrationError("item is withdrawn; narration is not generated or served")
+    if passage.item_version_id != item.published_version_id:
+        raise NarrationError("passage belongs to a superseded version; narrate the current published text")
     use_sarvam = not prefer_local and sarvam_text.tts_configured() and external_processing_allowed(item)
     if use_sarvam and (hit := _cached(db, passage, language, sarvam_text.tts_voice())):
         return hit, True

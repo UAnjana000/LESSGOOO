@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import difflib
 import json
+import secrets
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -23,6 +24,7 @@ from archive.models import (
     AnswerLog,
     ArchivalItem,
     AuditEvent,
+    Collection,
     CollectionSetting,
     ConstitutionArticle,
     ConstitutionLink,
@@ -41,6 +43,7 @@ from archive.models import (
     ReviewBatch,
     ReviewDecision,
     RightsRecord,
+    StaffUser,
     Story,
     SystemState,
     TimelineEvent,
@@ -50,6 +53,7 @@ from archive.models import (
 from archive.rights import external_processing_allowed
 from archive.search.hybrid import load_hits
 from archive.security import (
+    JUDGE_EMAIL,
     Admin,
     Archivist,
     Curator,
@@ -58,13 +62,27 @@ from archive.security import (
     TranslationReviewer,
     authenticate,
     create_token,
-    staff_acting_role,
+    hash_password,
 )
 from archive.services import narration, sarvam_text, speech_to_text
 
 router = APIRouter(prefix="/api/staff", tags=["staff"])
 DB = Annotated[Session, Depends(get_db)]
 BROWSER_IMAGE_FORMATS = frozenset({"image/jpeg", "image/png", "image/webp", "image/gif"})
+Language = Literal["en", "hi", "mr"]
+
+
+def _get_or_404[T](db: Session, model: type[T], ident: Any, what: str) -> T:
+    obj = db.get(model, ident)
+    if obj is None:
+        raise HTTPException(404, f"{what} not found")
+    return obj
+
+
+def _decision_role(user: Any) -> str:
+    """Role recorded on decisions at archivist-gated endpoints: the role that admitted the caller (a user who is
+    also a reviewer still decides here as archivist or admin)."""
+    return "admin" if "admin" in user.roles else "archivist"
 
 
 class LoginBody(BaseModel):
@@ -83,6 +101,31 @@ def login(body: LoginBody, db: DB) -> dict[str, Any]:
                                                  "roles": user.roles, "languages": user.languages}}
 
 
+@router.get("/judge-access")
+def judge_access() -> dict[str, bool]:
+    return {"enabled": get_settings().judge_access}
+
+
+@router.post("/login/judge")
+def login_judge(db: DB) -> dict[str, Any]:
+    """Demo only: sign in the read-only judge account without a password."""
+    if not get_settings().judge_access:
+        raise HTTPException(404, "Not found")
+    user = db.execute(select(StaffUser).where(StaffUser.email == JUDGE_EMAIL)).scalar()
+    if user is None:
+        # The random password is never shown, so this account cannot sign in through /login.
+        user = StaffUser(email=JUDGE_EMAIL, display_name="Judge (read-only)", roles=["viewer"], languages=[],
+                         password_hash=hash_password(secrets.token_urlsafe(32)))
+        db.add(user)
+        db.flush()
+    if not user.active or user.roles != ["viewer"]:
+        raise HTTPException(403, "The judge account is disabled.")
+    audit.record(db, user.email, "staff.login_judge", "staff_user", user.id)
+    db.commit()
+    return {"token": create_token(user), "user": {"email": user.email, "name": user.display_name,
+                                                 "roles": user.roles, "languages": user.languages}}
+
+
 @router.get("/me")
 def me(user: Staff) -> dict[str, Any]:
     return {"email": user.email, "name": user.display_name, "roles": user.roles, "languages": user.languages}
@@ -91,23 +134,25 @@ def me(user: Staff) -> dict[str, Any]:
 # ---------------------------------------------------------------- rights register
 
 class RightsBody(BaseModel):
-    source_key: str
-    title: str
+    """A new entry needs every required field; editing an existing entry changes only the fields sent."""
+
+    source_key: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
+    title: str | None = None
     source_url: str | None = None
-    source_institution: str
+    source_institution: str | None = None
     edition: str | None = None
     volume: str | None = None
     pages: str | None = None
-    rights_holder: str
-    basis_for_use: str
+    rights_holder: str | None = None
+    basis_for_use: str | None = None
     display_permission: str = "unknown"
     training_permission: str = "unknown"
     training_basis: str | None = None
     external_processing: str = "unknown"
-    evidence: str
-    attribution: str
-    date_checked: str
-    checked_by: str
+    evidence: str | None = None
+    attribution: str | None = None
+    date_checked: str | None = None
+    checked_by: str | None = None
     discovery_only: bool = False
     is_fixture: bool = False
     notes: str | None = None
@@ -124,13 +169,15 @@ def list_rights(db: DB, user: Staff) -> list[dict[str, Any]]:
 
 @router.post("/rights")
 def upsert_rights(body: RightsBody, db: DB, user: Archivist) -> dict[str, Any]:
-    errors = intake.validate_rights_entry(body.model_dump())
+    existing = db.execute(select(RightsRecord).where(RightsRecord.source_key == body.source_key)).scalar()
+    sent = body.model_dump(exclude_unset=True) | {"source_key": body.source_key}
+    entry = body.model_dump() if existing is None else _rights_dict(existing) | sent
+    errors = intake.validate_rights_entry(entry)
     if errors:
         raise HTTPException(422, errors)
-    existing = db.execute(select(RightsRecord).where(RightsRecord.source_key == body.source_key)).scalar()
     before_display = existing.display_permission if existing else None
     before_training = existing.training_permission if existing else None
-    rec = intake.upsert_rights(db, body.model_dump(), user.email)
+    rec = intake.upsert_rights(db, entry if existing is None else sent, user.email, partial=True)
     effects: dict[str, Any] = {}
     if before_display == "allowed" and rec.display_permission != "allowed":
         items = db.execute(select(ArchivalItem).where(ArchivalItem.rights_record_id == rec.id,
@@ -169,6 +216,19 @@ async def intake_upload(db: DB, user: Archivist, metadata: Annotated[str, Form()
         res = intake.intake_item(db, meta, payload, user.email, meta.get("page_labels"))
     except intake.IntakeRejected as exc:
         raise HTTPException(422, str(exc)) from exc
+    if payload and not any(f.status == "stored" for f in res.files):
+        # Nothing was kept, so no item either. The rollback drops the duplicate/quarantine audit events written
+        # against the item; record them again, against the upload, in their own commit.
+        db.rollback()
+        for f in res.files:
+            audit.record(db, user.email, "file.duplicate" if f.status == "duplicate" else "file.quarantine",
+                         "intake_upload", meta["item_key"],
+                         detail={"name": f.name, "sha256": f.sha256, "note": f.detail, "item_created": False,
+                                 **({"existing_file_id": f.file_id} if f.file_id else {})})
+        db.commit()
+        raise HTTPException(422, {"message": "No file was stored.",
+                                  "files": [{"name": f.name, "status": f.status, "notes": f.detail}
+                                            for f in res.files]})
     job = None
     if any(f.status == "stored" for f in res.files):
         job = enqueue(db, "ingest_item", {"item_id": res.item_id, "actor": user.email}, priority=20)
@@ -479,11 +539,9 @@ class PageReviewBody(BaseModel):
 
 @router.post("/pages/{page_id}/review")
 def page_review(page_id: int, body: PageReviewBody, db: DB, user: Archivist) -> dict[str, Any]:
-    page = db.get(Page, page_id)
-    if page is None:
-        raise HTTPException(404, "page not found")
+    page = _get_or_404(db, Page, page_id, "page")
     try:
-        review.review_page(db, page, body.action, user.email, staff_acting_role(user), text=body.text,
+        review.review_page(db, page, body.action, user.email, _decision_role(user), text=body.text,
                            reason=body.reason, source_result_id=body.source_result_id)
     except review.ReviewError as exc:
         raise HTTPException(409, str(exc)) from exc
@@ -493,8 +551,8 @@ def page_review(page_id: int, body: PageReviewBody, db: DB, user: Archivist) -> 
 
 @router.post("/pages/{page_id}/reopen")
 def page_reopen(page_id: int, db: DB, user: Archivist, reason: Annotated[str, Form()] = "correction") -> dict[str, Any]:
-    page = db.get(Page, page_id)
-    review.reopen_page(db, page, user.email, reason, staff_acting_role(user))
+    page = _get_or_404(db, Page, page_id, "page")
+    review.reopen_page(db, page, user.email, reason, _decision_role(user))
     db.commit()
     return _page_summary(page)
 
@@ -505,9 +563,9 @@ class ConfirmBody(BaseModel):
 
 @router.post("/pages/{page_id}/verify-quotes")
 def page_verify_quotes(page_id: int, body: ConfirmBody, db: DB, user: Archivist) -> dict[str, Any]:
-    page = db.get(Page, page_id)
+    page = _get_or_404(db, Page, page_id, "page")
     try:
-        review.verify_page_quotes(db, page, user.email, body.confirm, role=staff_acting_role(user))
+        review.verify_page_quotes(db, page, user.email, body.confirm, role=_decision_role(user))
     except review.ReviewError as exc:
         raise HTTPException(409, str(exc)) from exc
     db.commit()
@@ -544,11 +602,11 @@ def batch_detail(batch_id: int, db: DB, user: Staff) -> dict[str, Any]:
 
 @router.post("/batches/{batch_id}/decide")
 def batch_decide(batch_id: int, body: BatchBody, db: DB, user: Archivist) -> dict[str, Any]:
-    b = db.get(ReviewBatch, batch_id)
+    b = _get_or_404(db, ReviewBatch, batch_id, "batch")
     try:
         review.decide_batch(db, b, body.passed, user.email, body.reason,
                             {int(k): v for k, v in body.sample_checks.items()},
-                            role=staff_acting_role(user))
+                            role=_decision_role(user))
     except review.ReviewError as exc:
         raise HTTPException(409, str(exc)) from exc
     db.commit()
@@ -563,10 +621,10 @@ class SegmentReviewBody(BaseModel):
 
 @router.post("/segments/{seg_id}/review")
 def segment_review(seg_id: int, body: SegmentReviewBody, db: DB, user: Archivist) -> dict[str, Any]:
-    seg = db.get(MediaSegment, seg_id)
+    seg = _get_or_404(db, MediaSegment, seg_id, "segment")
     try:
         review.review_segment(db, seg, body.action, user.email, body.text, body.reason,
-                             role=staff_acting_role(user))
+                             role=_decision_role(user))
         review._update_item_state(db, db.get(ArchivalItem, seg.item_id))
     except review.ReviewError as exc:
         raise HTTPException(409, str(exc)) from exc
@@ -576,9 +634,9 @@ def segment_review(seg_id: int, body: SegmentReviewBody, db: DB, user: Archivist
 
 @router.post("/segments/{seg_id}/verify-quotes")
 def segment_verify(seg_id: int, body: ConfirmBody, db: DB, user: Archivist) -> dict[str, Any]:
-    seg = db.get(MediaSegment, seg_id)
+    seg = _get_or_404(db, MediaSegment, seg_id, "segment")
     try:
-        review.verify_segment_quotes(db, seg, user.email, body.confirm, role=staff_acting_role(user))
+        review.verify_segment_quotes(db, seg, user.email, body.confirm, role=_decision_role(user))
     except review.ReviewError as exc:
         raise HTTPException(409, str(exc)) from exc
     db.commit()
@@ -642,7 +700,7 @@ def photo_review(item_id: int, body: PhotoBody, db: DB, user: Archivist) -> dict
     if photo is None:
         raise HTTPException(404, "no photo metadata")
     try:
-        review.review_photo(db, photo, body.action, user.email, body.updates, role=staff_acting_role(user))
+        review.review_photo(db, photo, body.action, user.email, body.updates, role=_decision_role(user))
     except review.ReviewError as exc:
         raise HTTPException(409, str(exc)) from exc
     db.commit()
@@ -653,7 +711,7 @@ def photo_review(item_id: int, body: PhotoBody, db: DB, user: Archivist) -> dict
 
 @router.post("/items/{item_id}/publish")
 def request_publish(item_id: int, db: DB, user: Archivist) -> dict[str, Any]:
-    item = db.get(ArchivalItem, item_id)
+    item = _get_or_404(db, ArchivalItem, item_id, "item")
     ok, problems = review.item_ready_for_publication(db, item)
     if not ok:
         raise HTTPException(409, {"message": "Item is not ready to publish.", "problems": problems})
@@ -671,7 +729,10 @@ def withdraw_item(item_id: int, body: WithdrawBody, db: DB, user: Archivist) -> 
     item = db.get(ArchivalItem, item_id)
     if item is None:
         raise HTTPException(404, "item not found")
-    idx = publish.withdraw(db, item, user.email, body.reason)
+    try:
+        idx = publish.withdraw(db, item, user.email, body.reason)
+    except publish.PublicationError as exc:
+        raise HTTPException(409, str(exc)) from exc
     db.commit()
     return {"item_id": item_id, "state": item.publication_state, "index_version": idx}
 
@@ -698,15 +759,15 @@ def restore_item(item_id: int, body: RestoreBody, db: DB, user: Archivist) -> di
 
 class TranslationBody(BaseModel):
     source_passage_id: int
-    target_language: str
+    target_language: Language
     text: str | None = None  # human translation; omit to draft with Sarvam
 
 
 @router.post("/translations")
 def create_translation(body: TranslationBody, db: DB, user: Archivist) -> dict[str, Any]:
-    src = db.get(Passage, body.source_passage_id)
-    if src is None:
-        raise HTTPException(404, "passage not found")
+    src = _get_or_404(db, Passage, body.source_passage_id, "passage")
+    if body.target_language == src.language:
+        raise HTTPException(422, f"the passage is already in '{src.language}'; choose another target language")
     if body.text:
         tr = Translation(source_passage_id=src.id, target_language=body.target_language, text=body.text,
                          method="human", provider=user.email)
@@ -731,11 +792,22 @@ class ReviewTextBody(BaseModel):
     text: str | None = None
 
 
+def _translation_role(user: Any, language: str) -> str:
+    """A named reviewer for the language decides as translation_reviewer; otherwise an admin or archivist (the
+    other roles TranslationReviewer admits) may review any language, recorded under that role."""
+    if "translation_reviewer" in user.roles and language in (user.languages or []):
+        return "translation_reviewer"
+    if "admin" in user.roles or "archivist" in user.roles:
+        return _decision_role(user)
+    return "translation_reviewer"
+
+
 @router.post("/translations/{tr_id}/review")
 def translation_review(tr_id: int, body: ReviewTextBody, db: DB, user: TranslationReviewer) -> dict[str, Any]:
-    tr = db.get(Translation, tr_id)
+    tr = _get_or_404(db, Translation, tr_id, "translation")
     try:
-        review.review_translation(db, tr, body.action, user.email, user.languages or [], body.text)
+        review.review_translation(db, tr, body.action, user.email, user.languages or [], body.text,
+                                  role=_translation_role(user, tr.target_language))
     except review.ReviewError as exc:
         raise HTTPException(409, str(exc)) from exc
     db.commit()
@@ -743,7 +815,7 @@ def translation_review(tr_id: int, body: ReviewTextBody, db: DB, user: Translati
 
 
 class SummaryBody(BaseModel):
-    language: str = "en"
+    language: Language = "en"
     text: str | None = None  # archivist-written; omit to draft with the LLM from approved text
 
 
@@ -762,9 +834,11 @@ def draft_summary(item_id: int, body: SummaryBody, db: DB, user: Archivist) -> d
         d = Derivative(kind="summary", item_id=item_id, language=body.language, content=body.text,
                        generator=f"human:{user.email}", status="draft", label_shown="Summary draft")
     else:
+        if not external_processing_allowed(item):
+            raise HTTPException(409, "External processing is not permitted for this item's rights entry.")
         llm = get_llm()
-        if llm is None or not external_processing_allowed(item):
-            raise HTTPException(503, "no answer model configured or external processing not permitted")
+        if llm is None:
+            raise HTTPException(503, "No answer model is configured on this installation.")
         try:
             res = llm.complete("Summarise the archive text in 3-4 neutral sentences. Do not add facts. "
                                'Return JSON {"summary": "..."}', "\n\n".join(approved)[:6000], 300)
@@ -783,11 +857,9 @@ def draft_summary(item_id: int, body: SummaryBody, db: DB, user: Archivist) -> d
 
 @router.post("/derivatives/{d_id}/review")
 def derivative_review(d_id: int, body: ReviewTextBody, db: DB, user: Archivist) -> dict[str, Any]:
-    d = db.get(Derivative, d_id)
-    if d is None:
-        raise HTTPException(404, "derivative not found")
+    d = _get_or_404(db, Derivative, d_id, "derivative")
     try:
-        review.review_derivative(db, d, body.action, user.email, body.text, role=staff_acting_role(user))
+        review.review_derivative(db, d, body.action, user.email, body.text, role=_decision_role(user))
     except review.ReviewError as exc:
         raise HTTPException(409, str(exc)) from exc
     db.commit()
@@ -796,7 +868,7 @@ def derivative_review(d_id: int, body: ReviewTextBody, db: DB, user: Archivist) 
 
 class NarrationBody(BaseModel):
     passage_id: int
-    language: str
+    language: Language
     prefer_local: bool = False
 
 
@@ -832,14 +904,18 @@ def _reason(body: CurationReason | None) -> dict[str, Any] | None:
     return body.audit_detail() if body else None
 
 
+# A curator may create an entry as a draft or already approved (stories have no separate approve step).
+CurationStatus = Literal["draft", "approved"]
+
+
 class TimelineBody(CurationReason):
     date_text: str
     sort_date: dt.date
-    date_certainty: str = "exact"
+    date_certainty: Literal["exact", "approximate", "unknown"] = "exact"
     titles: dict[str, str]
     descriptions: dict[str, str] = Field(default_factory=dict)
     item_ids: list[int] = Field(min_length=1)
-    status: str = "draft"
+    status: CurationStatus = "draft"
 
 
 @router.get("/timeline")
@@ -861,26 +937,35 @@ def create_timeline(body: TimelineBody, db: DB, user: Curator) -> dict[str, Any]
 
 @router.post("/timeline/{event_id}/approve")
 def approve_timeline(event_id: int, db: DB, user: Curator, body: CurationReason | None = None) -> dict[str, Any]:
-    e = db.get(TimelineEvent, event_id)
+    e = _get_or_404(db, TimelineEvent, event_id, "timeline event")
+    if e.status == "approved":
+        raise HTTPException(409, "timeline event already approved")
     e.status = "approved"
     audit.record(db, user.email, "timeline.approve", "timeline_event", e.id, detail=_reason(body))
     db.commit()
     return {"id": e.id, "status": e.status}
 
 
+class StoryBlock(BaseModel):
+    """Every block cites an archive item; captions and other block fields pass through unchanged."""
+
+    model_config = ConfigDict(extra="allow")
+
+    item_id: Annotated[int, Field(strict=True)]
+
+
 class StoryBody(CurationReason):
-    slug: str
+    slug: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
     titles: dict[str, str]
-    blocks: list[dict[str, Any]] = Field(min_length=1)
-    status: str = "draft"
+    blocks: list[StoryBlock] = Field(min_length=1)
+    status: CurationStatus = "draft"
 
 
 @router.post("/stories")
 def create_story(body: StoryBody, db: DB, user: Curator) -> dict[str, Any]:
-    for b in body.blocks:
-        if not b.get("item_id"):
-            raise HTTPException(422, "every story block must cite an archive item")
-    _check_items_exist(db, [b["item_id"] for b in body.blocks])
+    _check_items_exist(db, [b.item_id for b in body.blocks])
+    if db.execute(select(Story.id).where(Story.slug == body.slug)).first():
+        raise HTTPException(409, f"a story with slug '{body.slug}' already exists")
     st = Story(**body.fields(), curator=user.email)
     db.add(st)
     db.flush()
@@ -890,7 +975,7 @@ def create_story(body: StoryBody, db: DB, user: Curator) -> dict[str, Any]:
 
 
 class NodeBody(CurationReason):
-    node_type: str
+    node_type: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=30)]
     labels: dict[str, str]
     description: str | None = None
     item_ids: list[int] = Field(min_length=1)
@@ -909,7 +994,9 @@ def create_node(body: NodeBody, db: DB, user: Curator) -> dict[str, Any]:
 
 @router.post("/map/nodes/{node_id}/approve")
 def approve_node(node_id: int, db: DB, user: Curator, body: CurationReason | None = None) -> dict[str, Any]:
-    n = db.get(KnowledgeNode, node_id)
+    n = _get_or_404(db, KnowledgeNode, node_id, "node")
+    if n.status == "approved":
+        raise HTTPException(409, "node already approved")
     n.status = "approved"
     n.approved_by = user.email
     audit.record(db, user.email, "map.node.approve", "knowledge_node", n.id, detail=_reason(body))
@@ -940,9 +1027,9 @@ def create_edge(body: EdgeBody, db: DB, user: Curator) -> dict[str, Any]:
 
 @router.post("/map/edges/{edge_id}/approve")
 def approve_edge(edge_id: int, db: DB, user: Curator, body: CurationReason | None = None) -> dict[str, Any]:
-    e = db.get(KnowledgeEdge, edge_id)
-    if e is None:
-        raise HTTPException(404, "edge not found")
+    e = _get_or_404(db, KnowledgeEdge, edge_id, "edge")
+    if e.status == "approved":
+        raise HTTPException(409, "edge already approved")
     e.status, e.approved_by = "approved", user.email
     audit.record(db, user.email, "map.edge.approve", "knowledge_edge", e.id, detail=_reason(body))
     db.commit()
@@ -957,7 +1044,9 @@ def _check_items_exist(db: Session, ids: list[int]) -> None:
 
 
 @router.put("/collections/{collection}")
-def set_collection(collection: str, db: DB, user: Archivist, machine_translation_enabled: bool) -> dict[str, Any]:
+def set_collection(collection: Collection, db: DB, user: Archivist,
+                   machine_translation_enabled: bool) -> dict[str, Any]:
+    collection = collection.value
     row = db.get(CollectionSetting, collection) or CollectionSetting(collection=collection)
     row.machine_translation_enabled = machine_translation_enabled
     db.merge(row)
@@ -1028,8 +1117,11 @@ def stats(db: DB, user: Staff) -> dict[str, Any]:
 
 
 @router.post("/datasets")
-def create_dataset(db: DB, user: Admin, name: Annotated[str, Form()]) -> dict[str, Any]:
+def create_dataset(db: DB, user: Admin,
+                   name: Annotated[str, Form(min_length=1, max_length=80)]) -> dict[str, Any]:
     from archive.datasets.corpus import freeze_dataset
+    if db.execute(select(DatasetVersion.id).where(DatasetVersion.name == name)).first():
+        raise HTTPException(409, f"a dataset named '{name}' already exists")
     dv = freeze_dataset(db, name, user.email)
     db.commit()
     return {"id": dv.id, "name": dv.name, "passages": dv.passage_count, "gate": dv.gate_report}

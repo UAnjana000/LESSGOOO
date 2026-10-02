@@ -1,5 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { api, type VisitorConfig } from "./api";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { api, REACHABILITY_EVENT, type AskResult, type VisitorConfig } from "./api";
 import { translate, type Key, type Lang } from "./i18n";
 
 export interface BasketEntry {
@@ -16,6 +16,12 @@ export interface AskTurn {
   a: string;
 }
 
+/** The visitor's latest Ask answer, kept so going Back to Ask shows it again instead of asking (and paying) again. */
+export interface AskLast {
+  asked: string;
+  result: AskResult;
+}
+
 interface Session {
   lang: Lang;
   setLang: (l: Lang) => void;
@@ -30,7 +36,11 @@ interface Session {
   inBasket: (e: Partial<BasketEntry>) => boolean;
   askHistory: AskTurn[];
   pushAsk: (turn: AskTurn) => void;
+  askLast: AskLast | null;
+  setAskLast: (last: AskLast | null) => void;
   sessionId: string;
+  /** False once Finish (or the idle timeout) has started a new visit: a late reply must not reach the next visitor. */
+  isCurrentSession: (id: string) => boolean;
   finish: () => void;
   config: VisitorConfig | null;
   online: boolean;
@@ -44,7 +54,7 @@ function newSessionId(): string {
   return crypto.randomUUID ? crypto.randomUUID() : `s-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function load(): { lang: Lang; textScale: number; contrast: boolean; basket: BasketEntry[]; askHistory: AskTurn[]; sessionId: string } {
+function load(): { lang: Lang; textScale: number; contrast: boolean; basket: BasketEntry[]; askHistory: AskTurn[]; askLast?: AskLast | null; sessionId: string } {
   try {
     const raw = sessionStorage.getItem(KEY);
     if (raw) return JSON.parse(raw);
@@ -64,13 +74,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [contrast, setContrast] = useState(initial.contrast);
   const [basket, setBasket] = useState<BasketEntry[]>(initial.basket);
   const [askHistory, setAskHistory] = useState<AskTurn[]>(initial.askHistory);
+  const [askLast, setAskLast] = useState<AskLast | null>(initial.askLast ?? null);
   const [sessionId, setSessionId] = useState(initial.sessionId);
+  const sessionRef = useRef(initial.sessionId);
   const [config, setConfig] = useState<VisitorConfig | null>(null);
   const [online, setOnline] = useState(navigator.onLine);
+  const [reachable, setReachable] = useState(true);
 
   useEffect(() => {
-    sessionStorage.setItem(KEY, JSON.stringify({ lang, textScale, contrast, basket, askHistory, sessionId }));
-  }, [lang, textScale, contrast, basket, askHistory, sessionId]);
+    sessionStorage.setItem(KEY, JSON.stringify({ lang, textScale, contrast, basket, askHistory, askLast, sessionId }));
+  }, [lang, textScale, contrast, basket, askHistory, askLast, sessionId]);
 
   useEffect(() => {
     document.documentElement.lang = lang;
@@ -81,22 +94,28 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const up = () => setOnline(true);
     const down = () => setOnline(false);
+    const server = (e: Event) => setReachable((e as CustomEvent<boolean>).detail);
     window.addEventListener("online", up);
     window.addEventListener("offline", down);
+    window.addEventListener(REACHABILITY_EVENT, server);
     api.get<VisitorConfig>("/api/visitor/config").then(setConfig).catch(() => setConfig(null));
     return () => {
       window.removeEventListener("online", up);
       window.removeEventListener("offline", down);
+      window.removeEventListener(REACHABILITY_EVENT, server);
     };
   }, []);
 
   const finish = useCallback(() => {
     setBasket([]);
     setAskHistory([]);
+    setAskLast(null);
     setTextScale(1);
     setContrast(false);
     setLang("en");
-    setSessionId(newSessionId());
+    const id = newSessionId();
+    sessionRef.current = id;
+    setSessionId(id);
   }, []);
 
   const value: Session = {
@@ -113,10 +132,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     inBasket: (e) => basket.some((x) => same(x, e)),
     askHistory,
     pushAsk: (turn) => setAskHistory((h) => [...h, turn].slice(-3)),
+    askLast,
+    setAskLast,
     sessionId,
+    isCurrentSession: (id) => id === sessionRef.current,
     finish,
     config,
-    online,
+    online: online && reachable,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

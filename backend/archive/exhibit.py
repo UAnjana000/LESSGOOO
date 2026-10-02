@@ -102,7 +102,8 @@ def build_manifest(db: Session, device_id: str | None = None) -> dict[str, Any]:
         "items": entries,
         "skipped_over_budget": skipped,
         "withdrawn_item_ids": withdrawn_item_ids(db),
-        "shared_urls": ["/api/visitor/home", "/api/visitor/timeline", "/api/visitor/stories", "/api/visitor/map"],
+        "shared_urls": ["/api/visitor/home", "/api/visitor/timeline", "/api/visitor/stories", "/api/visitor/map",
+                        "/api/visitor/signage"],
         "device_id": device_id,
     }
     return {"payload": payload, "signature": sign(payload), "alg": "ECDSA-P256-SHA256"}

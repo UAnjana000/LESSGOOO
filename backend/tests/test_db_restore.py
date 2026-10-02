@@ -170,7 +170,8 @@ class TestReviewRole:
             ReviewDecision.target_type == "page", ReviewDecision.target_id == page_id)).scalars())
         assert decisions
         assert decisions[-1].reviewer == "reviewer@test"
-        assert decisions[-1].role == "reviewer"
+        # Page review is archivist-gated: a user who is also a reviewer decides here as archivist.
+        assert decisions[-1].role == "archivist"
 
     def test_review_page_stores_the_role_argument(self, db):
         item = make_item(db, make_rights(db), ["Direct role argument."], approve=False)

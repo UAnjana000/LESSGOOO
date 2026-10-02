@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from archive import tracing
 from archive.ask import policy
-from archive.ask.graph import AskDeps, build_ask_graph, cache_key, run_graph
+from archive.ask.graph import ANAPHORA, AskDeps, build_ask_graph, cache_key, rewrite_query, run_graph
 from archive.ask.llm import AnswerLLM, get_llm
 from archive.config import get_settings
 from archive.ingest.publish import current_index_version
@@ -37,6 +37,12 @@ def _citation_payload(hit: dict[str, Any], quoted: list[str]) -> dict[str, Any]:
             "quoted_spans": quoted}
 
 
+def _standalone(question: str, history: list[dict[str, str]]) -> bool:
+    """True when the history rewrite leaves the question as it is (in any language the question may be detected
+    as), so its answer is the same one a first question would get and the answer cache applies."""
+    return not history or not any(rewrite_query(question, history, lang)[1] for lang in ANAPHORA)
+
+
 def daily_cost(db: Session) -> float:
     today = dt.datetime.now(dt.UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     return float(db.execute(select(func.coalesce(func.sum(AnswerLog.cost_usd), 0.0))
@@ -54,7 +60,7 @@ def ask(db: Session, question: str, history: list[dict[str, str]], ui_language: 
     with tracing.trace("ask", {"session": session_hash[:16], "question": qref, "index_version": index_version,
                                "prompt_version": s.prompt_version}) as tr:
         key = cache_key(question, ui_language, index_version, s.prompt_version)
-        cached = db.get(AnswerCache, key) if not history else None
+        cached = db.get(AnswerCache, key) if _standalone(question, history) else None
         if cached and cached.index_version == index_version and cached.prompt_version == s.prompt_version:
             payload = dict(cached.payload)
             ok_ids = _deliverable(db, [c["passage_id"] for c in payload.get("citations", [])])
@@ -104,17 +110,27 @@ def ask(db: Session, question: str, history: list[dict[str, str]], ui_language: 
         msg_key = outcome if outcome in policy.MESSAGES else ("insufficient" if outcome == "error" else None)
         if outcome == "extractive" and state.get("reason") == "local_only":
             msg_key = "local_only"
+        if outcome == "rejected_input" and state.get("reason") == "too_long":
+            msg_key = "too_long"
+        message = policy.MESSAGES[msg_key].get(ui_language, policy.MESSAGES[msg_key]["en"]) if msg_key else None
+        # What the validator actually checked for this answer; the visitor note claims no more than this.
+        v = state.get("validation") or {}
+        checks = ({"citations_ok": True, "quotes": len(v.get("quotes", [])),
+                   "quotes_verified": sum(1 for q in v.get("quotes", []) if q.get("verified_in"))}
+                  if outcome == "answered" and v.get("ok") else None)
         payload: dict[str, Any] = {
             "outcome": outcome,
             "language": lang,
             "label": policy.ANSWER_LABEL.get(lang, policy.ANSWER_LABEL["en"]) if outcome == "answered" else None,
-            "message": policy.MESSAGES[msg_key].get(ui_language, policy.MESSAGES[msg_key]["en"]) if msg_key else None,
+            "message": message.format(max_chars=s.question_max_chars) if msg_key == "too_long" else message,
+            "reason": state.get("reason") if outcome == "rejected_input" else None,
             "sentences": sentences,
             "citations": citations,
             "paraphrase_only": bool(state.get("paraphrase_only")),
             "retried_retrieval": bool(state.get("retried")),
             "rewritten_query": state.get("query") if state.get("rewritten") else None,
             "model": state.get("model"),
+            "checks": checks,
             "claim_support_note": "Citations were checked to exist and quotes to match verbatim; whether each "
                                   "paraphrased sentence is fully supported is measured by human grading, not guaranteed.",
         }
@@ -131,7 +147,8 @@ def ask(db: Session, question: str, history: list[dict[str, str]], ui_language: 
             db.add(Citation(answer_id=log.id, passage_id=c["passage_id"],
                             quoted_span=" | ".join(c["quoted_spans"]) or None, span_verified=bool(c["quoted_spans"]),
                             display_label=c["label"], deep_link=c["deep_link"]))
-        if outcome == "answered" and not history:
+        # A follow-up is cached only when neither pass used the history, i.e. it was answered as a first question.
+        if outcome == "answered" and (not history or not (state.get("rewritten") or state.get("retried"))):
             db.merge(AnswerCache(key=key, index_version=index_version, prompt_version=s.prompt_version,
                                  payload=payload))
         db.commit()
