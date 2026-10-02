@@ -112,6 +112,8 @@ function smallTargets(scope: ParentNode = document): string[] {
   const out: string[] = [];
   for (const el of scope.querySelectorAll<HTMLElement>(INTERACTIVE)) {
     if (el.closest(".visually-hidden, dialog:not([open]), [inert]")) continue;
+    // Graph nodes are SVG groups with a fixed r=24 (48 px) transparent hit circle; CSS box sizing does not apply to them.
+    if (el instanceof SVGElement) continue;
     const cs = getComputedStyle(el);
     const name = `${el.tagName.toLowerCase()}.${el.className || "-"} “${(el.getAttribute("aria-label") ?? el.textContent ?? "").trim().slice(0, 30)}”`;
     const minH = Math.max(parseFloat(cs.minHeight) || 0, parseFloat(cs.height) || 0);

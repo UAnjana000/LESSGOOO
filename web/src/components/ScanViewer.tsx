@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import OpenSeadragon from "openseadragon";
-import { fileUrl } from "../api";
+import { fileUrl, resolveApiUrl } from "../api";
 import { useSession } from "../state";
 
 interface Props {
@@ -19,12 +19,15 @@ export function ScanViewer({ iiif, fileId, label, highlight }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<OpenSeadragon.Viewer | null>(null);
 
+  // Rebuild the viewer when the boxes change, not when a re-render hands over an equal array.
+  const boxes = JSON.stringify(highlight ?? []);
+
   useEffect(() => {
     if (!host.current) return;
+    const highlight = JSON.parse(boxes) as number[][];
     const simple = { type: "image", url: fileUrl(fileId) };
     const viewer = OpenSeadragon({
       element: host.current,
-      tileSources: navigator.onLine && iiif ? iiif : simple,
       showNavigationControl: false,
       prefixUrl: "/osd-images/",
       gestureSettingsTouch: { pinchRotate: false, flickEnabled: true },
@@ -35,7 +38,31 @@ export function ScanViewer({ iiif, fileId, label, highlight }: Props) {
       animationTime: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 0.6,
     });
     viewerRef.current = viewer;
-    viewer.addOnceHandler("open-failed", () => viewer.open(simple as never));
+    let destroyed = false;
+    let fellBack = false;
+    const showSimple = () => {
+      if (destroyed || fellBack) return;
+      fellBack = true;
+      viewer.open(simple as never);
+    };
+    viewer.addHandler("open-failed", showSimple);
+    // Tiles can fail after info.json loaded (blocked host, timeout): the delivery image still shows the page.
+    viewer.addHandler("tile-load-failed", showSimple);
+    if (navigator.onLine && iiif) {
+      // The server names its own host in info.json's "id", and behind a proxy (the website rewriting /iiif to
+      // the API) that is a host the page may not load images from. Tiles are fetched where info.json was.
+      const infoUrl = new URL(resolveApiUrl(iiif), window.location.href);
+      fetch(infoUrl.href)
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`info.json ${r.status}`))))
+        .then((info: Record<string, unknown>) => {
+          if (destroyed) return;
+          const id = infoUrl.href.replace(/\/info\.json$/, "");
+          viewer.open({ ...info, id, "@id": id } as never);
+        })
+        .catch(showSimple);
+    } else {
+      showSimple();
+    }
     viewer.addHandler("open", () => {
       viewer.clearOverlays();
       const item = viewer.world.getItemAt(0);
@@ -47,10 +74,11 @@ export function ScanViewer({ iiif, fileId, label, highlight }: Props) {
       }
     });
     return () => {
+      destroyed = true;
       viewerRef.current = null;
       viewer.destroy();
     };
-  }, [iiif, fileId, highlight]);
+  }, [iiif, fileId, boxes]);
 
   const zoom = (factor: number) => {
     const v = viewerRef.current;

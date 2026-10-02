@@ -21,6 +21,7 @@ from archive import constitution, exhibit, storage
 from archive.ask import voice
 from archive.ask.service import ask as run_ask
 from archive.config import get_settings
+from archive.search.models import get_reranker
 from archive.db import get_db
 from archive.ingest.publish import current_index_version, withdrawn_item_ids
 from archive.models import (
@@ -285,7 +286,11 @@ def captions(item_id: int, db: DB) -> Response:
     def ts(ms: int) -> str:
         return f"{ms // 3600000:02d}:{(ms % 3600000) // 60000:02d}:{(ms % 60000) // 1000:02d}.{ms % 1000:03d}"
 
-    body = "WEBVTT\n\n" + "\n".join(f"{ts(s.start_ms)} --> {ts(s.end_ms)}\n{s.transcript_text}\n" for s in segs)
+    def cue(text: str) -> str:
+        # A blank line ends a cue and "-->" starts a timing line, so neither may appear inside cue text.
+        return re.sub(r"\n\s*\n+", "\n", (text or "").strip()).replace("-->", "→")
+
+    body = "WEBVTT\n\n" + "\n".join(f"{ts(s.start_ms)} --> {ts(s.end_ms)}\n{cue(s.transcript_text)}\n" for s in segs)
     return Response(body, media_type="text/vtt")
 
 
@@ -304,6 +309,14 @@ def search(db: DB, q: Annotated[str, Query(min_length=1, max_length=300)], colle
     filters = SearchFilters(item_type=item_type, collection=collection, language=lang, date_from=date_from,
                             date_to=date_to, subject=subject, person=person, place=place)
     hits, info = hybrid_search(db, q, filters, limit=20)
+    if hits and not info.get("keyword_candidates"):
+        # No passage contains the words, so every hit is only the nearest by embedding, and the nearest exist for
+        # any query ("bitcoin", a typo). Keep the ones the reranker finds related at all.
+        floor = get_settings().effective_sufficiency_threshold * 0.5
+        scores = get_reranker().score(q, [h.text[: get_settings().rerank_max_chars] for h in hits])
+        kept = [h for h, sc in zip(hits, scores, strict=True) if sc >= floor]
+        info = {**info, "semantic_only": True, "below_relevance_floor": len(hits) - len(kept)}
+        hits = kept
     return {"query": q, "results": [h.as_dict() for h in hits], "info": info, "llm_calls": 0}
 
 
@@ -475,8 +488,11 @@ def knowledge_map(db: DB) -> dict[str, Any]:
     keep = [n for n in nodes if set(n.item_ids or []) & vis]
     keep_ids = {n.id for n in keep}
     edges = db.execute(select(KnowledgeEdge).where(KnowledgeEdge.status == "approved")).scalars().all()
+    titles = dict(db.execute(select(ArchivalItem.id, ArchivalItem.title).where(ArchivalItem.id.in_(vis))).all()) if vis else {}
     return {"nodes": [{"id": n.id, "type": n.node_type, "labels": n.labels, "description": n.description,
-                       "item_ids": [i for i in (n.item_ids or []) if i in vis]} for n in keep],
+                       "item_ids": [i for i in (n.item_ids or []) if i in vis],
+                       "items": [{"id": i, "title": titles.get(i, "")} for i in (n.item_ids or []) if i in vis]}
+                      for n in keep],
             "edges": [{"id": e.id, "from": e.from_node, "to": e.to_node, "relation": e.relation}
                       for e in edges if e.from_node in keep_ids and e.to_node in keep_ids]}
 
@@ -534,6 +550,19 @@ def _qr_svg(url: str) -> str:
     return buf.getvalue().decode()
 
 
+def _link_base(requested: str | None) -> str:
+    """The site printed in a QR link. The page sends its own origin (a website can sit on another host than the
+    API), but a caller could send any host and mint a QR pointing elsewhere: only the configured public address
+    or an explicitly allowed web origin is used."""
+    s = get_settings()
+    default = s.public_base_url.rstrip("/")
+    if not requested:
+        return default
+    origin = requested.rstrip("/")
+    allowed = {default} | {o.rstrip("/") for o in s.cors_origins if o != "*"}
+    return origin if origin in allowed else default
+
+
 @router.post("/collections")
 def create_collection(body: CollectionBody, db: DB) -> dict[str, Any]:
     s = get_settings()
@@ -545,8 +574,7 @@ def create_collection(body: CollectionBody, db: DB) -> dict[str, Any]:
     expires = utcnow() + dt.timedelta(hours=s.qr_link_ttl_hours)
     db.add(QrCollection(token=token, entries=entries, language=body.language, expires_at=expires))
     db.commit()
-    base = (body.base_url or s.public_base_url).rstrip('/')
-    url = f"{base}/c/{token}"
+    url = f"{_link_base(body.base_url)}/c/{token}"
     return {"token": token, "url": url, "expires_at": expires.isoformat(), "qr_svg": _qr_svg(url),
             "count": len(entries)}
 

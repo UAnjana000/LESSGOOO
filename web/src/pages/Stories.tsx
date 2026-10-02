@@ -4,6 +4,7 @@ import { fileUrl } from "../api";
 import { useApi } from "../hooks";
 import { ErrorState, LangText, Loading, Page, useDocumentTitle, pickText } from "../components/Bits";
 import { useSession } from "../state";
+import { isKiosk } from "../kiosk";
 import type { ItemCard, Hit } from "../api";
 
 export interface StorySummary {
@@ -122,8 +123,10 @@ export function Story() {
   const currentBlock = blocks[activeIdx] ?? null;
   const total = blocks.length;
 
-  // Track visitor inactivity - auto start Guided Tour at 15s inactivity
+  // Track visitor inactivity - auto start Guided Tour at 15s inactivity, on gallery kiosks only: a visitor
+  // reading on their own phone or laptop must not have narration start by itself.
   useEffect(() => {
+    if (!isKiosk()) return;
     const handleActivity = () => {
       lastActiveRef.current = Date.now();
     };
@@ -147,8 +150,9 @@ export function Story() {
     };
   }, [autoplay, mode, total]);
 
-  // Stop audio on unmount or slide change
-  const stopNarration = () => {
+  // Stop audio on unmount or slide change. A story-level recording narrates the whole story, so turning a slide
+  // leaves it playing; only leaving the walkthrough (or the page) stops and rewinds it.
+  const stopNarration = (rewindRecording = true) => {
     if (advanceTimeoutRef.current) {
       clearTimeout(advanceTimeoutRef.current);
       advanceTimeoutRef.current = null;
@@ -156,6 +160,7 @@ export function Story() {
     if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
+    if (!rewindRecording && audioElemRef.current) return;
     if (audioElemRef.current) {
       audioElemRef.current.pause();
       audioElemRef.current.currentTime = 0;
@@ -165,8 +170,12 @@ export function Story() {
   };
 
   useEffect(() => {
+    stopNarration(false);
+  }, [activeIdx]);
+
+  useEffect(() => {
     stopNarration();
-  }, [activeIdx, mode]);
+  }, [mode]);
 
   const startNarration = () => {
     const narrationFileId = d?.narration_file_ids?.[lang] ?? d?.narration_file_ids?.en;
@@ -307,18 +316,20 @@ export function Story() {
               src={fileUrl(narrationFile)}
               preload="none"
               onEnded={() => {
+                // The recording covers the whole story: when it ends, the tour is over (no replay per slide).
                 setIsPlayingAudio(false);
                 setAudioProgress(100);
-                if (autoplay && total > 0) {
-                  if (advanceTimeoutRef.current) clearTimeout(advanceTimeoutRef.current);
-                  advanceTimeoutRef.current = window.setTimeout(() => {
-                    setActiveIdx((prev) => (prev + 1) % total);
-                  }, 3000);
-                }
+                setAutoplay(false);
               }}
               onTimeUpdate={(e) => {
                 const el = e.currentTarget;
-                if (el.duration) setAudioProgress((el.currentTime / el.duration) * 100);
+                if (!el.duration) return;
+                setAudioProgress((el.currentTime / el.duration) * 100);
+                // No per-slide timings exist, so the tour turns slides in step with the recording's progress.
+                if (autoplay && total > 0) {
+                  const due = Math.min(total - 1, Math.floor((el.currentTime / el.duration) * total));
+                  setActiveIdx((prev) => (due > prev ? due : prev));
+                }
               }}
             />
           ) : null}

@@ -56,6 +56,16 @@ class TestKnowledgeMap:
         m = client.get("/api/visitor/map").json()
         assert {n["id"] for n in m["nodes"]} == {na} and m["edges"] == []
 
+    def test_map_nodes_carry_titles_for_visible_items_only(self, db, client):
+        a, _, draft = _items(db)
+        h = _login(client, db, ["curator"], "curator@test")
+        nid = client.post("/api/staff/map/nodes", json={"node_type": "concept", "labels": {"en": "Mixed"},
+                                                        "item_ids": [a.id, draft.id]}, headers=h).json()["id"]
+        client.post(f"/api/staff/map/nodes/{nid}/approve", headers=h)
+        node = client.get("/api/visitor/map").json()["nodes"][0]
+        assert node["item_ids"] == [a.id]  # existing field unchanged
+        assert node["items"] == [{"id": a.id, "title": "Essay A"}]  # the unpublished draft's title is not leaked
+
     def test_map_curation_needs_curator_role_and_valid_nodes(self, db, client):
         a, _, _ = _items(db)
         archivist = _login(client, db, ["archivist"], "archivist@test")

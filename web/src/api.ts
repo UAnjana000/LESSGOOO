@@ -109,6 +109,11 @@ async function request<T>(path: string, init: RequestInit = {}, token?: string |
     }
   }
   const type = res.headers.get("content-type") ?? "";
+  // A website host with no route to the API serves its own index.html for /api paths: that is a misconfigured
+  // server, not a lost connection and not data.
+  if (type.includes("text/html") && path.startsWith("/api/")) {
+    throw new ApiError(502, "The archive server did not answer this request.", false);
+  }
   return (type.includes("json") ? res.json() : res.text()) as Promise<T>;
 }
 

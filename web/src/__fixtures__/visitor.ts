@@ -161,7 +161,7 @@ const story = {
 
 const map = {
   nodes: [
-    { id: 1, type: "person", labels: { en: "B. R. Ambedkar", hi: "बी. आर. आंबेडकर" }, description: "Chairman of the Drafting Committee.", item_ids: [1] },
+    { id: 1, type: "person", labels: { en: "B. R. Ambedkar", hi: "बी. आर. आंबेडकर" }, description: "Chairman of the Drafting Committee.", item_ids: [1], items: [{ id: 1, title: "Annihilation of Caste" }] },
     { id: 2, type: "place", labels: { en: "Mahad" }, description: null, item_ids: [4] },
     { id: 3, type: "event", labels: { en: "Mahad Satyagraha" }, description: null, item_ids: [] },
   ],

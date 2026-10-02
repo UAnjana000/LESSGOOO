@@ -21,10 +21,19 @@ const emit = (patch: Partial<ExhibitStatus>) => {
 };
 
 function deviceId(): string {
-  let id = localStorage.getItem(DEVICE_KEY);
+  let id: string | null = null;
+  try {
+    id = localStorage.getItem(DEVICE_KEY);
+  } catch {
+    /* storage blocked */
+  }
   if (!id) {
     id = `kiosk-${crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Date.now().toString(36)}`;
-    localStorage.setItem(DEVICE_KEY, id);
+    try {
+      localStorage.setItem(DEVICE_KEY, id);
+    } catch {
+      /* the id then lasts for this page load only */
+    }
   }
   return id;
 }
@@ -34,7 +43,7 @@ function applyPayload(p: ExhibitPayload | null) {
   emit({ version: p.manifest_version, leaseExpiresAt: p.lease_expires_at, leaseValid: leaseValid(p), items: p.items.length });
 }
 
-/** Every visitor gets the service worker (offline app shell); only kiosks download and sync the exhibit cache. */
+/** Kiosks only (main.tsx gates the call): register the service worker for the offline shell and sync the exhibit cache. */
 export async function startExhibit(): Promise<void> {
   if (!("serviceWorker" in navigator) || import.meta.env.DEV) return;
   const reg = await navigator.serviceWorker.register("/sw.js", { type: "module", scope: "/" }).catch(() => null);

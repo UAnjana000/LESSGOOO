@@ -99,7 +99,8 @@ In the local demo, one HTTPS site serves both visitors and staff. Production spl
 | Who | Address | What it is |
 | --- | --- | --- |
 | Visitor | `/` | Home: collections, search and navigation |
-| Visitor (gallery tablet) | `/?kiosk=1` | Kiosk mode: idle warning, reset and attract screen. `/?kiosk=0` turns it off |
+| Visitor (gallery tablet) | `/?kiosk=1` | Kiosk mode, remembered on that browser; `/?kiosk=0` turns it off. See [Kiosk mode](#kiosk-mode) |
+| Visitor (gallery tablet, dock layout) | `/kiosk` | Dock-style kiosk with a virtual keyboard. Same idle policy; the Staff button goes to `/staff`, which has its own sign-in |
 | Visitor | `/search`, `/ask`, `/item/<id>` | Search, Ask with citations, and the reader (text beside the scan) |
 | Visitor | `/timeline`, `/stories`, `/map`, `/constitution`, `/list` | Curated timeline, stories, connections, Constitution articles, and the visitor's own list with a QR code |
 | Visitor (phone) | `/c/<token>` | A shared list opened from a QR code |
@@ -108,6 +109,16 @@ In the local demo, one HTTPS site serves both visitors and staff. Production spl
 | Operator | `/api/health/ready` | Readiness: database, storage and provider configuration |
 
 Staff accounts come from `.env` the first time the api starts: the admin from `ARCHIVE_BOOTSTRAP_ADMIN_*`, and, when `ARCHIVE_DEMO_STAFF_PASSWORD` is set, `archivist@demo.local`, `curator@demo.local`, `reviewer-hi@demo.local` and `reviewer-mr@demo.local`. Bootstrap skips accounts that already exist, so changing a password in `.env` later does not change an existing account.
+
+### Kiosk mode
+
+Open `/?kiosk=1` once on a gallery screen (`?kiosk=0` undoes it; a fullscreen-installed PWA also counts). Kiosk mode:
+
+- warns 30 s before `session_idle_seconds` of inactivity, then ends the visit (list, Ask history, text size and contrast are cleared) and shows the attract screen;
+- locks the screen down: fullscreen on the first touch, no context menu, no text selection outside inputs, and links stay inside the app. Pinch-zoom stays available;
+- registers the service worker. Offline it keeps the app shell and serves the signed, leased exhibit cache (published, public items only). Ask and staff requests are never cached.
+
+The public website never runs a service worker; any left over from an earlier load is removed. `/kiosk` is the dock-style variant of the same behaviour.
 
 ## Content
 

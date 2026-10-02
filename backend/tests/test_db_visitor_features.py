@@ -559,6 +559,36 @@ class TestCompileAndQr:
         db.commit()
         assert client.get(f"/api/visitor/collections/{token}").status_code == 410
 
+    def test_search_without_any_matching_word_returns_nothing_unrelated(self, db, client):
+        self._two_items(db)
+        db.commit()
+        res = client.get("/api/visitor/search", params={"q": "zzqxv blorp cryptocurrency"}).json()
+        assert res["results"] == [] and res["info"]["semantic_only"]
+
+    def test_qr_link_uses_only_an_allowed_site(self, db, client, monkeypatch):
+        from archive.config import get_settings
+
+        s = get_settings()
+        monkeypatch.setattr(s, "public_base_url", "https://archive.example.org")
+        monkeypatch.setattr(s, "cors_origins", ["https://kiosk.example.org", "*"])
+        text, _ = self._two_items(db)
+
+        def link(base_url):
+            return client.post("/api/visitor/collections",
+                               json={"entries": [{"item_id": text.id}], "base_url": base_url}).json()["url"]
+
+        assert link("https://kiosk.example.org").startswith("https://kiosk.example.org/c/")
+        assert link("https://evil.example.com").startswith("https://archive.example.org/c/")
+        assert link(None).startswith("https://archive.example.org/c/")
+
+    def test_captions_keep_each_segment_one_cue(self, db, client):
+        _, video = self._two_items(db)
+        seg = db.execute(select(MediaSegment).where(MediaSegment.item_id == video.id)).scalars().first()
+        seg.transcript_text = "First line\n\nnot a new cue --> nor a timing"
+        db.commit()
+        vtt = client.get(f"/api/visitor/items/{video.id}/captions.vtt").text
+        assert "\n\nnot a new cue" not in vtt and "cue → nor" in vtt
+
     def test_collection_body_accepts_no_personal_fields(self, db, client):
         text, _ = self._two_items(db)
         r = client.post("/api/visitor/collections",

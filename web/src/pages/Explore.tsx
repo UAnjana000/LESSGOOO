@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, type Hit, type ItemCard, type TimelineEvent } from "../api";
-import type { Key } from "../i18n";
 import { basketLink } from "../basket";
 import { formatMs, useApi } from "../hooks";
 import { useSession } from "../state";
 import { ContentText, ErrorState, FixtureChip, LangText, LanguageSwitch, Loading, Page, pickText, useDocumentTitle } from "../components/Bits";
-import { GraphView, getNodeColor } from "../components/GraphView";
+import { GraphView, compareTypes, getNodeColor, nodeTypeLabel, relationLabel } from "../components/GraphView";
 
 const MAJOR_MILESTONE_YEARS = new Set([
   "1891", "1916", "1924", "1927", "1930", "1932", "1935",
@@ -27,9 +26,9 @@ export function Timeline() {
     if (!tl.data) return [];
     if (isDetailed) return tl.data;
 
-    // Filter to key landmark milestones when overview zoom is selected
+    // Overview shows the landmark milestones; with none marked, it has nothing to leave out and shows everything.
     const milestones = tl.data.filter(isMilestoneEvent);
-    return milestones.length >= 8 ? milestones : tl.data.filter((_, idx) => idx % 3 === 0);
+    return milestones.length ? milestones : tl.data;
   }, [tl.data, isDetailed]);
 
   return (
@@ -85,7 +84,7 @@ export function Timeline() {
                       </span>
                     )}
                     {!isMilestone && (
-                      <span className="sub-event-badge" style={{ font: "500 var(--step--2) var(--ui)", marginLeft: 8, padding: "1px 6px", borderRadius: 4, background: "#e8effc", color: "#365d9d", verticalAlign: "middle" }}>
+                      <span className="sub-event-badge" style={{ font: "500 var(--step--2) var(--ui)", marginLeft: 8, padding: "1px 6px", borderRadius: 4, background: "var(--indigo-soft)", color: "var(--indigo)", verticalAlign: "middle" }}>
                         {t("timelineDetailTag")}
                       </span>
                     )}
@@ -116,17 +115,19 @@ export function Timeline() {
 export { Stories, Story } from "./Stories";
 
 interface MapData {
-  nodes: { id: number; type: string; labels: Record<string, string>; description: string | null; item_ids: number[] }[];
+  nodes: { id: number; type: string; labels: Record<string, string>; description: string | null; item_ids: number[]; items?: { id: number; title: string }[] }[];
   edges: { id: number; from: number; to: number; relation: string }[];
 }
-
-const TYPE_ORDER = ["person", "organisation", "place", "event", "concept", "document"];
 
 export function KnowledgeMap() {
   const { t, lang } = useSession();
   const m = useApi<MapData>("/api/visitor/map");
-  const items = useApi<ItemCard[]>("/api/visitor/items");
-  const titles = useMemo(() => new Map((items.data ?? []).map((i) => [i.id, i.title])), [items.data]);
+  // Evidence titles come with the map itself, so a failed or paginated item list can never hide them.
+  const titles = useMemo(() => {
+    const out = new Map<number, string>();
+    for (const n of m.data?.nodes ?? []) for (const it of n.items ?? []) if (it.title) out.set(it.id, it.title);
+    return out;
+  }, [m.data]);
   const [sel, setSel] = useState<number | null>(null);
   const [nameFilter, setNameFilter] = useState("");
 
@@ -142,24 +143,30 @@ export function KnowledgeMap() {
       }
       out.set(n.type, [...(out.get(n.type) ?? []), n]);
     }
-    return [...out.entries()].sort(([a], [b]) => TYPE_ORDER.indexOf(a) - TYPE_ORDER.indexOf(b));
+    return [...out.entries()].sort(([a], [b]) => compareTypes(a, b));
   }, [m.data, nameFilter, lang]);
 
+  // Start with the best-connected names (then the most documented); "Ambedkar" wins ties, no hard-coded ids.
   const suggestedNodes = useMemo(() => {
     if (!m.data?.nodes.length) return [];
-    return [...m.data.nodes]
-      .sort((a, b) => (b.item_ids.length + (b.id === 25 ? 10 : 0)) - (a.item_ids.length + (a.id === 25 ? 10 : 0)))
-      .slice(0, 4);
-  }, [m.data?.nodes]);
+    const degree = new Map<number, number>();
+    for (const e of m.data.edges) {
+      degree.set(e.from, (degree.get(e.from) ?? 0) + 1);
+      degree.set(e.to, (degree.get(e.to) ?? 0) + 1);
+    }
+    const isAmbedkar = (n: MapData["nodes"][number]) => Object.values(n.labels).some((l) => /ambedkar/i.test(l));
+    const score = (n: MapData["nodes"][number]) => (degree.get(n.id) ?? 0) * 100 + n.item_ids.length * 10 + (isAmbedkar(n) ? 5 : 0);
+    return [...m.data.nodes].sort((a, b) => score(b) - score(a)).slice(0, 4);
+  }, [m.data]);
 
   return (
     <Page title={t("mapTitle")} lead={t("mapLead")}>
-      {(m.loading || (!m.data && items.loading)) && <Loading center />}
+      {m.loading && <Loading center />}
       {m.error && <ErrorState error={m.error} retry={m.reload} />}
-      {items.error && <ErrorState error={items.error} retry={items.reload} />}
       {m.data?.nodes.length === 0 && <p className="empty-state">{t("mapEmpty")}</p>}
       {!!m.data?.nodes.length && (
         <div className="knowledge-map-layout">
+          <p className="map-intro">{t("mapIntro")}</p>
           {/* Top Full-Width Interactive Obsidian/Logseq Graph Canvas */}
           <div className="map-wrap">
             <GraphView data={m.data} selectedId={sel} onSelectNode={setSel} />
@@ -211,7 +218,7 @@ export function KnowledgeMap() {
                           color: "#ffffff",
                         }}
                       >
-                        {t(`node_${selected.type}` as Key)}
+                        {nodeTypeLabel(t, selected.type)}
                       </span>
                     </div>
                     <button
@@ -247,7 +254,7 @@ export function KnowledgeMap() {
                                 <LangText map={other.labels} />
                               </button>
                               <span className="relation-tag">
-                                <ContentText text={e.relation.replace(/_/g, " ")} />
+                                {relationLabel(t, e.relation)}
                               </span>
                             </li>
                           );
@@ -305,10 +312,10 @@ export function KnowledgeMap() {
                 {byType.map(([type, nodes]) => {
                   const color = getNodeColor(type);
                   return (
-                    <div key={type} role="group" aria-label={t(`node_${type}` as Key)} className="directory-category-card">
+                    <div key={type} role="group" aria-label={nodeTypeLabel(t, type)} className="directory-category-card">
                       <div className="category-header">
                         <span className="category-indicator" style={{ backgroundColor: color.bg }} />
-                        <span className="category-title">{t(`node_${type}` as Key)}</span>
+                        <span className="category-title">{nodeTypeLabel(t, type)}</span>
                         <span className="category-count">{nodes.length}</span>
                       </div>
                       <div className="chips directory-chips">

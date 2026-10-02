@@ -4,25 +4,10 @@ import { useSession } from "../state";
 import { useExhibitStatus } from "../exhibit";
 import { isKiosk } from "../kiosk";
 import { LanguageSwitch } from "./Bits";
+import { closeModal, IDLE_WARNING_MS, IdleWarning, openModal, useIdleReset } from "./useIdleReset";
 import { IconAsk, IconConstitution, IconHome, IconList, IconMap, IconSearch, IconSettings, IconStories, IconTimeline } from "./Icons";
 
-const IDLE_MS_DEFAULT = 120_000;
-/** WCAG 2.2.1: visitors get at least 20 s warning, and one simple action, before the visit is cleared. */
-export const IDLE_WARNING_MS = 30_000;
-// "click" covers screen-reader activation, which fires a click with no key or pointer event.
-const ACTIVITY = ["pointerdown", "keydown", "click", "wheel", "touchstart", "input", "focusin", "scroll"] as const;
-
-function openModal(d: HTMLDialogElement | null) {
-  if (!d || d.open) return;
-  if (typeof d.showModal === "function") d.showModal();
-  else d.setAttribute("open", "");
-}
-
-function closeModal(d: HTMLDialogElement | null) {
-  if (!d?.open) return;
-  if (typeof d.close === "function") d.close();
-  else d.removeAttribute("open");
-}
+export { IDLE_WARNING_MS };
 
 export function Shell() {
   const s = useSession();
@@ -30,15 +15,11 @@ export function Shell() {
   const nav = useNavigate();
   const { pathname } = useLocation();
   const finishRef = useRef<HTMLDialogElement>(null);
-  const warnRef = useRef<HTMLDialogElement>(null);
   const mainRef = useRef<HTMLElement>(null);
   const settingsRef = useRef<HTMLDivElement>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [attract, setAttract] = useState(false);
-  const [remaining, setRemaining] = useState(IDLE_WARNING_MS / 1000);
   const exhibit = useExhibitStatus();
-  const idleMs = (s.config?.session_idle_seconds ?? 0) * 1000 || IDLE_MS_DEFAULT;
-  const warnAfter = Math.max(idleMs - IDLE_WARNING_MS, 10_000);
 
   // Close settings drop-up on click outside or Escape
   useEffect(() => {
@@ -66,49 +47,53 @@ export function Shell() {
     s.finish();
     nav("/");
   }, [s, nav]);
-  const endRef = useRef(endVisit);
-  endRef.current = endVisit;
+  const kiosk = isKiosk();
+  const { warnRef, remaining } = useIdleReset(kiosk && !attract, () => {
+    endVisit();
+    setAttract(true);
+  });
 
-  // No idle timer over the attract screen: its own focus would count as activity and re-arm the warning.
+  // Gallery lockdown: no context menu, no text selection (CSS), fullscreen on first touch, and links stay in the app.
   useEffect(() => {
-    if (attract || !isKiosk()) return;
-    let warnTimer = 0;
-    let resetTimer = 0;
-    let tick = 0;
-    const clear = () => {
-      window.clearTimeout(warnTimer);
-      window.clearTimeout(resetTimer);
-      window.clearInterval(tick);
+    if (!kiosk) return;
+    document.documentElement.dataset.kiosk = "1";
+    const noMenu = (e: Event) => e.preventDefault();
+    const fullscreen = () => {
+      if (document.fullscreenElement) return;
+      try {
+        void Promise.resolve(document.documentElement.requestFullscreen?.()).catch(() => {});
+      } catch {
+        /* not allowed here */
+      }
     };
-    const arm = () => {
-      clear();
-      closeModal(warnRef.current);
-      warnTimer = window.setTimeout(() => {
-        const started = Date.now();
-        setRemaining(IDLE_WARNING_MS / 1000);
-        openModal(warnRef.current);
-        tick = window.setInterval(() => setRemaining(Math.max(0, Math.ceil((IDLE_WARNING_MS - (Date.now() - started)) / 1000))), 1000);
-        resetTimer = window.setTimeout(() => {
-          clear();
-          closeModal(warnRef.current);
-          endRef.current();
-          setAttract(true);
-        }, IDLE_WARNING_MS);
-      }, warnAfter);
+    const onClick = (e: MouseEvent) => {
+      const a = e.target instanceof Element ? e.target.closest("a[href]") : null;
+      if (!(a instanceof HTMLAnchorElement)) return;
+      let url: URL;
+      try {
+        url = new URL(a.href, window.location.href);
+      } catch {
+        return;
+      }
+      if (url.origin !== window.location.origin) {
+        e.preventDefault();
+        return;
+      }
+      if (a.target === "_blank") {
+        e.preventDefault();
+        nav(url.pathname + url.search + url.hash);
+      }
     };
-    // Screen-reader and switch users often move focus or scroll without key or pointer events on the page.
-    const onActivity = (e: Event) => {
-      const insideWarning = e.target instanceof Node && warnRef.current?.contains(e.target);
-      if (insideWarning && (e.type === "focusin" || e.type === "scroll")) return;
-      arm();
-    };
-    ACTIVITY.forEach((e) => window.addEventListener(e, onActivity, { passive: true, capture: true }));
-    arm();
+    document.addEventListener("contextmenu", noMenu);
+    document.addEventListener("pointerdown", fullscreen, { once: true });
+    document.addEventListener("click", onClick, true);
     return () => {
-      clear();
-      ACTIVITY.forEach((e) => window.removeEventListener(e, onActivity, { capture: true }));
+      delete document.documentElement.dataset.kiosk;
+      document.removeEventListener("contextmenu", noMenu);
+      document.removeEventListener("pointerdown", fullscreen);
+      document.removeEventListener("click", onClick, true);
     };
-  }, [warnAfter, attract]);
+  }, [kiosk, nav]);
 
   const dismissAttract = () => {
     setAttract(false);
@@ -251,16 +236,7 @@ export function Shell() {
           </button>
         </div>
       </dialog>
-      <dialog ref={warnRef} className="idle-warning" aria-labelledby="idle-title" aria-describedby="idle-body">
-        <h2 id="idle-title">{t("idleTitle")}</h2>
-        <p id="idle-body">{t("idleBody", { n: IDLE_WARNING_MS / 1000 })}</p>
-        <p className="countdown" aria-hidden="true">{t("seconds", { n: remaining })}</p>
-        <div className="actions">
-          <button type="button" className="btn" onClick={() => closeModal(warnRef.current)}>
-            {t("idleStay")}
-          </button>
-        </div>
-      </dialog>
+      <IdleWarning warnRef={warnRef} remaining={remaining} />
       {attract && (
         <button type="button" className="attract" onClick={dismissAttract} autoFocus>
           <span className="attract-title">{t("archiveName")}</span>

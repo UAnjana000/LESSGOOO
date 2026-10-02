@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "../state";
 import { pickText } from "./Bits";
-import type { Key } from "../i18n";
+import { STRINGS, type Key } from "../i18n";
 
 export interface GraphNode {
   id: number;
@@ -9,6 +9,7 @@ export interface GraphNode {
   labels: Record<string, string>;
   description: string | null;
   item_ids: number[];
+  items?: { id: number; title: string }[];
 }
 
 export interface GraphEdge {
@@ -49,9 +50,45 @@ export function getNodeColor(type: string) {
   return { bg: t.color, border: t.border, fill: t.bg, text: t.color };
 }
 
-const TYPE_ORDER = ["person", "organisation", "place", "event", "concept", "document"];
+export const TYPE_ORDER = ["person", "organisation", "place", "event", "concept", "document"];
 
-const DEFAULT_ZOOM = 0.9;
+export function compareTypes(a: string, b: string): number {
+  const ia = TYPE_ORDER.indexOf(a);
+  const ib = TYPE_ORDER.indexOf(b);
+  return (ia < 0 ? TYPE_ORDER.length : ia) - (ib < 0 ? TYPE_ORDER.length : ib) || a.localeCompare(b);
+}
+
+type TFn = (key: Key, vars?: Record<string, string | number>) => string;
+
+function humanise(raw: string): string {
+  const s = raw.replace(/[_-]+/g, " ").trim();
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
+
+/** Visitor-facing name of a node type; unknown types fall back to readable text, never the raw i18n key. */
+export function nodeTypeLabel(t: TFn, type: string): string {
+  if (!type) return t("node_other" as Key);
+  const key = `node_${type}`;
+  return key in STRINGS.en ? t(key as Key) : humanise(type);
+}
+
+/** Visitor-facing name of a relation; unknown relations are humanised (spoke_at -> "spoke at"). */
+export function relationLabel(t: TFn, relation: string): string {
+  const key = `rel_${relation}`;
+  return key in STRINGS.en ? t(key as Key) : relation.replace(/_/g, " ");
+}
+
+export function truncateLabel(text: string, max: number): string {
+  const chars = Array.from(text);
+  return chars.length > max ? `${chars.slice(0, max - 1).join("").trimEnd()}…` : text;
+}
+
+const NODE_LABEL_MAX = 24;
+const EDGE_LABEL_MAX = 26;
+const MIN_ZOOM = 0.2;
+const MAX_ZOOM = 2.5;
+const TAP_SLOP = 5;
+const FALLBACK_SIZE = { width: 800, height: 520 };
 
 export interface GraphViewProps {
   data: GraphData;
@@ -61,7 +98,7 @@ export interface GraphViewProps {
 
 export function GraphView({ data, selectedId, onSelectNode }: GraphViewProps) {
   const { lang, t } = useSession();
-  const containerRef = useRef<HTMLDivElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
   const [search, setSearch] = useState("");
@@ -69,38 +106,35 @@ export function GraphView({ data, selectedId, onSelectNode }: GraphViewProps) {
   const [hoveredId, setHoveredId] = useState<number | null>(null);
   const [isPanning, setIsPanning] = useState(false);
 
-  // Viewport transform (Pan & Zoom) - fitted by default
-  const [dimensions, setDimensions] = useState({ width: 1100, height: 560 });
-  const [transform, setTransform] = useState(() => ({
-    k: DEFAULT_ZOOM,
-    x: (1100 / 2) * (1 - DEFAULT_ZOOM),
-    y: (560 / 2) * (1 - DEFAULT_ZOOM),
-  }));
+  // The wrapper is the single source of truth for the canvas size; the SVG viewBox is its real pixel size.
+  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
+  const sizeRef = useRef(size);
+  sizeRef.current = size;
+  const [transform, setTransform] = useState({ k: 1, x: 0, y: 0 });
 
   const simNodesRef = useRef<SimNode[]>([]);
   const simEdgesRef = useRef<GraphEdge[]>([]);
   const [renderCounter, setRenderCounter] = useState(0);
 
-  // Pointer interaction state
+  const selectedIdRef = useRef(selectedId);
+  selectedIdRef.current = selectedId;
+  const onSelectRef = useRef(onSelectNode);
+  onSelectRef.current = onSelectNode;
+
+  const needFitRef = useRef(false);
+
   const dragRef = useRef<{
     nodeId: number | null;
     isPanning: boolean;
-    startX: number;
-    startY: number;
+    originX: number;
+    originY: number;
+    lastX: number;
+    lastY: number;
     startTransformX: number;
     startTransformY: number;
     moved: boolean;
-  }>({
-    nodeId: null,
-    isPanning: false,
-    startX: 0,
-    startY: 0,
-    startTransformX: 0,
-    startTransformY: 0,
-    moved: false,
-  });
+  }>({ nodeId: null, isPanning: false, originX: 0, originY: 0, lastX: 0, lastY: 0, startTransformX: 0, startTransformY: 0, moved: false });
 
-  // Calculate degrees for node importance
   const degrees = useMemo(() => {
     const degMap = new Map<number, number>();
     for (const n of data.nodes) degMap.set(n.id, 0);
@@ -111,93 +145,90 @@ export function GraphView({ data, selectedId, onSelectNode }: GraphViewProps) {
     return degMap;
   }, [data]);
 
-  // Update dimensions on container resize & initialize centered zoomed view
+  // Measure the wrapper (ResizeObserver) and keep viewBox == real pixel size.
   useEffect(() => {
-    let initialized = false;
-    const updateSize = () => {
-      if (containerRef.current) {
-        const rect = containerRef.current.getBoundingClientRect();
-        if (rect.width > 0) {
-          const w = Math.max(rect.width, 600);
-          const h = Math.max(Math.min(window.innerHeight * 0.62, 560), 440);
-          setDimensions({ width: w, height: h });
-          if (!initialized) {
-            initialized = true;
-            setTransform({
-              k: DEFAULT_ZOOM,
-              x: (w / 2) * (1 - DEFAULT_ZOOM),
-              y: (h / 2) * (1 - DEFAULT_ZOOM),
-            });
-          }
-        }
-      }
+    const el = wrapRef.current;
+    if (!el) return;
+    const measure = () => {
+      const rect = el.getBoundingClientRect();
+      const width = Math.round(rect.width) || FALLBACK_SIZE.width;
+      const height = Math.round(rect.height) || FALLBACK_SIZE.height;
+      setSize((prev) => (prev && prev.width === width && prev.height === height ? prev : { width, height }));
     };
-    updateSize();
-    window.addEventListener("resize", updateSize);
-    return () => window.removeEventListener("resize", updateSize);
+    measure();
+    if (typeof ResizeObserver !== "undefined") {
+      const ro = new ResizeObserver(measure);
+      ro.observe(el);
+      return () => ro.disconnect();
+    }
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
   }, []);
 
-  // Compute clean, widely-spaced initial layout by categories
-  useEffect(() => {
-    if (!data.nodes.length) return;
-    const W = dimensions.width;
-    const H = dimensions.height;
-    const cx = W / 2;
-    const cy = H / 2;
-
-    const groups = new Map<string, GraphNode[]>();
-    for (const n of data.nodes) {
-      groups.set(n.type, [...(groups.get(n.type) ?? []), n]);
+  /** Zoom and pan so every node (plus room for its label) sits inside the canvas. */
+  const fitView = useCallback(() => {
+    const sz = sizeRef.current;
+    const nodes = simNodesRef.current;
+    if (!sz || !nodes.length) return;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const n of nodes) {
+      const labelW = Math.min(Array.from(pickText(n.labels, "en")).length, NODE_LABEL_MAX) * 7 + 16;
+      minX = Math.min(minX, n.x - n.radius - 8);
+      maxX = Math.max(maxX, n.x + n.radius + 8 + labelW);
+      minY = Math.min(minY, n.y - n.radius - 8);
+      maxY = Math.max(maxY, n.y + n.radius + 8);
     }
-    const types = [...groups.keys()].sort((a, b) => TYPE_ORDER.indexOf(a) - TYPE_ORDER.indexOf(b));
-
-    const initialNodes: SimNode[] = [];
-    types.forEach((type, gi) => {
-      const typeNodes = groups.get(type)!;
-      const baseAngle = (gi / types.length) * Math.PI * 2 - Math.PI / 2;
-      const span = (Math.PI * 2) / types.length;
-
-      typeNodes.forEach((node, i) => {
-        const existing = simNodesRef.current.find((n) => n.id === node.id);
-        const deg = degrees.get(node.id) ?? 0;
-        const radius = node.type === "person" ? 15 : 12 + Math.min(deg, 4);
-
-        if (existing) {
-          initialNodes.push({
-            ...node,
-            x: existing.x,
-            y: existing.y,
-            vx: existing.vx,
-            vy: existing.vy,
-            radius,
-            degree: deg,
-            pinned: existing.pinned,
-          });
-        } else {
-          // Generous radial spacing so nodes are spread apart
-          const a = baseAngle + span * ((i + 0.5) / typeNodes.length) * 0.88;
-          const r = 260 + (i % 3) * 110;
-          initialNodes.push({
-            ...node,
-            x: cx + Math.cos(a) * r * 1.6,
-            y: cy + Math.sin(a) * r * 1.15,
-            vx: 0,
-            vy: 0,
-            radius,
-            degree: deg,
-          });
-        }
-      });
+    const pad = 28;
+    const bw = Math.max(maxX - minX, 1);
+    const bh = Math.max(maxY - minY, 1);
+    const k = Math.max(MIN_ZOOM, Math.min((sz.width - pad * 2) / bw, (sz.height - pad * 2) / bh, 1.4));
+    setTransform({
+      k,
+      x: sz.width / 2 - ((minX + maxX) / 2) * k,
+      y: sz.height / 2 - ((minY + maxY) / 2) * k,
     });
+  }, []);
 
+  // Initial layout: a ring that fits the canvas; nodes already placed keep their position.
+  const hasSize = size !== null;
+  useEffect(() => {
+    const sz = sizeRef.current;
+    if (!sz || !data.nodes.length) {
+      simNodesRef.current = [];
+      return;
+    }
+    const cx = sz.width / 2;
+    const cy = sz.height / 2;
+    const ring = Math.min(sz.width, sz.height) * 0.35;
+    const ordered = [...data.nodes].sort((a, b) => compareTypes(a.type, b.type));
+    const initialNodes: SimNode[] = ordered.map((node, i) => {
+      const existing = simNodesRef.current.find((n) => n.id === node.id);
+      const deg = degrees.get(node.id) ?? 0;
+      const radius = node.type === "person" ? 15 : 12 + Math.min(deg, 4);
+      if (existing) return { ...existing, ...node, radius, degree: deg };
+      const a = (i / ordered.length) * Math.PI * 2 - Math.PI / 2;
+      const r = ordered.length === 1 ? 0 : ring;
+      return { ...node, x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r, vx: 0, vy: 0, radius, degree: deg };
+    });
     simNodesRef.current = initialNodes;
     simEdgesRef.current = data.edges;
+    needFitRef.current = true;
+    alphaRef.current = Math.max(alphaRef.current, 0.3);
+    fitView();
     setRenderCounter((c) => c + 1);
-  }, [data, dimensions, degrees]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, degrees, hasSize, fitView]);
 
-  // Gentle physics relaxer with spacious node repulsion
+  // On a real resize, re-fit what is already laid out.
+  useEffect(() => {
+    if (size && simNodesRef.current.length) fitView();
+  }, [size, fitView]);
+
   const animFrameRef = useRef<number | null>(null);
-  const alphaRef = useRef(0.25);
+  const alphaRef = useRef(0.3);
 
   const triggerSimulation = useCallback((alpha = 0.3) => {
     alphaRef.current = Math.max(alphaRef.current, alpha);
@@ -213,33 +244,33 @@ export function GraphView({ data, selectedId, onSelectNode }: GraphViewProps) {
       const nodes = simNodesRef.current;
       const edges = simEdgesRef.current;
       const alpha = alphaRef.current;
+      const sz = sizeRef.current;
 
-      if (nodes.length > 0 && alpha > 0.002) {
-        const cx = dimensions.width / 2;
-        const cy = dimensions.height / 2;
+      if (sz && nodes.length > 0 && alpha > 0.002) {
+        const cx = sz.width / 2;
+        const cy = sz.height / 2;
+        // Spacing scales with the canvas and the node count, so a 6-node map is compact and a 60-node map spreads out.
+        const spacing = Math.max(70, Math.min(200, Math.sqrt((sz.width * sz.height) / nodes.length) * 0.6));
+        const repel = spacing * spacing * 1.2;
+        const soft = spacing * spacing * 0.03;
 
-        // Subtle center anchor (low gravity so nodes remain spaced apart)
         for (const n of nodes) {
           if (n.pinned) continue;
-          n.vx += (cx - n.x) * 0.05 * alpha * dt;
-          n.vy += (cy - n.y) * 0.05 * alpha * dt;
+          n.vx += (cx - n.x) * 0.9 * alpha * dt;
+          n.vy += (cy - n.y) * 0.9 * alpha * dt;
         }
 
-        // Strong electrostatic repulsion and collision padding
         for (let i = 0; i < nodes.length; i++) {
           const n1 = nodes[i];
           for (let j = i + 1; j < nodes.length; j++) {
             const n2 = nodes[j];
             const dx = n2.x - n1.x;
             const dy = n2.y - n1.y;
-            const distSq = dx * dx + dy * dy + 1200;
+            const distSq = dx * dx + dy * dy + soft;
             const dist = Math.sqrt(distSq);
-
-            // Wide area repulsion
-            const force = (58000 * alpha * dt) / distSq;
+            const force = (repel * alpha * dt) / distSq;
             const fx = (dx / dist) * force;
             const fy = (dy / dist) * force;
-
             if (!n1.pinned) {
               n1.vx -= fx;
               n1.vy -= fy;
@@ -249,8 +280,7 @@ export function GraphView({ data, selectedId, onSelectNode }: GraphViewProps) {
               n2.vy += fy;
             }
 
-            // Hard collision separation so labels and circles never overlap
-            const minSeparation = n1.radius + n2.radius + 80;
+            const minSeparation = n1.radius + n2.radius + spacing * 0.3;
             if (dist < minSeparation && dist > 0) {
               const push = ((minSeparation - dist) / minSeparation) * 50 * alpha * dt;
               const px = (dx / dist) * push;
@@ -267,20 +297,17 @@ export function GraphView({ data, selectedId, onSelectNode }: GraphViewProps) {
           }
         }
 
-        // Springs along edges (long rest length for breathing room)
-        const nodeMap = new Map(nodes.map((n) => [n.id, n]));
-        const restLength = 220;
+        const nodeById = new Map(nodes.map((n) => [n.id, n]));
         for (const e of edges) {
-          const s = nodeMap.get(e.from);
-          const tr = nodeMap.get(e.to);
+          const s = nodeById.get(e.from);
+          const tr = nodeById.get(e.to);
           if (!s || !tr) continue;
           const dx = tr.x - s.x;
           const dy = tr.y - s.y;
           const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          const force = (dist - restLength) * 1.8 * alpha * dt;
+          const force = (dist - spacing) * 1.8 * alpha * dt;
           const fx = (dx / dist) * force;
           const fy = (dy / dist) * force;
-
           if (!s.pinned) {
             s.vx += fx;
             s.vy += fy;
@@ -291,7 +318,6 @@ export function GraphView({ data, selectedId, onSelectNode }: GraphViewProps) {
           }
         }
 
-        // Damping
         for (const n of nodes) {
           if (n.pinned) continue;
           n.vx *= 0.88;
@@ -301,6 +327,10 @@ export function GraphView({ data, selectedId, onSelectNode }: GraphViewProps) {
         }
 
         alphaRef.current *= 0.985;
+        if (alphaRef.current <= 0.002 && needFitRef.current) {
+          needFitRef.current = false;
+          fitView();
+        }
         setRenderCounter((c) => (c + 1) % 1000000);
       }
 
@@ -311,9 +341,9 @@ export function GraphView({ data, selectedId, onSelectNode }: GraphViewProps) {
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [dimensions]);
+  }, [fitView]);
 
-  // Connected neighbors
+  // Hover focus only applies to a real mouse; on touch it would stick after a tap.
   const activeFocusId = hoveredId ?? selectedId;
   const connectedNodeIds = useMemo(() => {
     if (activeFocusId === null) return new Set<number>();
@@ -325,33 +355,48 @@ export function GraphView({ data, selectedId, onSelectNode }: GraphViewProps) {
     return neighbors;
   }, [activeFocusId, data.edges]);
 
-  // Viewport Zoom & Pan
-  const handleZoom = (delta: number) => {
+  /** Wrapper pixels per SVG unit's inverse: how many viewBox units one client pixel is worth. */
+  const pointerScale = () => {
+    const rect = wrapRef.current?.getBoundingClientRect();
+    const sz = sizeRef.current;
+    return rect && rect.width > 0 && sz ? sz.width / rect.width : 1;
+  };
+
+  const zoomAround = useCallback((factor: number, px: number, py: number) => {
+    needFitRef.current = false;
     setTransform((prev) => {
-      const newK = Math.max(0.4, Math.min(prev.k * delta, 2.5));
-      const factor = newK / prev.k;
-      const cx = dimensions.width / 2;
-      const cy = dimensions.height / 2;
-      return {
-        k: newK,
-        x: cx - (cx - prev.x) * factor,
-        y: cy - (cy - prev.y) * factor,
-      };
+      const newK = Math.max(MIN_ZOOM, Math.min(prev.k * factor, MAX_ZOOM));
+      const f = newK / prev.k;
+      return { k: newK, x: px - (px - prev.x) * f, y: py - (py - prev.y) * f };
     });
+  }, []);
+
+  const handleZoom = (delta: number) => {
+    const sz = sizeRef.current ?? FALLBACK_SIZE;
+    zoomAround(delta, sz.width / 2, sz.height / 2);
   };
 
   const handleResetView = () => {
-    const cx = dimensions.width / 2;
-    const cy = dimensions.height / 2;
-    setTransform({
-      k: DEFAULT_ZOOM,
-      x: cx * (1 - DEFAULT_ZOOM),
-      y: cy * (1 - DEFAULT_ZOOM),
-    });
+    fitView();
+    needFitRef.current = true;
     triggerSimulation(0.3);
   };
 
-  // Pointer drag & pan
+  // Native, non-passive wheel listener so preventDefault actually stops the page scrolling.
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = el.getBoundingClientRect();
+      const sz = sizeRef.current;
+      const scale = rect.width > 0 && sz ? sz.width / rect.width : 1;
+      zoomAround(e.deltaY < 0 ? 1.08 : 0.92, (e.clientX - rect.left) * scale, (e.clientY - rect.top) * scale);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [zoomAround]);
+
   const handlePointerDown = (e: React.PointerEvent) => {
     const target = e.target as HTMLElement | SVGElement;
     const nodeG = target.closest<SVGGElement>("[data-node-id]");
@@ -359,65 +404,59 @@ export function GraphView({ data, selectedId, onSelectNode }: GraphViewProps) {
     try {
       (e.currentTarget as Element).setPointerCapture(e.pointerId);
     } catch {
-      // Ignored if pointer capture is unsupported
+      // Pointer capture unsupported
     }
+
+    const base = {
+      originX: e.clientX,
+      originY: e.clientY,
+      lastX: e.clientX,
+      lastY: e.clientY,
+      startTransformX: transform.x,
+      startTransformY: transform.y,
+      moved: false,
+    };
 
     if (nodeG) {
       const nodeId = Number(nodeG.getAttribute("data-node-id"));
       const node = simNodesRef.current.find((n) => n.id === nodeId);
       if (node) {
         node.pinned = true;
-        dragRef.current = {
-          nodeId,
-          isPanning: false,
-          startX: e.clientX,
-          startY: e.clientY,
-          startTransformX: transform.x,
-          startTransformY: transform.y,
-          moved: false,
-        };
+        dragRef.current = { ...base, nodeId, isPanning: false };
       }
     } else {
       setIsPanning(true);
-      dragRef.current = {
-        nodeId: null,
-        isPanning: true,
-        startX: e.clientX,
-        startY: e.clientY,
-        startTransformX: transform.x,
-        startTransformY: transform.y,
-        moved: false,
-      };
+      dragRef.current = { ...base, nodeId: null, isPanning: true };
     }
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    const distMoved = Math.hypot(e.clientX - dragRef.current.startX, e.clientY - dragRef.current.startY);
-    if (distMoved > 3) {
-      dragRef.current.moved = true;
+    const d = dragRef.current;
+    if (d.nodeId === null && !d.isPanning) return;
+    if (!d.moved && Math.hypot(e.clientX - d.originX, e.clientY - d.originY) > TAP_SLOP) {
+      d.moved = true;
+      needFitRef.current = false;
     }
+    if (!d.moved) return;
+    const scale = pointerScale();
 
-    if (dragRef.current.nodeId !== null) {
-      const node = simNodesRef.current.find((n) => n.id === dragRef.current.nodeId);
+    if (d.nodeId !== null) {
+      const node = simNodesRef.current.find((n) => n.id === d.nodeId);
       if (node) {
-        const dx = (e.clientX - dragRef.current.startX) / transform.k;
-        const dy = (e.clientY - dragRef.current.startY) / transform.k;
-        node.x += dx;
-        node.y += dy;
+        node.x += ((e.clientX - d.lastX) * scale) / transform.k;
+        node.y += ((e.clientY - d.lastY) * scale) / transform.k;
         node.vx = 0;
         node.vy = 0;
-        dragRef.current.startX = e.clientX;
-        dragRef.current.startY = e.clientY;
         triggerSimulation(0.3);
         setRenderCounter((c) => (c + 1) % 1000000);
       }
-    } else if (dragRef.current.isPanning) {
-      const dx = e.clientX - dragRef.current.startX;
-      const dy = e.clientY - dragRef.current.startY;
+      d.lastX = e.clientX;
+      d.lastY = e.clientY;
+    } else if (d.isPanning) {
       setTransform((prev) => ({
         ...prev,
-        x: dragRef.current.startTransformX + dx,
-        y: dragRef.current.startTransformY + dy,
+        x: d.startTransformX + (e.clientX - d.originX) * scale,
+        y: d.startTransformY + (e.clientY - d.originY) * scale,
       }));
     }
   };
@@ -432,48 +471,26 @@ export function GraphView({ data, selectedId, onSelectNode }: GraphViewProps) {
     }
 
     const { nodeId, moved } = dragRef.current;
+    const cancelled = e.type === "pointercancel";
 
     if (nodeId !== null) {
       const node = simNodesRef.current.find((n) => n.id === nodeId);
       if (node) node.pinned = false;
-      // If it was a quick click without dragging, handle selection
-      if (!moved) {
-        onSelectNode(selectedId === nodeId ? null : nodeId);
-        triggerSimulation(0.2);
-      }
-      dragRef.current.nodeId = null;
+      // The only place a tap selects: a press that stayed put.
+      if (!moved && !cancelled) toggleSelect(nodeId);
       triggerSimulation(0.2);
-    } else if (!moved && dragRef.current.isPanning) {
-      // Clicked on empty canvas background without panning: clear selection
-      onSelectNode(null);
+    } else if (!moved && !cancelled && dragRef.current.isPanning) {
+      onSelectRef.current(null);
     }
 
-    dragRef.current.isPanning = false;
-    dragRef.current.moved = false;
+    dragRef.current = { ...dragRef.current, nodeId: null, isPanning: false, moved: false };
     setIsPanning(false);
   };
 
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
-    if (svgRef.current) {
-      const rect = svgRef.current.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
-
-      setTransform((prev) => {
-        const newK = Math.max(0.4, Math.min(prev.k * zoomFactor, 2.5));
-        const factor = newK / prev.k;
-        return {
-          k: newK,
-          x: mouseX - (mouseX - prev.x) * factor,
-          y: mouseY - (mouseY - prev.y) * factor,
-        };
-      });
-    }
+  const toggleSelect = (id: number) => {
+    onSelectRef.current(selectedIdRef.current === id ? null : id);
   };
 
-  // Node filtering
   const matchingNodeIds = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return null;
@@ -481,25 +498,26 @@ export function GraphView({ data, selectedId, onSelectNode }: GraphViewProps) {
     for (const n of data.nodes) {
       const label = pickText(n.labels, lang).toLowerCase();
       const desc = (n.description ?? "").toLowerCase();
-      if (label.includes(q) || desc.includes(q)) {
-        matches.add(n.id);
-      }
+      if (label.includes(q) || desc.includes(q)) matches.add(n.id);
     }
     return matches;
   }, [search, data.nodes, lang]);
 
   const nodes = simNodesRef.current;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const nodeMap = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes, renderCounter]);
 
   const availableTypes = useMemo(() => {
     const s = new Set<string>();
     for (const n of data.nodes) s.add(n.type);
-    return Array.from(s).sort((a, b) => TYPE_ORDER.indexOf(a) - TYPE_ORDER.indexOf(b));
+    return Array.from(s).sort(compareTypes);
   }, [data.nodes]);
 
+  const vw = size?.width ?? FALLBACK_SIZE.width;
+  const vh = size?.height ?? FALLBACK_SIZE.height;
+
   return (
-    <div className="heritage-graph-container" ref={containerRef}>
-      {/* Top Header Bar with Filter Pills and Zoom Controls */}
+    <div className="heritage-graph-container">
       <div className="heritage-graph-toolbar">
         <div className="heritage-toolbar-left">
           <div className="heritage-search-box">
@@ -543,7 +561,7 @@ export function GraphView({ data, selectedId, onSelectNode }: GraphViewProps) {
                   aria-pressed={isActive}
                 >
                   <span className="heritage-chip-dot" style={{ backgroundColor: theme.color }} />
-                  <span>{t(`node_${type}` as Key)}</span>
+                  <span>{nodeTypeLabel(t, type)}</span>
                   <span className="heritage-chip-count">{count}</span>
                 </button>
               );
@@ -556,56 +574,35 @@ export function GraphView({ data, selectedId, onSelectNode }: GraphViewProps) {
             {t("graphNodesCount", { n: data.nodes.length })} • {t("graphEdgesCount", { n: data.edges.length })}
           </span>
           <div className="heritage-zoom-controls">
-            <button
-              type="button"
-              className="btn secondary small heritage-btn"
-              onClick={() => handleZoom(1.2)}
-              title={t("zoomIn")}
-              aria-label={t("zoomIn")}
-            >
+            <button type="button" className="btn secondary small heritage-btn" onClick={() => handleZoom(1.2)} title={t("zoomIn")} aria-label={t("zoomIn")}>
               +
             </button>
-            <button
-              type="button"
-              className="btn secondary small heritage-btn"
-              onClick={() => handleZoom(0.8)}
-              title={t("zoomOut")}
-              aria-label={t("zoomOut")}
-            >
+            <button type="button" className="btn secondary small heritage-btn" onClick={() => handleZoom(0.8)} title={t("zoomOut")} aria-label={t("zoomOut")}>
               −
             </button>
-            <button
-              type="button"
-              className="btn secondary small heritage-btn"
-              onClick={handleResetView}
-              title={t("zoomReset")}
-              aria-label={t("zoomReset")}
-            >
+            <button type="button" className="btn secondary small heritage-btn" onClick={handleResetView} title={t("zoomReset")} aria-label={t("zoomReset")}>
               ⛶
             </button>
           </div>
         </div>
       </div>
 
-      {/* Clean SVG Canvas */}
       <div
+        ref={wrapRef}
         className={`heritage-canvas-wrap ${isPanning ? "panning" : ""}`}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
-        onWheel={handleWheel}
       >
         <svg
           ref={svgRef}
           className="heritage-svg"
-          width={dimensions.width}
-          height={dimensions.height}
-          viewBox={`0 0 ${dimensions.width} ${dimensions.height}`}
+          viewBox={`0 0 ${vw} ${vh}`}
+          role="group"
+          aria-label={t("mapGraphDesc")}
         >
-          {/* Pan & Zoom Group */}
           <g transform={`translate(${transform.x}, ${transform.y}) scale(${transform.k})`}>
-            {/* Edges */}
             <g className="heritage-edges">
               {data.edges.map((edge) => {
                 const source = nodeMap.get(edge.from);
@@ -620,20 +617,18 @@ export function GraphView({ data, selectedId, onSelectNode }: GraphViewProps) {
 
                 const midX = (source.x + target.x) / 2;
                 const midY = (source.y + target.y) / 2;
+                const relFull = relationLabel(t, edge.relation);
+                const relShown = truncateLabel(relFull, EDGE_LABEL_MAX);
+                const labelW = Math.max(36, Array.from(relShown).length * 6.8 + 18);
 
                 return (
                   <g key={edge.id} className={`heritage-edge-group ${isConnectedToFocus ? "edge-active" : ""} ${isDimmed ? "edge-dimmed" : ""}`}>
-                    <line
-                      x1={source.x}
-                      y1={source.y}
-                      x2={target.x}
-                      y2={target.y}
-                      className="heritage-edge-line"
-                    />
+                    <line x1={source.x} y1={source.y} x2={target.x} y2={target.y} className="heritage-edge-line" />
                     {isConnectedToFocus && (
                       <g transform={`translate(${midX}, ${midY})`} className="heritage-edge-label">
-                        <rect x="-38" y="-11" width="76" height="22" rx="4" />
-                        <text y="4">{edge.relation.replace(/_/g, " ")}</text>
+                        <title>{relFull}</title>
+                        <rect x={-labelW / 2} y="-11" width={labelW} height="22" rx="4" />
+                        <text y="1">{relShown}</text>
                       </g>
                     )}
                   </g>
@@ -641,7 +636,6 @@ export function GraphView({ data, selectedId, onSelectNode }: GraphViewProps) {
               })}
             </g>
 
-            {/* Nodes */}
             <g className="heritage-nodes">
               {nodes.map((node) => {
                 const isSelected = selectedId === node.id;
@@ -652,35 +646,41 @@ export function GraphView({ data, selectedId, onSelectNode }: GraphViewProps) {
 
                 const matchesSearch = matchingNodeIds ? matchingNodeIds.has(node.id) : true;
                 const matchesType = activeTypeFilter ? node.type === activeTypeFilter : true;
+                const isDimmed = (activeFocusId !== null && !isConnected) || !matchesSearch || !matchesType;
 
-                const isDimmed =
-                  (activeFocusId !== null && !isConnected) ||
-                  !matchesSearch ||
-                  !matchesType;
-
-                const labelText = pickText(node.labels, lang);
+                const labelFull = pickText(node.labels, lang);
+                const labelText = truncateLabel(labelFull, NODE_LABEL_MAX);
+                const typeText = nodeTypeLabel(t, node.type);
 
                 return (
                   <g
                     key={node.id}
                     data-node-id={node.id}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${labelFull}, ${typeText}`}
+                    aria-pressed={isSelected}
                     transform={`translate(${node.x}, ${node.y})`}
                     className={`heritage-node-group ${isSelected ? "selected" : ""} ${isHovered ? "hovered" : ""} ${isDimmed ? "dimmed" : ""}`}
-                    onMouseEnter={() => setHoveredId(node.id)}
-                    onMouseLeave={() => setHoveredId(null)}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (!dragRef.current.moved) {
-                        onSelectNode(isSelected ? null : node.id);
-                        triggerSimulation(0.3);
+                    onPointerEnter={(e) => {
+                      if (e.pointerType === "mouse") setHoveredId(node.id);
+                    }}
+                    onPointerLeave={(e) => {
+                      if (e.pointerType === "mouse") setHoveredId(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        toggleSelect(node.id);
+                        triggerSimulation(0.2);
                       }
                     }}
                     cursor="pointer"
                   >
-                    {/* 48px Touch Hit Target */}
                     <circle r={24} fill="transparent" />
 
-                    {/* Outer Focus Ring */}
+                    <circle className="heritage-focus-ring" r={node.radius + 9} fill="none" strokeWidth="3" />
+
                     {isFocused && (
                       <circle
                         r={node.radius + 6}
@@ -691,27 +691,12 @@ export function GraphView({ data, selectedId, onSelectNode }: GraphViewProps) {
                       />
                     )}
 
-                    {/* Node Body */}
-                    <circle
-                      r={node.radius}
-                      fill={isSelected ? theme.color : theme.bg}
-                      stroke={theme.color}
-                      strokeWidth="2.5"
-                    />
+                    <circle r={node.radius} fill={isSelected ? theme.color : theme.bg} stroke={theme.color} strokeWidth="2.5" />
+                    <circle r={node.radius > 12 ? 4 : 3} fill={isSelected ? "#ffffff" : theme.color} />
 
-                    {/* Inner icon or dot */}
-                    <circle
-                      r={node.radius > 12 ? 4 : 3}
-                      fill={isSelected ? "#ffffff" : theme.color}
-                    />
-
-                    {/* Clean Label */}
                     <g className="heritage-node-label" transform={`translate(${node.radius + 8}, 4)`}>
-                      <text
-                        fill="var(--ink)"
-                        fontWeight={isFocused ? "700" : "500"}
-                        fontSize={node.type === "person" ? "14" : "12.5"}
-                      >
+                      <text fill="var(--ink)" fontWeight={isFocused ? "700" : "500"} fontSize={node.type === "person" ? "14" : "12.5"}>
+                        {labelText !== labelFull && <title>{labelFull}</title>}
                         {labelText}
                       </text>
                     </g>

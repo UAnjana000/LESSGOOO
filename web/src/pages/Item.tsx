@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { api, ApiError, fileUrl, type ItemDetail, type PassageView } from "../api";
+import { api, ApiError, fileUrl, resolveApiUrl, type ItemDetail, type PassageView } from "../api";
 import { derivativeLabel, type Key } from "../i18n";
 import { itemCitation } from "../basket";
 import { formatMs, useApi } from "../hooks";
@@ -127,7 +127,7 @@ function Media({ item, startMs, targetPassage }: { item: ItemDetail; startMs: nu
       <h2 id="media-h">{t("transcript")}</h2>
       <Player ref={player} controls preload="metadata" playsInline={isVideo || undefined} src={fileUrl(media.file_id)}
         onLoadedMetadata={applyStart} onTimeUpdate={(e) => setNow(e.currentTarget.currentTime * 1000)}>
-        <track kind="captions" src={media.captions} srcLang={item.languages[0] ?? "en"} label={isVideo ? t("captions") : t("transcript")} default />
+        <track kind="captions" src={resolveApiUrl(media.captions)}srcLang={item.languages[0] ?? "en"} label={isVideo ? t("captions") : t("transcript")} default />
       </Player>
       <div className="chips">
         <span className="chip">{t("transcript")}</span>

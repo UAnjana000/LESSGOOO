@@ -82,7 +82,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [reachable, setReachable] = useState(true);
 
   useEffect(() => {
-    sessionStorage.setItem(KEY, JSON.stringify({ lang, textScale, contrast, basket, askHistory, askLast, sessionId }));
+    try {
+      sessionStorage.setItem(KEY, JSON.stringify({ lang, textScale, contrast, basket, askHistory, askLast, sessionId }));
+    } catch {
+      /* storage blocked or full: the visit just is not kept across reloads */
+    }
   }, [lang, textScale, contrast, basket, askHistory, askLast, sessionId]);
 
   useEffect(() => {

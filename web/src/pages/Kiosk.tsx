@@ -7,6 +7,7 @@ import { Search } from "./Search";
 import { Ask } from "./Ask";
 import { Stories } from "./Stories";
 import { Timeline, Basket, KnowledgeMap } from "./Explore";
+import { IdleWarning, useIdleReset } from "../components/useIdleReset";
 
 const Constitution = lazy(async () => {
   const m = await import("./Constitution");
@@ -14,14 +15,11 @@ const Constitution = lazy(async () => {
 });
 
 export function KioskMode() {
-  const { t, lang, setLang, basket } = useSession();
+  const { t, lang, setLang, basket, finish } = useSession();
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState<"search" | "ask" | "stories" | "timeline" | "constitution" | "map" | "list">("search");
   const [activeInput, setActiveInput] = useState<HTMLInputElement | HTMLTextAreaElement | null>(null);
-  const [showExitModal, setShowExitModal] = useState(false);
-  const [pin, setPin] = useState("");
-  const [pinError, setPinError] = useState(false);
   const [isIdle, setIsIdle] = useState(false);
   const [currentTime, setCurrentTime] = useState("");
 
@@ -36,30 +34,13 @@ export function KioskMode() {
     return () => clearInterval(interval);
   }, [lang]);
 
-  // Inactivity Attract Mode (60 seconds)
-  useEffect(() => {
-    let idleTimer: number | null = null;
-    const resetTimer = () => {
-      setIsIdle(false);
-      if (idleTimer) window.clearTimeout(idleTimer);
-      idleTimer = window.setTimeout(() => {
-        setIsIdle(true);
-        setActiveInput(null);
-      }, 60000);
-    };
-
-    resetTimer();
-    window.addEventListener("pointerdown", resetTimer, { passive: true });
-    window.addEventListener("keydown", resetTimer, { passive: true });
-    window.addEventListener("touchstart", resetTimer, { passive: true });
-
-    return () => {
-      if (idleTimer) window.clearTimeout(idleTimer);
-      window.removeEventListener("pointerdown", resetTimer);
-      window.removeEventListener("keydown", resetTimer);
-      window.removeEventListener("touchstart", resetTimer);
-    };
-  }, []);
+  // Same idle policy as the main kiosk shell: warn, then end the visit (session_idle_seconds) and show the attract screen.
+  const { warnRef, remaining } = useIdleReset(!isIdle, () => {
+    finish();
+    setActiveTab("search");
+    setActiveInput(null);
+    setIsIdle(true);
+  });
 
   // Global Input Focus Listener for Virtual Keyboard
   useEffect(() => {
@@ -80,16 +61,6 @@ export function KioskMode() {
       document.removeEventListener("focusin", handleFocusIn);
     };
   }, []);
-
-  const handlePinSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (pin === "1956" || pin === "admin") {
-      setShowExitModal(false);
-      navigate("/staff");
-    } else {
-      setPinError(true);
-    }
-  };
 
   return (
     <div className="kiosk-shell">
@@ -211,10 +182,10 @@ export function KioskMode() {
           <button
             type="button"
             className="btn quiet small kiosk-exit-btn"
-            onClick={() => setShowExitModal(true)}
+            onClick={() => navigate("/staff")}
             aria-label={t("kioskExit")}
           >
-            🔒 {t("kioskExit")}
+            {t("kioskExit")}
           </button>
         </div>
       </header>
@@ -244,7 +215,16 @@ export function KioskMode() {
       {isIdle && (
         <div
           className="kiosk-attract-overlay"
-          onClick={() => setIsIdle(false)}
+          // Swallow the waking tap so it cannot activate whatever sits underneath.
+          onPointerDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsIdle(false);
+          }}
           role="region"
           aria-label={t("attractTitle")}
         >
@@ -259,41 +239,7 @@ export function KioskMode() {
         </div>
       )}
 
-      {/* Staff PIN Lock Modal */}
-      {showExitModal && (
-        <div className="kiosk-modal-backdrop" role="dialog" aria-modal="true" aria-label={t("kioskExit")}>
-          <div className="kiosk-modal-card">
-            <h2 className="kiosk-modal-title">{t("kioskExit")}</h2>
-            <p className="kiosk-modal-prompt">{t("kioskPinPrompt")}</p>
-
-            <form onSubmit={handlePinSubmit} className="kiosk-pin-form">
-              <input
-                type="password"
-                className="input kiosk-pin-input"
-                autoFocus
-                maxLength={8}
-                value={pin}
-                onChange={(e) => {
-                  setPin(e.target.value);
-                  setPinError(false);
-                }}
-                aria-label={t("kioskPinPrompt")}
-              />
-
-              {pinError && <p className="notice bad" role="alert">{t("kioskPinError")}</p>}
-
-              <div className="kiosk-modal-actions">
-                <button type="button" className="btn secondary" onClick={() => setShowExitModal(false)}>
-                  {t("cancel")}
-                </button>
-                <button type="submit" className="btn primary">
-                  {t("kioskExit")}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <IdleWarning warnRef={warnRef} remaining={remaining} />
     </div>
   );
 }
