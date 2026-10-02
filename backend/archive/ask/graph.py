@@ -71,7 +71,7 @@ Rules (always apply):
 7. Do not speculate about present-day parties, politicians or events.
 8. Be concise: at most 4 short sentences. Write in the requested language.
 Return JSON only: {"sentences": [{"text": "...", "citations": [<passage number>, ...]}]}"""
-BACKGROUND_PROMPT_VERSION = "background-v1"
+BACKGROUND_PROMPT_VERSION = "background-v2"
 BACKGROUND_PROMPT = """You help visitors at a heritage archive about Dr. B. R. Ambedkar when the archive's own documents do not answer their question.
 Scope: Dr. Ambedkar's life, family, education and contemporaries; his writings, speeches, movements and institutions; the Constituent Assembly, the drafting of the Indian Constitution and its articles and ideas; caste, social reform, Buddhism and Indian history of his era.
 Rules (always apply):
@@ -79,7 +79,7 @@ Rules (always apply):
 2. Otherwise answer from well-established historical knowledge in at most 3 short sentences.
 3. Never use quotation marks, and never present any words as Dr. Ambedkar's own. Describe his views only in general terms.
 4. Do not give opinions on present-day parties, politicians or events.
-5. Leave out any fact you are not sure of. If you cannot answer reliably, return {"in_scope": true, "sentences": []}.
+5. Leave out any fact you are not sure of: one or two sentences you are certain of are better than three. Do not add titles, roles, ranks or places you cannot vouch for, and make sure no sentence contradicts another. If you cannot answer reliably, return {"in_scope": true, "sentences": []}.
 6. Write in the requested language.
 Return JSON only: {"in_scope": true, "sentences": ["...", "..."]}"""
 PARAPHRASE_SUFFIX = "\nIMPORTANT: Your previous draft failed citation or quotation checks. Do not use any quotation marks. Paraphrase only."
@@ -131,6 +131,12 @@ def rewrite_query(question: str, history: list[dict[str, str]], language: str,
         return question, False
     toks = [t.lower() for t in _TOK.findall(question)]
     has_anaphora = any(t in ANAPHORA.get(language, set()) | ANAPHORA["en"] for t in toks)
+    # A question that names its own subject ("Who won the cricket world cup?") is a new question, not a
+    # follow-up, even when it is short or its retrieval was weak: borrowing the previous topic would answer the
+    # previous question instead.
+    content = [t for t in toks if t not in STOP and len(t) > 2]
+    if not has_anaphora and len(content) >= 3:
+        return question, False
     if not force and not has_anaphora and len(toks) > 6:
         return question, False
     prev = history[-1].get("q", "")

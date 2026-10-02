@@ -246,6 +246,11 @@ describe("Ask answer notes and memory", () => {
     askWith(() => json(200, { ...answer, checks: { citations_ok: true, quotes: 1, quotes_verified: 1 } }));
     await mount("/ask?q=What%20is%20it%3F", ".answer .cite-link");
     expect(text(".answer")).toContain(STRINGS.en.claimNote);
+    await unmount();
+    // No quote in the answer: a note about quotes matching would only contradict the "not quote-verified" chips.
+    askWith(() => json(200, { ...answer, checks: { citations_ok: true, quotes: 0, quotes_verified: 0 } }));
+    await mount("/ask?q=What%20else%3F", ".answer .cite-link");
+    expect(text(".answer")).not.toContain(STRINGS.en.claimNote);
   });
 
   it("going back to Ask shows the last answer again without asking again", async () => {

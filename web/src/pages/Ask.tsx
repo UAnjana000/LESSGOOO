@@ -8,7 +8,8 @@ import { mergeTranscript } from "../voice";
 
 const MAX_QUESTION = 500;
 
-export function Ask() {
+/** `autoAsk`: ask the ?q= question on arrival (links from Home). Off inside the /kiosk dock, where ?q= belongs to Search. */
+export function Ask({ autoAsk = true }: { autoAsk?: boolean } = {}) {
   const s = useSession();
   const { t } = s;
   const [params, setParams] = useSearchParams();
@@ -63,7 +64,7 @@ export function Ask() {
 
   useEffect(() => {
     const q = params.get("q");
-    if (q && !autoAsked.current) {
+    if (autoAsk && q && !autoAsked.current) {
       autoAsked.current = true;
       void submit(undefined, q);
     }
@@ -98,6 +99,12 @@ export function Ask() {
         />
         <button type="submit" className="btn" disabled={busy || !question.trim()}>{t("askButton")}</button>
       </form>
+      {/* The box stops at MAX_QUESTION characters; say so before the visitor runs into it. */}
+      {question.length > MAX_QUESTION - 100 && (
+        <p className={`muted ask-count${question.length >= MAX_QUESTION ? " full" : ""}`} aria-live="polite">
+          {t("askCharCount", { n: question.length, max: MAX_QUESTION })}
+        </p>
+      )}
       <VoiceQuestion
         disabled={busy}
         hideNote={hasUsed}
@@ -222,7 +229,9 @@ function AnswerBody({ result, numberOf, onRetry, onAsk }: { result: AskResult; n
           </p>
         ))}
       </div>
-      {r.checks?.citations_ok && r.checks.quotes_verified === r.checks.quotes && (
+      {/* The note speaks of quotes matching, so it needs at least one quote: otherwise it sits beside sources
+          marked "not yet quote-verified" and contradicts them. */}
+      {r.checks?.citations_ok && r.checks.quotes > 0 && r.checks.quotes_verified === r.checks.quotes && (
         <p className="muted" style={{ fontSize: "var(--step--1)", marginTop: 12 }}>{t("claimNote")}</p>
       )}
       <Sources result={r} heading={t("sources")} showExcerpt />

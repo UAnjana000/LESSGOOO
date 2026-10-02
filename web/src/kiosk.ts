@@ -1,5 +1,14 @@
 const KIOSK_KEY = "archive-kiosk-mode";
 
+/** Remember that this device is a gallery kiosk (the /kiosk dock is only opened on one). */
+export function markKiosk(): void {
+  try {
+    localStorage.setItem(KIOSK_KEY, "1");
+  } catch {
+    /* storage blocked: kiosk behaviour then lasts for this page only */
+  }
+}
+
 /** Kiosk behaviour (idle reset, attract screen, exhibit sync) applies to installed gallery screens, not visitors' phones. */
 export function isKiosk(): boolean {
   let stored = false;

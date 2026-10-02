@@ -101,6 +101,24 @@ class TestProviderParameterRetry:
         assert len(calls) == 2
 
 
+class TestFollowUpRewrite:
+    HISTORY = [{"q": "What role did Dr. Ambedkar play in drafting the Constitution?", "a": "..."}]
+
+    def test_self_contained_question_never_borrows_the_previous_topic(self):
+        from archive.ask.graph import rewrite_query
+
+        for force in (False, True):
+            assert rewrite_query("Who won the cricket world cup?", self.HISTORY, "en", force=force) == (
+                "Who won the cricket world cup?", False)
+
+    def test_pronoun_and_short_follow_ups_still_carry_the_topic(self):
+        from archive.ask.graph import rewrite_query
+
+        for q in ("Why did he do that?", "And in 1949?"):
+            rewritten, changed = rewrite_query(q, self.HISTORY, "en")
+            assert changed and "Constitution" in rewritten
+
+
 class TestLexicalReranker:
     def test_question_framing_words_do_not_count(self):
         rr = LexicalReranker()

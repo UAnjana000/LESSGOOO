@@ -1,4 +1,6 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { startExhibit } from "../exhibit";
+import { markKiosk } from "../kiosk";
 import { useNavigate } from "react-router-dom";
 import { useSession } from "../state";
 import { Loading } from "../components/Bits";
@@ -33,6 +35,35 @@ export function KioskMode() {
     const interval = window.setInterval(updateTime, 1000);
     return () => clearInterval(interval);
   }, [lang]);
+
+  // Search keeps its query in the URL (?q=) and Ask asks whatever ?q= holds when it opens, so a tab switch starts
+  // with a clean URL: otherwise searching "caste" then opening Ask sends "caste" to the answer model unasked.
+  const openTab = (tab: typeof activeTab) => {
+    navigate({ search: "" }, { replace: true });
+    setActiveInput(null);
+    setActiveTab(tab);
+  };
+
+  // This screen is a gallery kiosk: remember it (offline shell and exhibit cache from the next load), start the
+  // exhibit sync now, and keep the browser's context menu away from visitors.
+  useEffect(() => {
+    markKiosk();
+    void startExhibit();
+    const block = (e: Event) => e.preventDefault();
+    document.addEventListener("contextmenu", block);
+    return () => document.removeEventListener("contextmenu", block);
+  }, []);
+
+  // Staff Exit needs a 2-second press, so a visitor's tap cannot open the staff tools.
+  const holdTimer = useRef<number | null>(null);
+  const [exitHint, setExitHint] = useState(false);
+  const startHold = () => {
+    holdTimer.current = window.setTimeout(() => navigate("/staff"), 2000);
+  };
+  const cancelHold = () => {
+    if (holdTimer.current !== null) window.clearTimeout(holdTimer.current);
+    holdTimer.current = null;
+  };
 
   // Same idle policy as the main kiosk shell: warn, then end the visit (session_idle_seconds) and show the attract screen.
   const { warnRef, remaining } = useIdleReset(!isIdle, () => {
@@ -79,7 +110,7 @@ export function KioskMode() {
           <button
             type="button"
             className={`kiosk-nav-btn ${activeTab === "search" ? "active" : ""}`}
-            onClick={() => setActiveTab("search")}
+            onClick={() => openTab("search")}
             aria-pressed={activeTab === "search"}
           >
             <span className="dock-icon" aria-hidden="true">🔍</span>
@@ -89,7 +120,7 @@ export function KioskMode() {
           <button
             type="button"
             className={`kiosk-nav-btn ${activeTab === "ask" ? "active" : ""}`}
-            onClick={() => setActiveTab("ask")}
+            onClick={() => openTab("ask")}
             aria-pressed={activeTab === "ask"}
           >
             <span className="dock-icon" aria-hidden="true">💬</span>
@@ -99,7 +130,7 @@ export function KioskMode() {
           <button
             type="button"
             className={`kiosk-nav-btn ${activeTab === "stories" ? "active" : ""}`}
-            onClick={() => setActiveTab("stories")}
+            onClick={() => openTab("stories")}
             aria-pressed={activeTab === "stories"}
           >
             <span className="dock-icon" aria-hidden="true">📖</span>
@@ -109,7 +140,7 @@ export function KioskMode() {
           <button
             type="button"
             className={`kiosk-nav-btn ${activeTab === "timeline" ? "active" : ""}`}
-            onClick={() => setActiveTab("timeline")}
+            onClick={() => openTab("timeline")}
             aria-pressed={activeTab === "timeline"}
           >
             <span className="dock-icon" aria-hidden="true">⏳</span>
@@ -119,17 +150,17 @@ export function KioskMode() {
           <button
             type="button"
             className={`kiosk-nav-btn ${activeTab === "constitution" ? "active" : ""}`}
-            onClick={() => setActiveTab("constitution")}
+            onClick={() => openTab("constitution")}
             aria-pressed={activeTab === "constitution"}
           >
             <span className="dock-icon" aria-hidden="true">📜</span>
-            <span className="kiosk-nav-label">{t("constitutionTitle")}</span>
+            <span className="kiosk-nav-label">{t("navConstitution")}</span>
           </button>
 
           <button
             type="button"
             className={`kiosk-nav-btn ${activeTab === "map" ? "active" : ""}`}
-            onClick={() => setActiveTab("map")}
+            onClick={() => openTab("map")}
             aria-pressed={activeTab === "map"}
           >
             <span className="dock-icon" aria-hidden="true">🌐</span>
@@ -139,7 +170,7 @@ export function KioskMode() {
           <button
             type="button"
             className={`kiosk-nav-btn ${activeTab === "list" ? "active" : ""}`}
-            onClick={() => setActiveTab("list")}
+            onClick={() => openTab("list")}
             aria-pressed={activeTab === "list"}
           >
             <span className="dock-icon" aria-hidden="true">🔖</span>
@@ -182,18 +213,24 @@ export function KioskMode() {
           <button
             type="button"
             className="btn quiet small kiosk-exit-btn"
-            onClick={() => navigate("/staff")}
-            aria-label={t("kioskExit")}
+            onPointerDown={startHold}
+            onPointerUp={cancelHold}
+            onPointerLeave={cancelHold}
+            onPointerCancel={cancelHold}
+            onClick={() => setExitHint(true)}
+            aria-label={`${t("kioskExit")}: ${t("kioskExitHold")}`}
+            title={t("kioskExitHold")}
           >
             {t("kioskExit")}
           </button>
+          {exitHint && <span className="kiosk-exit-hint" role="status">{t("kioskExitHold")}</span>}
         </div>
       </header>
 
       {/* Main Kiosk Content Area */}
       <main className="kiosk-main-stage">
         {activeTab === "search" && <Search />}
-        {activeTab === "ask" && <Ask />}
+        {activeTab === "ask" && <Ask autoAsk={false} />}
         {activeTab === "stories" && <Stories />}
         {activeTab === "timeline" && <Timeline />}
         {activeTab === "constitution" && (

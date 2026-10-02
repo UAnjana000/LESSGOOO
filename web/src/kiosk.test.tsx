@@ -7,6 +7,7 @@ import { SessionProvider } from "./state";
 import { IDLE_WARNING_MS } from "./components/Shell";
 import { isKiosk } from "./kiosk";
 import { fakeFetch } from "./__fixtures__/visitor";
+import { STRINGS } from "./i18n";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -92,6 +93,41 @@ describe("/kiosk dock", () => {
     await act(async () => { overlay.querySelector<HTMLElement>("button")!.click(); });
     expect(reachedPage).not.toHaveBeenCalled();
     expect(document.querySelector(".kiosk-attract-overlay")).toBeNull();
+  });
+
+  it("opening Ask after a search does not send the search words to the answer model", async () => {
+    const router = await mount("/kiosk?q=caste");
+    const tab = [...document.querySelectorAll<HTMLButtonElement>(".kiosk-nav-btn")].find((b) => b.textContent?.includes(STRINGS.en.askTitle))!;
+    await act(async () => tab.click());
+    await advance(0);
+    const fetchMock = fetch as unknown as { mock: { calls: [RequestInfo | URL, RequestInit?][] } };
+    const asks = fetchMock.mock.calls.filter(([u, init]) => String(u).endsWith("/api/visitor/ask") && init?.method === "POST");
+    expect(asks).toHaveLength(0);
+    expect(router.state.location.search).toBe("");
+  });
+
+  it("Staff Exit needs a 2-second press; a tap only shows how", async () => {
+    const router = await mount("/kiosk");
+    const exit = document.querySelector<HTMLButtonElement>(".kiosk-exit-btn")!;
+    await act(async () => exit.click());
+    expect(router.state.location.pathname).toBe("/kiosk");
+    expect(document.querySelector(".kiosk-exit-hint")?.textContent).toBe(STRINGS.en.kioskExitHold);
+    await act(async () => { exit.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true })); });
+    await advance(1000);
+    await act(async () => { exit.dispatchEvent(new MouseEvent("pointerup", { bubbles: true })); });
+    await advance(2000);
+    expect(router.state.location.pathname).toBe("/kiosk");
+    await act(async () => { exit.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true })); });
+    await advance(2100);
+    expect(router.state.location.pathname).toBe("/staff");
+  });
+
+  it("marks the device as a kiosk and blocks the context menu", async () => {
+    await mount("/kiosk");
+    expect(localStorage.getItem("archive-kiosk-mode")).toBe("1");
+    const menu = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    document.body.dispatchEvent(menu);
+    expect(menu.defaultPrevented).toBe(true);
   });
 
   it("has no staff PIN in the bundle sources", () => {
