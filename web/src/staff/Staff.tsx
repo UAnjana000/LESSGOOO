@@ -114,7 +114,7 @@ function StaffLanguage() {
 }
 
 export function StaffLogin() {
-  const { login, loginAsJudge, token } = useStaff();
+  const { login, loginAsJudge, token, open } = useStaff();
   const { t } = useSession();
   const nav = useNavigate();
   const [email, setEmail] = useState("");
@@ -123,7 +123,7 @@ export function StaffLogin() {
   const [judgeBusy, setJudgeBusy] = useState(false);
   // Demo installations can switch on a read-only judge account; the button only shows when they have.
   const judge = useApi<{ enabled: boolean }>("/api/staff/judge-access");
-  if (token) return <Navigate to="/staff" replace />;
+  if (token || open) return <Navigate to="/staff" replace />;
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -173,9 +173,10 @@ export function StaffLogin() {
 const ACTING_ROLES = ["admin", "archivist", "curator", "reviewer", "translation_reviewer"];
 
 export function StaffLayout() {
-  const { token, user, logout, can } = useStaff();
+  const { token, user, logout, can, open } = useStaff();
   const { t } = useSession();
-  if (!token) return <Navigate to="/staff/login" replace />;
+  // Without a token, wait for the open-access check (it signs in when the login is switched off).
+  if (!token) return open === false ? <Navigate to="/staff/login" replace /> : null;
   // Intake and the rights register are archivist work; the register stays readable by URL.
   const archivist = can("archivist");
   const links: [string, Key][] = [
@@ -201,7 +202,7 @@ export function StaffLayout() {
         <div className="who">
           <StaffLanguage />
           <span>{user?.email} ({(user?.roles ?? []).join(", ")})</span>
-          <button type="button" className="btn secondary small" onClick={logout}>{t("stSignOut")}</button>
+          {!open && <button type="button" className="btn secondary small" onClick={logout}>{t("stSignOut")}</button>}
         </div>
       </header>
       <main id="main" className="page" tabIndex={-1}>

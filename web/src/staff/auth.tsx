@@ -14,6 +14,8 @@ interface Auth {
   login: (email: string, password: string) => Promise<void>;
   /** Demo only: the read-only judge account, when the server has judge access switched on. */
   loginAsJudge: () => Promise<void>;
+  /** Demo only: the server has removed the staff login; null while that is still being checked. */
+  open: boolean | null;
   logout: () => void;
   can: (role: string) => boolean;
 }
@@ -24,6 +26,7 @@ const KEY = "archive-staff-token";
 export function StaffAuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(() => sessionStorage.getItem(KEY));
   const [user, setUser] = useState<StaffUser | null>(null);
+  const [open, setOpen] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -40,9 +43,26 @@ export function StaffAuthProvider({ children }: { children: ReactNode }) {
     setToken(r.token);
     setUser(r.user);
   };
+
+  // Demo installations can switch the login off: sign straight in as the administrator.
+  useEffect(() => {
+    if (token) return;
+    let live = true;
+    api.get<{ enabled: boolean }>("/api/staff/open-access")
+      .then(async (r) => {
+        if (r.enabled) signedIn(await api.post<{ token: string; user: StaffUser }>("/api/staff/login/open", {}));
+        if (live) setOpen(r.enabled);
+      })
+      .catch(() => live && setOpen(false));
+    return () => {
+      live = false;
+    };
+  }, [token]);
+
   const value: Auth = {
     token,
     user,
+    open,
     login: async (email, password) => {
       signedIn(await api.post<{ token: string; user: StaffUser }>("/api/staff/login", { email, password }));
     },

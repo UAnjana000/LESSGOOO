@@ -5,3 +5,7 @@ services:
   proxy:
     volumes:
       - ./deploy/cloud/Caddyfile:/etc/caddy/Caddyfile:ro
+  api:
+    environment:
+      # Prototype submission: /staff opens without a login, as the administrator. Set to "false" to restore it.
+      ARCHIVE_OPEN_STAFF_ACCESS: "true"
