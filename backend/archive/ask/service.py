@@ -105,9 +105,12 @@ def ask(db: Session, question: str, history: list[dict[str, str]], ui_language: 
                         if c not in used:
                             used.append(c)
                 citations = [_citation_payload(by_id[c], quotes_by_pid.get(c, [])) for c in used]
-        if outcome in ("extractive", "insufficient", "refused", "error"):
+        if outcome in ("extractive", "insufficient", "refused", "error", "background"):
+            # Closest items to browse; for "background" they are suggestions, never sources of its sentences.
             citations = [_citation_payload(h, []) for h in hits[:3]]
-        msg_key = outcome if outcome in policy.MESSAGES else ("insufficient" if outcome == "error" else None)
+        if outcome == "background":
+            sentences = [{"text": sent["text"], "citations": []} for sent in state.get("sentences", [])]
+        msg_key = outcome if outcome in policy.MESSAGES else None
         if outcome == "extractive" and state.get("reason") == "local_only":
             msg_key = "local_only"
         if outcome == "rejected_input" and state.get("reason") == "too_long":
@@ -118,10 +121,11 @@ def ask(db: Session, question: str, history: list[dict[str, str]], ui_language: 
         checks = ({"citations_ok": True, "quotes": len(v.get("quotes", [])),
                    "quotes_verified": sum(1 for q in v.get("quotes", []) if q.get("verified_in"))}
                   if outcome == "answered" and v.get("ok") else None)
+        labels = {"answered": policy.ANSWER_LABEL, "background": policy.BACKGROUND_LABEL}.get(outcome)
         payload: dict[str, Any] = {
             "outcome": outcome,
             "language": lang,
-            "label": policy.ANSWER_LABEL.get(lang, policy.ANSWER_LABEL["en"]) if outcome == "answered" else None,
+            "label": labels.get(lang, labels["en"]) if labels else None,
             "message": message.format(max_chars=s.question_max_chars) if msg_key == "too_long" else message,
             "reason": state.get("reason") if outcome == "rejected_input" else None,
             "sentences": sentences,

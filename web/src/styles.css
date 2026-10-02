@@ -697,6 +697,9 @@ label { font-weight: 500; color: var(--ink); }
 .chip.ai { border-color: var(--indigo); background: var(--indigo-soft); color: var(--indigo); font-weight: 600; }
 .chip.mt { border-color: var(--danger); background: var(--sheet); color: var(--danger); font-weight: 600; }
 .chip.fixture { border-style: dashed; }
+/* General background has no archive source: brass and dashed, never the indigo of a cited AI answer. */
+.chip.background { border-color: var(--brass-ink); border-style: dashed; background: var(--brass-wash); color: var(--brass-ink); font-weight: 600; }
+.background-answer { border-left: 3px dashed var(--brass-ink); padding-left: 14px; }
 .chip-link {
   display: inline-flex;
   align-items: center;

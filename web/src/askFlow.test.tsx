@@ -181,6 +181,45 @@ describe("Ask requests", () => {
   });
 });
 
+describe("Ask beyond the archive", () => {
+  it("a background answer is labelled as not from archive sources, has no citation marks, and links archive items", async () => {
+    const answer = await answerFixture();
+    askWith(() => json(200, {
+      ...answer, outcome: "background", label: "AI general background, not from archive sources", checks: null,
+      message: "The archive's own documents do not answer this directly.",
+      sentences: [{ text: "Dr. Ambedkar chaired the Drafting Committee.", citations: [] }],
+    }));
+    await mount("/ask?q=Who%20chaired%20the%20drafting%20committee%3F", ".answer .chip.background");
+    expect(text(".answer .chip.background")).toBe(STRINGS.en.askBackgroundLabel);
+    expect(text(".answer")).toContain("Dr. Ambedkar chaired the Drafting Committee.");
+    expect(text(".answer")).toContain(STRINGS.en.askBackgroundNote);
+    expect(text(".answer")).not.toContain(STRINGS.en.askLabel);
+    expect(document.querySelector(".answer .cite-link")).toBeNull();
+    expect(text(".answer summary")).toContain(STRINGS.en.askExploreArchive);
+    expect(visit().askHistory).toHaveLength(1);
+  });
+
+  it("an off-topic question offers suggested questions that ask on click", async () => {
+    const bodies = askWith(
+      () => json(200, { outcome: "off_topic", language: "en", label: null, message: "x", sentences: [], citations: [], paraphrase_only: false, retried_retrieval: false }),
+      async () => json(200, await answerFixture()),
+    );
+    await mount("/ask?q=Who%20won%20the%20cricket%20match%3F", ".ask-suggestions button");
+    expect(text(".answer")).toContain(STRINGS.en.askOffTopic);
+    const first = document.querySelector<HTMLButtonElement>(".ask-suggestions button")!;
+    expect(first.textContent).toBe(STRINGS.en.askSuggest1);
+    await act(async () => first.click());
+    await waitFor(() => !!document.querySelector(".answer .cite-link"), "answer to the suggestion");
+    expect((bodies[1] as { question: string }).question).toBe(STRINGS.en.askSuggest1);
+  });
+
+  it("a server-side answer failure says the answer service did not respond", async () => {
+    askWith(() => json(200, { outcome: "error", language: "en", label: null, message: "The answer service did not respond.", sentences: [], citations: [], paraphrase_only: false, retried_retrieval: false }));
+    await mount("/ask?q=What%20is%20caste%3F", ".answer .notice");
+    expect(text(".answer .notice")).toBe(STRINGS.en.askServiceError);
+  });
+});
+
 describe("Ask answer notes and memory", () => {
   it("the 'citations and quotes were checked' note needs the server's check result", async () => {
     const answer = await answerFixture();

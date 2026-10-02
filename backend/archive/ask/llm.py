@@ -71,8 +71,9 @@ class OpenAICompatibleLLM:
         }
         t0 = time.perf_counter()
         try:
-            resp = self._client.post(f"{self.base_url}/chat/completions", json=body,
-                                     headers={"Authorization": f"Bearer {self.api_key}"})
+            resp = self._post(body)
+            if resp.status_code == 400 and (adjusted := _adjust_for_provider(body, resp.text)) is not None:
+                resp = self._post(adjusted)
             resp.raise_for_status()
         except httpx.HTTPError as exc:
             raise LLMUnavailable(str(exc)) from exc
@@ -86,6 +87,23 @@ class OpenAICompatibleLLM:
             model=data.get("model", self.model),
             latency_ms=int((time.perf_counter() - t0) * 1000),
         )
+
+    def _post(self, body: dict) -> httpx.Response:
+        return self._client.post(f"{self.base_url}/chat/completions", json=body,
+                                 headers={"Authorization": f"Bearer {self.api_key}"})
+
+
+def _adjust_for_provider(body: dict, error: str) -> dict | None:
+    """One retry for a provider that rejects a parameter by name: newer OpenAI models take max_completion_tokens
+    instead of max_tokens, and some compatible servers have no JSON mode (the prompt still asks for JSON)."""
+    adjusted = dict(body)
+    if "max_tokens" in error and "max_tokens" in adjusted:
+        adjusted["max_completion_tokens"] = adjusted.pop("max_tokens")
+    if "response_format" in error:
+        adjusted.pop("response_format", None)
+    if "temperature" in error:
+        adjusted.pop("temperature", None)
+    return adjusted if adjusted != body else None
 
 
 def get_llm() -> AnswerLLM | None:

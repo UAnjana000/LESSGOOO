@@ -38,6 +38,8 @@ os.environ.update({
     "ARCHIVE_LANGFUSE_SECRET_KEY": "",
     "ARCHIVE_JWT_SECRET": "test-secret-not-for-production-0123456789",
     "ARCHIVE_SUFFICIENCY_THRESHOLD": "0.3",
+    # Archive-only abstention is what most Ask tests check; background-answer tests turn this on themselves.
+    "ARCHIVE_ASK_BACKGROUND_ENABLED": "false",
 })
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"

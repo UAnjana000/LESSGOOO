@@ -72,6 +72,34 @@ def extract_quotes(text: str) -> list[str]:
     return [q.strip() for q in spans if len(q.strip()) >= MIN_QUOTE_CHARS or len(q.split()) >= 2]
 
 
+@dataclass
+class BackgroundResult:
+    in_scope: bool
+    sentences: list[str]
+    dropped: int = 0
+
+
+def parse_background(raw: str, max_sentences: int = 3) -> BackgroundResult:
+    """Expect {"in_scope": bool, "sentences": ["...", ...]}. Background cites nothing, so nothing in it may read as
+    a quotation: a sentence with any quotation mark is dropped, and so is one quoting in single quotes."""
+    start, end = raw.find("{"), raw.rfind("}")
+    if start < 0 or end < 0:
+        raise ValueError("answer is not JSON")
+    data = json.loads(raw[start:end + 1])
+    if not data.get("in_scope", True):
+        return BackgroundResult(in_scope=False, sentences=[])
+    kept, dropped = [], 0
+    for s in data.get("sentences") or []:
+        text = str(s.get("text", "") if isinstance(s, dict) else s).strip()
+        if not text:
+            continue
+        if re.search(r"[\"“”„«»]", text) or SINGLE_QUOTE_RE.search(text):
+            dropped += 1
+            continue
+        kept.append(text)
+    return BackgroundResult(in_scope=True, sentences=kept[:max_sentences], dropped=dropped)
+
+
 def validate(raw: str, retrieved: dict[int, dict[str, Any]]) -> ValidationResult:
     """retrieved: passage_id -> {"text": str, "quote_verified": bool}"""
     try:

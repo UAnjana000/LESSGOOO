@@ -285,7 +285,8 @@ export interface AskCitation {
 }
 
 export interface AskResult {
-  outcome: "answered" | "extractive" | "insufficient" | "refused" | "rejected_input" | "error" | "offline";
+  /** "background": uncited general knowledge, labelled as not from archive sources; "off_topic": a redirect. */
+  outcome: "answered" | "extractive" | "insufficient" | "background" | "off_topic" | "refused" | "rejected_input" | "error" | "offline";
   language: string;
   label: string | null;
   message: string | null;

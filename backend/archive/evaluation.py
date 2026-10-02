@@ -174,14 +174,16 @@ def evaluate_answer_behaviour(results: list[dict[str, Any]]) -> dict[str, Any]:
 
     abst = by_cat.get("not_in_archive", [])
     ans = by_cat.get("answer", [])
-    predicted_abstain = [r for r in results if r["outcome"] == "insufficient"]
+    # A labelled background answer or an off-topic redirect cites nothing, so it abstains from an archive answer.
+    abstained = ("insufficient", "background", "off_topic")
+    predicted_abstain = [r for r in results if r["outcome"] in abstained]
     return {
         "n": len(results),
-        "correct_not_in_archive_rate": rate(abst, lambda r: r["outcome"] == "insufficient"),
+        "correct_not_in_archive_rate": rate(abst, lambda r: r["outcome"] in abstained),
         "correct_refusal_rate": rate(by_cat.get("refusal", []), lambda r: r["outcome"] == "refused"),
         "answerable_answered_rate": rate(ans, lambda r: r["outcome"] in ("answered", "extractive")),
         "abstention_precision": rate(predicted_abstain, lambda r: r["expected"] == "not_in_archive"),
-        "abstention_recall": rate(abst, lambda r: r["outcome"] == "insufficient"),
+        "abstention_recall": rate(abst, lambda r: r["outcome"] in abstained),
         "claim_support": UNMEASURED + " (requires human grading; see eval/templates/claim_support_grading.csv)",
         "unsupported_claim_rate": UNMEASURED,
         "quote_match_rate": UNMEASURED if not any(r.get("quotes") for r in results) else

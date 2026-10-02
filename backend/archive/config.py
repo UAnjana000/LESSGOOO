@@ -89,7 +89,8 @@ class Settings(BaseSettings):
     llm_base_url: str = "https://api.openai.com/v1"
     llm_api_key: str = ""
     llm_model: str = ""
-    llm_max_output_tokens: int = 350
+    # Room for 4 cited sentences in JSON; a reasoning model also spends part of this before it writes.
+    llm_max_output_tokens: int = 800
     # True when the answer model runs off the premises (hosted API): passages whose rights register entry
     # does not allow external processing are then never put in its prompt.
     llm_external: bool = True
@@ -119,6 +120,12 @@ class Settings(BaseSettings):
     passage_max_chars: int = 900
     sufficiency_threshold: float = 0.20
     sufficiency_threshold_version: str = "calibrated-v1"
+    # The 0.20 above is calibrated for the cross-encoder. The lexical test double scores the share of the
+    # question's content words a passage contains, so it needs its own bar; unset keeps sufficiency_threshold.
+    lexical_sufficiency_threshold: float | None = None
+    # When the archive cannot answer, the answer model may give up to 3 sentences of general background on
+    # Dr. Ambedkar's life, works and constitutional ideas: labelled, uncited, never quoted, never cached.
+    ask_background_enabled: bool = True
     session_turns: int = 3
     question_max_chars: int = 500
     prompt_version: str = "ask-v2"
@@ -166,6 +173,12 @@ class Settings(BaseSettings):
     @property
     def llm_available(self) -> bool:
         return self.llm_provider != "none" and bool(self.llm_api_key and self.llm_model)
+
+    @property
+    def effective_sufficiency_threshold(self) -> float:
+        if self.reranker_backend == "lexical" and self.lexical_sufficiency_threshold is not None:
+            return self.lexical_sufficiency_threshold
+        return self.sufficiency_threshold
 
     @property
     def ask_voice_available(self) -> bool:

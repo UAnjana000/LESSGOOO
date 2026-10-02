@@ -45,7 +45,7 @@ export function Ask() {
       if (ctrl.signal.aborted || !s.isCurrentSession(sessionId)) return;
       setResult(r);
       if (r.outcome !== "rejected_input" && r.outcome !== "error") setQuestion((cur) => (cur === q ? "" : cur));
-      if (r.outcome === "answered" || r.outcome === "extractive") {
+      if (r.outcome === "answered" || r.outcome === "extractive" || r.outcome === "background") {
         s.pushAsk({ q, a: r.sentences.map((x) => x.text).join(" ").slice(0, 300) });
         s.setAskLast({ asked: q, result: r });
       }
@@ -116,7 +116,7 @@ export function Ask() {
         {result && asked && (
           <article className="answer">
             <h2 style={{ fontSize: "var(--step-1)" }}>{asked}</h2>
-            <AnswerBody result={result} numberOf={numberOf} onRetry={() => void submit(undefined, asked ?? undefined)} />
+            <AnswerBody result={result} numberOf={numberOf} onRetry={() => void submit(undefined, asked ?? undefined)} onAsk={(q) => void submit(undefined, q)} />
           </article>
         )}
       </div>
@@ -124,7 +124,7 @@ export function Ask() {
   );
 }
 
-function AnswerBody({ result, numberOf, onRetry }: { result: AskResult; numberOf: (pid: number) => number; onRetry: () => void }) {
+function AnswerBody({ result, numberOf, onRetry, onAsk }: { result: AskResult; numberOf: (pid: number) => number; onRetry: () => void; onAsk: (q: string) => void }) {
   const { t } = useSession();
   const r = result;
   const retry = <button type="button" className="btn small" onClick={onRetry}>{t("retry")}</button>;
@@ -139,9 +139,36 @@ function AnswerBody({ result, numberOf, onRetry }: { result: AskResult; numberOf
   if (r.outcome === "error") {
     return (
       <>
-        <div className="notice bad">{t("errorGeneric")}</div>
+        {/* The server says when the answer service failed; a request that never got a reply has no message. */}
+        <div className="notice bad">{r.message ? t("askServiceError") : t("errorGeneric")}</div>
         {retry}
         {r.citations.length > 0 && <Sources result={r} heading={t("askRelated")} />}
+      </>
+    );
+  }
+  if (r.outcome === "off_topic") {
+    return (
+      <>
+        <p>{t("askOffTopic")}</p>
+        <div className="row ask-suggestions" style={{ flexWrap: "wrap", gap: 8 }}>
+          {(["askSuggest1", "askSuggest2", "askSuggest3"] as const).map((k) => (
+            <button key={k} type="button" className="btn small secondary" onClick={() => onAsk(t(k))}>{t(k)}</button>
+          ))}
+        </div>
+      </>
+    );
+  }
+  if (r.outcome === "background") {
+    return (
+      <>
+        <div className="label-row"><span className="chip background">{t("askBackgroundLabel")}</span></div>
+        <div className="stack background-answer" style={{ gap: 8 }}>
+          {r.sentences.map((sent, i) => (
+            <p key={i} lang={r.language} style={{ margin: 0 }}>{sent.text}</p>
+          ))}
+        </div>
+        <p className="muted" style={{ fontSize: "var(--step--1)", marginTop: 12 }}>{t("askBackgroundNote")}</p>
+        {r.citations.length > 0 && <Sources result={r} heading={t("askExploreArchive")} showExcerpt />}
       </>
     );
   }

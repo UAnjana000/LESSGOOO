@@ -24,6 +24,9 @@ from archive.config import get_settings
 
 log = logging.getLogger(__name__)
 _TOKEN = re.compile(r"\w+", re.UNICODE)
+_FILLER = {"what", "which", "who", "whom", "whose", "when", "where", "why", "how", "did", "does", "do", "is", "are",
+           "was", "were", "be", "been", "the", "a", "an", "of", "in", "on", "at", "to", "for", "from", "by", "with",
+           "and", "or", "about", "tell", "me", "please", "say", "said", "can", "you", "there", "this", "that"}
 
 
 class Embedder(Protocol):
@@ -66,13 +69,15 @@ class HashEmbedder:
 
 
 class LexicalReranker:
-    """Token-overlap scorer squashed to 0..1. Test double only."""
+    """Share of the query's content words found in each passage (0..1). Test double only. Question framing
+    words ("what", "the", "of") occur in almost every passage, so they are left out unless nothing else is left."""
 
     is_test_double = True
     name = "lexical-overlap-reranker"
 
     def score(self, query: str, docs: list[str]) -> list[float]:
-        q = set(_TOKEN.findall(query.lower()))
+        words = set(_TOKEN.findall(query.lower()))
+        q = (words - _FILLER) or words
         out = []
         for d in docs:
             dt = set(_TOKEN.findall(d.lower()))

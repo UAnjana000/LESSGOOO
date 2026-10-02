@@ -5,6 +5,7 @@ check_input -> detect_language -> rewrite -> retrieve
 retry_retrieve: strong -> generate   weak -> abstain
 generate -> validate: ok -> finalize | model found no support -> abstain | failed -> generate_paraphrase
 generate_paraphrase -> validate_paraphrase: ok -> finalize | failed -> abstain
+abstain -> background (one uncited call, only when the archive could not answer) -> finalize
 Any node failure (retrieval, answer model) routes to finalize with outcome "error"; nothing raises to the API.
 
 No open-ended agent loop and no tool use beyond retrieval. Language ID, rewrite, retrieval,
@@ -31,7 +32,7 @@ from sqlalchemy.orm import Session
 
 from archive.ask import policy
 from archive.ask.llm import AnswerLLM, cost_usd
-from archive.ask.validate import validate
+from archive.ask.validate import parse_background, validate
 from archive.config import get_settings
 from archive.models import Passage
 from archive.rights import external_processing_item_ids
@@ -42,8 +43,9 @@ from archive.search.models import get_reranker
 log = logging.getLogger(__name__)
 
 REWRITE_VERSION = "rule-rewrite-v1"
-# Longest path is 11 nodes (check_input .. retry .. paraphrase .. abstain -> finalize); the DAG cannot exceed it.
-RECURSION_LIMIT = 12
+# Longest path is 12 nodes (check_input .. retry .. paraphrase .. abstain -> background -> finalize); the DAG
+# cannot exceed it.
+RECURSION_LIMIT = 13
 NO_SUPPORT = "model found no support in passages"
 RARE_TERM_DF_FRACTION = 0.05
 ANAPHORA = {
@@ -69,6 +71,17 @@ Rules (always apply):
 7. Do not speculate about present-day parties, politicians or events.
 8. Be concise: at most 4 short sentences. Write in the requested language.
 Return JSON only: {"sentences": [{"text": "...", "citations": [<passage number>, ...]}]}"""
+BACKGROUND_PROMPT_VERSION = "background-v1"
+BACKGROUND_PROMPT = """You help visitors at a heritage archive about Dr. B. R. Ambedkar when the archive's own documents do not answer their question.
+Scope: Dr. Ambedkar's life, family, education and contemporaries; his writings, speeches, movements and institutions; the Constituent Assembly, the drafting of the Indian Constitution and its articles and ideas; caste, social reform, Buddhism and Indian history of his era.
+Rules (always apply):
+1. If the question is outside that scope, return {"in_scope": false, "sentences": []}.
+2. Otherwise answer from well-established historical knowledge in at most 3 short sentences.
+3. Never use quotation marks, and never present any words as Dr. Ambedkar's own. Describe his views only in general terms.
+4. Do not give opinions on present-day parties, politicians or events.
+5. Leave out any fact you are not sure of. If you cannot answer reliably, return {"in_scope": true, "sentences": []}.
+6. Write in the requested language.
+Return JSON only: {"in_scope": true, "sentences": ["...", "..."]}"""
 PARAPHRASE_SUFFIX = "\nIMPORTANT: Your previous draft failed citation or quotation checks. Do not use any quotation marks. Paraphrase only."
 LANG_NAMES = {"en": "English", "hi": "Hindi", "mr": "Marathi"}
 
@@ -300,7 +313,7 @@ def _generate(state: AskState, deps: AskDeps, paraphrase: bool, name: str) -> As
     if deps.llm is None:
         return {"outcome": "extractive", "attempt": attempt,
                 "trace_spans": _span(state, name, skipped="no answer model configured")}
-    strong = [h for h in state["hits"] if (h["rerank_score"] or 0) >= s.sufficiency_threshold * 0.5] or state["hits"]
+    strong = [h for h in state["hits"] if (h["rerank_score"] or 0) >= s.effective_sufficiency_threshold * 0.5] or state["hits"]
     withheld: list[int] = []
     if s.llm_external:
         sendable = external_processing_item_ids(deps.db, {h["item_id"] for h in strong})
@@ -325,18 +338,23 @@ def _generate(state: AskState, deps: AskDeps, paraphrase: bool, name: str) -> As
     end_ns = time.time_ns()
     cost = cost_usd(res.tokens_in, res.tokens_out)
     return {
-        "raw_answer": res.content, "attempt": attempt, "model": res.model, "prompt_ids": prompt_ids,
-        "withheld_ids": withheld, "paraphrase_only": paraphrase,
-        "tokens_in": state.get("tokens_in", 0) + res.tokens_in,
-        "tokens_out": state.get("tokens_out", 0) + res.tokens_out,
-        "cached_tokens": state.get("cached_tokens", 0) + res.cached_tokens,
-        "cost_usd": round(state.get("cost_usd", 0.0) + cost, 6),
-        "provider_ms": state.get("provider_ms", 0) + res.latency_ms,
+        "raw_answer": res.content, "attempt": attempt, "prompt_ids": prompt_ids,
+        "withheld_ids": withheld, "paraphrase_only": paraphrase, **_usage(state, res, cost),
         "trace_spans": _span(state, name, model=res.model, tokens_in=res.tokens_in, tokens_out=res.tokens_out,
                              cached_tokens=res.cached_tokens, cost_usd=cost, latency_ms=res.latency_ms,
                              prompt_version=s.prompt_version, attempt=attempt, passage_ids=prompt_ids,
                              start_ns=start_ns, end_ns=end_ns),
     }
+
+
+def _usage(state: AskState, res: Any, cost: float) -> AskState:
+    """Running totals over every model call in this question."""
+    return {"model": res.model,
+            "tokens_in": state.get("tokens_in", 0) + res.tokens_in,
+            "tokens_out": state.get("tokens_out", 0) + res.tokens_out,
+            "cached_tokens": state.get("cached_tokens", 0) + res.cached_tokens,
+            "cost_usd": round(state.get("cost_usd", 0.0) + cost, 6),
+            "provider_ms": state.get("provider_ms", 0) + res.latency_ms}
 
 
 def generate(state: AskState, deps: AskDeps) -> AskState:
@@ -378,6 +396,50 @@ def abstain(state: AskState, deps: AskDeps) -> AskState:
             "trace_spans": _span(state, "abstain")}
 
 
+def build_background_prompt(question: str, language: str, history: list[dict[str, str]]) -> str:
+    # History arrives from the client, so an earlier question goes in only if it would pass as a question itself.
+    max_chars = get_settings().question_max_chars
+    earlier = [h["q"] for h in history if h.get("q") and policy.check_input(h["q"], max_chars).allowed]
+    context = ("Earlier questions in this conversation:\n" + "\n".join(f"- {q}" for q in earlier) + "\n\n"
+               if earlier else "")
+    return f"Answer language: {LANG_NAMES.get(language, 'English')}\n\n{context}Question: {question}"
+
+
+def background(state: AskState, deps: AskDeps) -> AskState:
+    """The archive could not answer: one uncited call for general background within the archive's subject, or
+    an off-topic redirect. Only the visitor's own question (and earlier questions) is sent, never a passage, so
+    rights terms are not involved. Any failure keeps the "insufficient" outcome and its closest items."""
+    s = get_settings()
+    if state.get("outcome") != "insufficient" or not s.ask_background_enabled or deps.llm is None:
+        return {"trace_spans": _span(state, "background", skipped=True)}
+    history = (state.get("history") or [])[-s.session_turns:]
+    user = build_background_prompt(state["question"], state["language"], history)
+    start_ns = time.time_ns()
+    try:
+        res = deps.llm.complete(BACKGROUND_PROMPT, user, s.llm_max_output_tokens)
+    except Exception as exc:  # LLMUnavailable or a malformed provider response: the abstention stands
+        return {"trace_spans": _span(state, "background", error=str(exc)[:200], start_ns=start_ns,
+                                     end_ns=time.time_ns())}
+    end_ns = time.time_ns()
+    cost = cost_usd(res.tokens_in, res.tokens_out)
+    span = {"model": res.model, "tokens_in": res.tokens_in, "tokens_out": res.tokens_out, "cost_usd": cost,
+            "latency_ms": res.latency_ms, "prompt_version": BACKGROUND_PROMPT_VERSION, "start_ns": start_ns,
+            "end_ns": end_ns}
+    try:
+        parsed = parse_background(res.content)
+    except (ValueError, AttributeError, TypeError) as exc:  # not the JSON asked for: paid for, logged, and the abstention stands
+        return {**_usage(state, res, cost), "trace_spans": _span(state, "background", error=str(exc)[:200], **span)}
+    out: AskState = {**_usage(state, res, cost),
+                     "trace_spans": _span(state, "background", in_scope=parsed.in_scope,
+                                          sentences=len(parsed.sentences), dropped_quoted=parsed.dropped, **span)}
+    if not parsed.in_scope:
+        out.update(outcome="off_topic", reason="outside the archive's subject")
+    elif parsed.sentences:
+        out.update(outcome="background", reason="general background, not from archive sources",
+                   sentences=[{"text": t, "citations": []} for t in parsed.sentences])
+    return out
+
+
 def refusal_browse(state: AskState, deps: AskDeps) -> AskState:
     """Related material for a refused question: fused hybrid order is enough to browse, so no rerank."""
     try:
@@ -401,13 +463,13 @@ def route_after_input(state: AskState) -> str:
 def route_after_retrieve(state: AskState) -> str:
     if state.get("outcome") == "error":
         return "finalize"
-    return "generate" if state["best_score"] >= get_settings().sufficiency_threshold else "retry_retrieve"
+    return "generate" if state["best_score"] >= get_settings().effective_sufficiency_threshold else "retry_retrieve"
 
 
 def route_after_retry(state: AskState) -> str:
     if state.get("outcome") == "error":
         return "finalize"
-    return "generate" if state["best_score"] >= get_settings().sufficiency_threshold else "abstain"
+    return "generate" if state["best_score"] >= get_settings().effective_sufficiency_threshold else "abstain"
 
 
 def route_after_generate(state: AskState) -> str:
@@ -430,7 +492,7 @@ def route_after_validate_paraphrase(state: AskState) -> str:
 def build_ask_graph():
     g = StateGraph(AskState, context_schema=AskDeps)
     for fn in (check_input, detect, rewrite, retrieve, retry_retrieve, generate, do_validate, generate_paraphrase,
-               validate_paraphrase, abstain, refusal_browse, finalize):
+               validate_paraphrase, abstain, background, refusal_browse, finalize):
         name = {"detect": "detect_language", "do_validate": "validate"}.get(fn.__name__, fn.__name__)
         g.add_node(name, _timed(fn))
     g.add_edge(START, "check_input")
@@ -443,7 +505,8 @@ def build_ask_graph():
     g.add_conditional_edges("validate", route_after_validate, ["finalize", "abstain", "generate_paraphrase"])
     g.add_conditional_edges("generate_paraphrase", route_after_paraphrase, ["finalize", "validate_paraphrase"])
     g.add_conditional_edges("validate_paraphrase", route_after_validate_paraphrase, ["finalize", "abstain"])
-    g.add_edge("abstain", "finalize")
+    g.add_edge("abstain", "background")
+    g.add_edge("background", "finalize")
     g.add_edge("refusal_browse", "finalize")
     g.add_edge("finalize", END)
     return g.compile()

@@ -94,6 +94,27 @@ MESSAGES = {
         "mr": "या उताऱ्यांच्या हक्क-अटी त्यांना उत्तर मॉडेलकडे पाठवण्याची परवानगी देत नाहीत, म्हणून उत्तर लिहिले "
               "गेले नाही. सर्वात जवळचे मंजूर उतारे तुम्ही येथे वाचू शकता.",
     },
+    "background": {
+        "en": "The archive's own documents do not answer this directly, so this is general background, not from "
+              "archive sources. Check it against the closest archive items below.",
+        "hi": "संग्रह के अपने दस्तावेज़ इसका सीधा उत्तर नहीं देते, इसलिए यह सामान्य पृष्ठभूमि है, संग्रह के स्रोतों से नहीं। "
+              "नीचे दी गई संग्रह की निकटतम सामग्री से इसकी जाँच करें।",
+        "mr": "संग्रहातील दस्तऐवज याचे थेट उत्तर देत नाहीत, म्हणून ही सामान्य पार्श्वभूमी आहे, संग्रहातील स्रोतांवरून नाही. "
+              "खालील संग्रहातील सर्वात जवळच्या साहित्याशी ती तपासून पाहा.",
+    },
+    "off_topic": {
+        "en": "I can help with Dr. Ambedkar's life, his writings and speeches, and the ideas of the Indian "
+              "Constitution. Try one of the questions below.",
+        "hi": "मैं डॉ. आंबेडकर के जीवन, उनके लेखन और भाषणों, और भारतीय संविधान के विचारों के बारे में मदद कर सकता हूँ। "
+              "नीचे दिए गए प्रश्नों में से कोई एक पूछकर देखें।",
+        "mr": "मी डॉ. आंबेडकरांचे जीवन, त्यांचे लेखन आणि भाषणे, आणि भारतीय संविधानातील विचार यांबद्दल मदत करू शकतो. "
+              "खालीलपैकी एखादा प्रश्न विचारून पाहा.",
+    },
+    "error": {
+        "en": "The answer service did not respond. Please try again; the closest archive items are below.",
+        "hi": "उत्तर सेवा ने जवाब नहीं दिया। कृपया फिर से प्रयास करें; संग्रह की निकटतम सामग्री नीचे है।",
+        "mr": "उत्तर सेवेने प्रतिसाद दिला नाही. कृपया पुन्हा प्रयत्न करा; संग्रहातील सर्वात जवळचे साहित्य खाली आहे.",
+    },
     "extractive": {
         "en": "No answer model is connected on this server, so no answer was written. "
               "These approved passages match your question most closely.",
@@ -106,4 +127,9 @@ ANSWER_LABEL = {
     "en": "AI-generated answer from archive sources",
     "hi": "संग्रह स्रोतों से AI द्वारा बनाया गया उत्तर",
     "mr": "संग्रह स्रोतांवरून AI ने तयार केलेले उत्तर",
+}
+BACKGROUND_LABEL = {
+    "en": "AI general background, not from archive sources",
+    "hi": "AI द्वारा सामान्य पृष्ठभूमि, संग्रह के स्रोतों से नहीं",
+    "mr": "AI ने दिलेली सामान्य पार्श्वभूमी, संग्रहातील स्रोतांवरून नाही",
 }

@@ -369,7 +369,11 @@ class TestAskGraphShape:
             return 1 + max((longest(m) for m in edges.get(n, ())), default=0)
 
         nodes_on_longest = longest("__start__") - 2  # minus __start__ and __end__
-        assert nodes_on_longest == 11 and nodes_on_longest < RECURSION_LIMIT
+        assert nodes_on_longest == 12 and nodes_on_longest < RECURSION_LIMIT
+
+    def test_background_runs_once_after_abstain_and_only_finalizes(self):
+        edges = self._edges()
+        assert edges["abstain"] == {"background"} and edges["background"] == {"finalize"}
 
     def test_only_one_retry_node_and_retry_cannot_reach_itself(self):
         edges = self._edges()

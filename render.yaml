@@ -32,6 +32,8 @@ services:
         value: hash # Lightweight 384-d embedder for 512MB RAM compatibility
       - key: ARCHIVE_RERANKER_BACKEND
         value: lexical # Lightweight overlap reranker for 512MB RAM compatibility
+      - key: ARCHIVE_LEXICAL_SUFFICIENCY_THRESHOLD
+        value: "0.4" # Share of the question's content words a passage must contain (the 0.20 default is for the cross-encoder)
       - key: PORT
         value: "8000"
 
