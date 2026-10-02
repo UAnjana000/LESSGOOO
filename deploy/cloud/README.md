@@ -104,11 +104,31 @@ Manual backend deploy, on the VM: `cd ~/archive && git pull && bash deploy/cloud
 | GitHub secret | `AZURE_DEPLOY_KEY` | Private half of a key used only for deploying |
 | GitHub secret | `AZURE_KNOWN_HOSTS` | The VM's SSH host keys (`ssh-keyscan`), checked against a first-hand login |
 | GitHub variable | `AZURE_HOST` | `ambedkar-archive.indiasouthcentral.cloudapp.azure.com` |
-| VM `~/.ssh/authorized_keys` | the deploy key's line | `command="cd ~/archive && git pull --ff-only -q && exec bash deploy/cloud/deploy.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-ed25519 …` |
+| VM `~/.ssh/authorized_keys` | the deploy key's line | `command="exec bash ~/archive/deploy/cloud/pull-and-deploy.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-ed25519 …` |
 
 The forced command means the deploy key can only pull and deploy; it cannot open a shell. To revoke it,
-delete that line on the VM and the secret on GitHub. `git pull --ff-only` refuses to deploy if someone has
-edited tracked files on the VM; keep VM-only settings in `.env`, which is not tracked.
+delete that line on the VM and the secret on GitHub. The VM always deploys `origin/main`: if someone has
+committed or edited tracked files on the VM, `pull-and-deploy.sh` saves them (a `vm-diverged-*` branch and
+a patch in `~/archive-backups`) and resets to `origin/main` instead of failing every deploy with
+"Not possible to fast-forward". Keep VM-only settings in `.env`, which is not tracked.
+
+**Older VMs** still have `command="cd ~/archive && git pull --ff-only -q && exec bash deploy/cloud/deploy.sh"`.
+If a deploy fails with "Not possible to fast-forward", log in with your own key (not the deploy key) once:
+
+```bash
+cd ~/archive
+git fetch origin
+git log --oneline origin/main..HEAD          # VM-only commits, if any
+git branch "vm-diverged-$(date +%F)" HEAD     # keep them
+git diff HEAD > ~/vm-edits-$(date +%F).patch  # keep any edits to tracked files
+git checkout --force -B main origin/main
+nano ~/.ssh/authorized_keys
+```
+
+In `authorized_keys`, on the deploy key's line only, replace
+`command="cd ~/archive && git pull --ff-only -q && exec bash deploy/cloud/deploy.sh"` with
+`command="exec bash ~/archive/deploy/cloud/pull-and-deploy.sh"`, leave the rest of the line as it is, and save.
+Then re-run the failed "Deploy to Azure" workflow on GitHub.
 
 Never run `docker compose down -v`: it deletes the database and file volumes.
 
