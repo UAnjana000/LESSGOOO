@@ -1,4 +1,5 @@
 export interface ItemMetadata {
+  title: string;
   subjects: string[];
   people: string[];
   places: string[];
@@ -15,7 +16,7 @@ export interface ItemMetadata {
 
 export const CERTAINTIES = ["exact", "approximate", "unknown"] as const;
 const LISTS = ["subjects", "people", "places", "languages"] as const;
-const TEXTS = ["date_text", "date_start", "date_end", "edition", "volume", "publisher", "creator"] as const;
+const TEXTS = ["title", "date_text", "date_start", "date_end", "edition", "volume", "publisher", "creator"] as const;
 
 export type MetadataForm = Record<(typeof LISTS)[number] | (typeof TEXTS)[number] | "date_certainty" | "reason", string>;
 
@@ -35,6 +36,7 @@ export function metadataBody(f: MetadataForm): Record<string, unknown> {
   const body: Record<string, unknown> = {};
   for (const k of LISTS) body[k] = parseList(f[k]);
   for (const k of TEXTS) body[k] = f[k].trim() || null;
+  if (!body.title) delete body.title; // the title cannot be blanked; leaving it out keeps the stored one
   body.date_certainty = f.date_certainty;
   body.reason = f.reason.trim();
   return body;

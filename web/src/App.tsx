@@ -37,6 +37,7 @@ const StaffPage = named(staff, "StaffPage");
 const StaffBatch = named(staff, "StaffBatch");
 const StaffRights = named(staff, "StaffRights");
 const StaffJobs = named(staff, "StaffJobs");
+const StaffCuration = named(staff, "StaffCuration");
 const StaffAudit = named(staff, "StaffAudit");
 
 export const routes: RouteObject[] = [
@@ -77,6 +78,7 @@ export const routes: RouteObject[] = [
           { path: "pages/:id", element: <StaffPage /> },
           { path: "batches/:id", element: <StaffBatch /> },
           { path: "rights", element: <StaffRights /> },
+          { path: "curation", element: <StaffCuration /> },
           { path: "jobs", element: <StaffJobs /> },
           { path: "audit", element: <StaffAudit /> },
         ],

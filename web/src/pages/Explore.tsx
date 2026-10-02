@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { Link, useParams } from "react-router-dom";
 import { api, type Hit, type ItemCard, type TimelineEvent } from "../api";
-import { basketLink } from "../basket";
+import { basketLink, citationTail } from "../basket";
 import { formatMs, useApi } from "../hooks";
 import { useSession } from "../state";
 import { ContentText, ErrorState, FixtureChip, LangText, LanguageSwitch, Loading, Page, pickText, useDocumentTitle } from "../components/Bits";
@@ -40,7 +41,7 @@ export function Timeline() {
         <div className="timeline-wrap">
           <div className="timeline-toolbar">
             <span className="timeline-stats muted">
-              {t("itemsCount", { n: displayedEvents.length })} {isDetailed ? `(${t("timelineZoomIn")})` : `(${t("timelineZoomOut")})`}
+              {t("itemsCount", { n: displayedEvents.length })}
             </span>
             <div className="timeline-zoom-controls" role="group" aria-label={t("timelineTitle")}>
               <button
@@ -51,7 +52,7 @@ export function Timeline() {
                 aria-pressed={!isDetailed}
                 aria-label={t("timelineZoomOut")}
               >
-                <span>−</span> {t("timelineZoomOut")}
+                {t("timelineZoomOut")}
               </button>
               <button
                 type="button"
@@ -61,7 +62,7 @@ export function Timeline() {
                 aria-pressed={isDetailed}
                 aria-label={t("timelineZoomIn")}
               >
-                <span>+</span> {t("timelineZoomIn")}
+                {t("timelineZoomIn")}
               </button>
             </div>
           </div>
@@ -177,8 +178,7 @@ export function KnowledgeMap() {
             {/* Panel 1: Connection Inspector & Evidence */}
             <section className="map-panel map-inspector-panel" aria-live="polite">
               <div className="panel-header">
-                <h2>{selected ? pickText(selected.labels, lang) : t("connectedTo")}</h2>
-                <p className="panel-subtitle">{t("mapPick")}</p>
+                <h2>{t("mapDetails")}</h2>
               </div>
 
               {!selected && (
@@ -363,9 +363,14 @@ export function Basket() {
   useEffect(() => {
     setQr(null);
     setError(null);
+    setConfirmClear(false);
   }, [s.basket]);
   const hours = qr ? Math.round((Date.parse(qr.expires_at) - Date.now()) / 3_600_000) : 0;
-  const make = async () => {
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  const qrRef = useRef<CollectionResult | null>(null);
+  qrRef.current = qr;
+  const make = async (): Promise<CollectionResult | null> => {
     setError(null);
     setMaking(true);
     try {
@@ -374,12 +379,25 @@ export function Basket() {
         language: s.lang,
         base_url: typeof window !== "undefined" ? window.location.origin : undefined,
       });
-      setQr(data);
+      flushSync(() => setQr(data));
+      return data;
     } catch {
       setError(s.online ? t("errorGeneric") : t("qrOffline"));
+      return null;
     } finally {
       setMaking(false);
     }
+  };
+
+  // The printed booklet carries the share QR: make the link first when the visitor has not, then print.
+  const printBooklet = async () => {
+    setPrinting(true);
+    try {
+      if (!qrRef.current && s.online) await make();
+    } finally {
+      setPrinting(false);
+    }
+    window.print();
   };
 
   const copyLink = async () => {
@@ -397,27 +415,49 @@ export function Basket() {
       {s.basket.length === 0 && <p className="empty-state">{t("basketEmpty")}</p>}
       {s.basket.length > 0 && (
         <>
-          <ul className="results screen-only">
-            {s.basket.map((b) => (
-              <li key={`${b.item_id}-${b.passage_id}-${b.page}-${b.start_ms}`} className="result">
-                <div>
-                  <h2 style={{ fontSize: "var(--step-1)", margin: 0 }}><Link to={basketLink(b)}><ContentText text={b.title} /></Link></h2>
-                  <span className="cite" style={{ marginTop: 6 }}><ContentText text={b.citation} /></span>
-                </div>
-                <button type="button" className="btn secondary small" onClick={() => s.removeFromBasket(b)}>
-                  {t("remove")}<span className="visually-hidden">: {b.title}</span>
-                </button>
-              </li>
-            ))}
+          <ul className="results screen-only basket-list">
+            {s.basket.map((b, i) => {
+              const tail = citationTail(b.title, b.citation);
+              return (
+                <li key={`${b.item_id}-${b.passage_id}-${b.page}-${b.start_ms}`} className="result basket-entry">
+                  <div>
+                    <h2 style={{ fontSize: "var(--step-1)", margin: 0 }}><Link to={basketLink(b)}><ContentText text={b.title} /></Link></h2>
+                    {b.snippet && <p className="basket-snippet"><ContentText text={b.snippet} /></p>}
+                    {tail && <span className="cite" style={{ marginTop: 6 }}><ContentText text={tail} /></span>}
+                  </div>
+                  <div className="basket-entry-actions">
+                    <button type="button" className="btn secondary small basket-move" disabled={i === 0} onClick={() => s.moveInBasket(b, -1)}>
+                      <span aria-hidden="true">↑</span>
+                      <span className="visually-hidden">{t("moveUp")}: {b.title}</span>
+                    </button>
+                    <button type="button" className="btn secondary small basket-move" disabled={i === s.basket.length - 1} onClick={() => s.moveInBasket(b, 1)}>
+                      <span aria-hidden="true">↓</span>
+                      <span className="visually-hidden">{t("moveDown")}: {b.title}</span>
+                    </button>
+                    <button type="button" className="btn secondary small" onClick={() => s.removeFromBasket(b)}>
+                      {t("remove")}<span className="visually-hidden">: {b.title}</span>
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
           <div className="row screen-only basket-actions-bar" style={{ marginTop: 20, gap: 12, flexWrap: "wrap" }}>
-            <button type="button" className="btn primary" onClick={() => window.print()}>
-              <span aria-hidden="true">📄 </span>
-              {t("downloadBooklet")}
+            <button type="button" className="btn primary" onClick={printBooklet} disabled={printing}>
+              {printing ? <Loading inline size="sm" label={t("bookletPreparing")} /> : <><span aria-hidden="true">📄 </span>{t("downloadBooklet")}</>}
             </button>
-            <button type="button" className="btn secondary" onClick={make} disabled={making}>
+            <button type="button" className="btn secondary" onClick={() => void make()} disabled={making}>
               {making ? <Loading inline size="sm" label={t("qrMaking")} /> : t("basketMakeQr")}
             </button>
+            {confirmClear ? (
+              <span className="basket-clear-confirm" role="group" aria-label={t("clearList")}>
+                <span>{t("clearListConfirm", { n: s.basket.length })}</span>
+                <button type="button" className="btn danger" onClick={() => { s.clearBasket(); setConfirmClear(false); }}>{t("clearList")}</button>
+                <button type="button" className="btn secondary" onClick={() => setConfirmClear(false)}>{t("keepList")}</button>
+              </span>
+            ) : (
+              <button type="button" className="btn quiet" onClick={() => setConfirmClear(true)}>{t("clearList")}</button>
+            )}
           </div>
           <div role="status" className="screen-only">
             {qr && (
@@ -448,7 +488,7 @@ export function Basket() {
           {/* Printable Memorial Booklet Guide */}
           <section className="memorial-booklet-sheet print-only" aria-label={t("memorialBookletSubtitle")}>
             <header className="booklet-header">
-              <h1 className="booklet-institution">{t("memorialBookletHeader")}</h1>
+              <h1 className="booklet-institution">{t("archiveName")}</h1>
               <p className="booklet-subtitle">{t("memorialBookletSubtitle")}</p>
               <div className="booklet-meta-grid">
                 <div><span>{t("visitDate")}: </span><strong>{new Date().toLocaleDateString(`${s.lang}-IN`, { dateStyle: "long" })}</strong></div>
@@ -465,7 +505,8 @@ export function Basket() {
                   <div className="booklet-entry-num">{(idx + 1).toString().padStart(2, "0")}</div>
                   <div className="booklet-entry-content">
                     <h2 className="booklet-entry-title">{b.title}</h2>
-                    <span className="booklet-entry-cite">{b.citation}</span>
+                    {b.snippet && <p className="booklet-entry-snippet">{b.snippet}</p>}
+                    {citationTail(b.title, b.citation) && <span className="booklet-entry-cite">{citationTail(b.title, b.citation)}</span>}
                   </div>
                 </article>
               ))}
@@ -475,6 +516,7 @@ export function Basket() {
               <footer className="booklet-footer">
                 <div className="booklet-qr" dangerouslySetInnerHTML={{ __html: qr.qr_svg }} />
                 <p className="booklet-qr-note">{t("scanToView")}</p>
+                <p className="booklet-qr-note booklet-qr-url">{qr.url || `${window.location.origin}/c/${qr.token}`}</p>
               </footer>
             )}
           </section>

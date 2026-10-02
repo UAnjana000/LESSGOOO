@@ -17,3 +17,21 @@ export function itemCitation(item: Pick<ItemDetail, "title" | "edition" | "volum
   if (first) return first.replace(/, p\. [^,]*$/, "");
   return [item.title, item.edition, item.volume && `Vol. ${item.volume}`].filter(Boolean).join(", ");
 }
+
+/** A short one-line excerpt (<=160 chars) for a saved passage; collapses whitespace and cuts at a word. */
+export function clipSnippet(text: string, max = 160): string {
+  const flat = text.replace(/\s+/g, " ").trim();
+  if (flat.length <= max) return flat;
+  const cut = flat.slice(0, max - 1);
+  const sp = cut.lastIndexOf(" ");
+  return `${(sp > max * 0.6 ? cut.slice(0, sp) : cut).trimEnd()}…`;
+}
+
+/** The citation without a leading repeat of the title ("Title, 1936, p. 3" under the title "Title" becomes "1936, p. 3"). */
+export function citationTail(title: string, citation: string): string {
+  const c = citation.trim();
+  const t = title.trim();
+  if (!c || c === t) return "";
+  if (t && c.startsWith(t)) return c.slice(t.length).replace(/^[\s,;:.\u2013\u2014-]+/, "").trim();
+  return c;
+}

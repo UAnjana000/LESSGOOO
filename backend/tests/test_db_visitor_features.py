@@ -564,6 +564,21 @@ class TestCompileAndQr:
         db.commit()
         res = client.get("/api/visitor/search", params={"q": "zzqxv blorp cryptocurrency"}).json()
         assert res["results"] == [] and res["info"]["semantic_only"]
+        assert client.get("/api/visitor/search", params={"q": "zzqxv"}).json()["results"] == []
+
+    def test_search_falls_back_to_any_rarer_query_word(self, db, client):
+        self._two_items(db)
+        db.commit()
+        # "essay" is in one passage, "zzqxvblorp" in none: AND finds nothing, the rarer-word fallback finds the essay.
+        res = client.get("/api/visitor/search", params={"q": "essay zzqxvblorp"}).json()
+        assert res["info"].get("relaxed_keywords") and res["results"]
+        assert all("essay" in r["text"].lower() for r in res["results"])
+
+    def test_devanagari_query_over_english_text_is_marked_cross_language(self, db, client):
+        self._two_items(db)
+        db.commit()
+        info = client.get("/api/visitor/search", params={"q": "जाति व्यवस्था"}).json()["info"]
+        assert info.get("cross_language") or info.get("keyword_candidates")
 
     def test_qr_link_uses_only_an_allowed_site(self, db, client, monkeypatch):
         from archive.config import get_settings

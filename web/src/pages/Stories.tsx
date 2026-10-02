@@ -5,6 +5,7 @@ import { useApi } from "../hooks";
 import { ErrorState, LangText, Loading, Page, useDocumentTitle, pickText } from "../components/Bits";
 import { useSession } from "../state";
 import { isKiosk } from "../kiosk";
+import { LANGS } from "../i18n";
 import type { ItemCard, Hit } from "../api";
 
 export interface StorySummary {
@@ -37,6 +38,30 @@ export interface StoryDetailData {
   theme?: Record<string, string> | string | null;
   narration_file_ids: Record<string, number>;
   narration_label: string;
+}
+
+/** Text from a language map plus the language it was actually found in; empty strings count as missing. */
+export function pickWithLang(map: Record<string, string> | undefined, lang: string): { text: string; lang: string } {
+  if (!map) return { text: "", lang };
+  if (map[lang]?.trim()) return { text: map[lang], lang };
+  if (map.en?.trim()) return { text: map.en, lang: "en" };
+  const other = Object.entries(map).find(([, v]) => v?.trim());
+  return other ? { text: other[1], lang: other[0] } : { text: "", lang };
+}
+
+const SPEECH_LANG: Record<string, string> = { en: "en-IN", hi: "hi-IN", mr: "mr-IN" };
+
+/** A chapter's heading: its title in the visitor's language, else English, else "Chapter N". */
+function ChapterName({ block, n }: { block: StoryBlock; n: number }) {
+  const { t, lang } = useSession();
+  const p = pickWithLang(block.chapter_title, lang);
+  if (!p.text) return <>{t("chapterLabel", { n })}</>;
+  return <span lang={p.lang !== lang ? p.lang : undefined}>{p.text}</span>;
+}
+
+/** The block's milestone year, or "" when the story gives none: no year is ever invented. */
+function yearOf(b: StoryBlock): string {
+  return (b.year ?? "").trim();
 }
 
 export function Stories() {
@@ -177,6 +202,14 @@ export function Story() {
     stopNarration();
   }, [mode]);
 
+  // What the browser voice would read for this chapter: non-empty parts only, each tagged with the language it was found in.
+  const speechParts = useMemo(() => {
+    if (!currentBlock) return [] as { text: string; lang: string }[];
+    return [currentBlock.chapter_title, currentBlock.captions, currentBlock.quote_text]
+      .map((m) => pickWithLang(m, lang))
+      .filter((p) => p.text.trim());
+  }, [currentBlock, lang]);
+
   const startNarration = () => {
     const narrationFileId = d?.narration_file_ids?.[lang] ?? d?.narration_file_ids?.en;
     if (narrationFileId && audioElemRef.current) {
@@ -185,47 +218,46 @@ export function Story() {
       return;
     }
 
-    if (typeof window !== "undefined" && "speechSynthesis" in window && currentBlock) {
-      const chapterTitle = currentBlock.chapter_title ? pickText(currentBlock.chapter_title, lang) : "";
-      const caption = currentBlock.captions ? pickText(currentBlock.captions, lang) : "";
-      const quote = currentBlock.quote_text ? pickText(currentBlock.quote_text, lang) : "";
-      const textToSpeak = `${chapterTitle}. ${caption}. ${quote}`;
-
+    const parts = speechParts;
+    if (typeof window !== "undefined" && "speechSynthesis" in window && currentBlock && parts.length) {
       window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(textToSpeak);
-      u.lang = lang === "hi" ? "hi-IN" : lang === "mr" ? "mr-IN" : "en-IN";
-      u.rate = 0.95;
-
-      u.onstart = () => {
-        setIsPlayingAudio(true);
-        setAudioProgress(25);
-      };
-      u.onboundary = () => {
-        setAudioProgress((prev) => Math.min(prev + 15, 95));
-      };
-      u.onend = () => {
-        setIsPlayingAudio(false);
-        setAudioProgress(100);
+      const advance = (ms: number) => {
         if (autoplay && total > 0) {
           if (advanceTimeoutRef.current) clearTimeout(advanceTimeoutRef.current);
           advanceTimeoutRef.current = window.setTimeout(() => {
             setActiveIdx((prev) => (prev + 1) % total);
-          }, 3000);
+          }, ms);
         }
       };
-      u.onerror = () => {
-        setIsPlayingAudio(false);
-        setAudioProgress(0);
-        if (autoplay && total > 0) {
-          if (advanceTimeoutRef.current) clearTimeout(advanceTimeoutRef.current);
-          advanceTimeoutRef.current = window.setTimeout(() => {
-            setActiveIdx((prev) => (prev + 1) % total);
-          }, 8000);
+      // One utterance per part, each in the language its text is actually in (English text must not be read by a Hindi voice).
+      parts.forEach((part, i) => {
+        const u = new SpeechSynthesisUtterance(part.text);
+        u.lang = SPEECH_LANG[part.lang] ?? part.lang;
+        u.rate = 0.95;
+        if (i === 0) {
+          u.onstart = () => {
+            setIsPlayingAudio(true);
+            setAudioProgress(25);
+          };
         }
-      };
-
-      synthRef.current = u;
-      window.speechSynthesis.speak(u);
+        u.onboundary = () => {
+          setAudioProgress((prev) => Math.min(prev + 15, 95));
+        };
+        if (i === parts.length - 1) {
+          u.onend = () => {
+            setIsPlayingAudio(false);
+            setAudioProgress(100);
+            advance(3000);
+          };
+          synthRef.current = u;
+        }
+        u.onerror = () => {
+          setIsPlayingAudio(false);
+          setAudioProgress(0);
+          advance(8000);
+        };
+        window.speechSynthesis.speak(u);
+      });
     } else if (autoplay && total > 0) {
       if (advanceTimeoutRef.current) clearTimeout(advanceTimeoutRef.current);
       advanceTimeoutRef.current = window.setTimeout(() => {
@@ -253,6 +285,10 @@ export function Story() {
   };
 
   const narrationFile = d?.narration_file_ids?.[lang] ?? d?.narration_file_ids?.en;
+  // Tell the visitor when Listen will not be in their language.
+  const narrationInEnglish =
+    lang !== "en" && (narrationFile ? !d?.narration_file_ids?.[lang] : speechParts.some((p) => p.lang !== lang));
+  const languageName = LANGS.find((l) => l.code === lang)?.name ?? lang;
 
   return (
     <div className="page story-experience-page">
@@ -351,7 +387,7 @@ export function Story() {
                     ) : (
                       <div className="exhibition-document-preview">
                         <div className="doc-preview-inner">
-                          <span className="doc-preview-year">{currentBlock.year ?? "1927"}</span>
+                          {yearOf(currentBlock) && <span className="doc-preview-year">{yearOf(currentBlock)}</span>}
                           <h3 className="doc-preview-title">{currentBlock.item.title}</h3>
                           <span className="doc-preview-col">{currentBlock.item.collection}</span>
                         </div>
@@ -366,20 +402,18 @@ export function Story() {
                 {/* Right Pane: Curator Narrative & Spotlight Quote */}
                 <div className="exhibition-content-pane">
                   <div className="exhibition-meta-row">
-                    <span className="milestone-badge">
-                      {t("milestoneYear", { year: currentBlock.year ?? "1927" })}
-                    </span>
+                    {yearOf(currentBlock) && (
+                      <span className="milestone-badge">
+                        {t("milestoneYear", { year: yearOf(currentBlock) })}
+                      </span>
+                    )}
                     <span className="chapter-step-badge">
                       {t("chapterIndicator", { current: activeIdx + 1, total })}
                     </span>
                   </div>
 
                   <h2 className="exhibition-chapter-title">
-                    {currentBlock.chapter_title ? (
-                      <LangText map={currentBlock.chapter_title} />
-                    ) : (
-                      t("chapterLabel", { n: activeIdx + 1 })
-                    )}
+                    <ChapterName block={currentBlock} n={activeIdx + 1} />
                   </h2>
 
                   {/* Audio Narration Bar */}
@@ -404,6 +438,10 @@ export function Story() {
                       <span className={`wave-bar ${isPlayingAudio ? "animating" : ""}`} />
                     </div>
                   </div>
+
+                  {narrationInEnglish && (
+                    <p className="narration-lang-note muted" role="note">{t("narrationFallback", { language: languageName })}</p>
+                  )}
 
                   {currentBlock.captions ? (
                     <p className="exhibition-narrative-text">
@@ -509,7 +547,7 @@ export function Story() {
                         <a href={`#chapter-${idx + 1}`} className="toc-link">
                           <span className="toc-number">{idx + 1}. </span>
                           <span>
-                            {b.chapter_title ? pickText(b.chapter_title, lang) : t("chapterLabel", { n: idx + 1 })}
+                            <ChapterName block={b} n={idx + 1} />
                           </span>
                         </a>
                       </li>
@@ -522,16 +560,18 @@ export function Story() {
                 {blocks.map((b, idx) => (
                   <section key={idx} id={`chapter-${idx + 1}`} className="story-block longform-chapter-section">
                     <div className="chapter-header-row">
-                      <span className="milestone-badge">
-                        {t("milestoneYear", { year: b.year ?? "1927" })}
-                      </span>
+                      {yearOf(b) && (
+                        <span className="milestone-badge">
+                          {t("milestoneYear", { year: yearOf(b) })}
+                        </span>
+                      )}
                       <span className="chapter-step-badge">
                         {t("chapterIndicator", { current: idx + 1, total })}
                       </span>
                     </div>
 
                     <h2 className="longform-chapter-title">
-                      {b.chapter_title ? <LangText map={b.chapter_title} /> : t("chapterLabel", { n: idx + 1 })}
+                      <ChapterName block={b} n={idx + 1} />
                     </h2>
 
                     {b.image_file_id ? (

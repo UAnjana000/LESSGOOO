@@ -1,6 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import type { ConstitutionArticle, ConstitutionDetail } from "../api";
 import { useApi } from "../hooks";
+import { clipSnippet } from "../basket";
 import { useSession } from "../state";
 import { AddToList, ContentText, ErrorState, FixtureChip, KindChip, LangText, Loading, Page, useDocumentTitle, VerifiedChip } from "../components/Bits";
 
@@ -14,7 +15,16 @@ export function Constitution() {
       {list.error && <ErrorState error={list.error} retry={list.reload} />}
       {list.data && (
         <ul className="results">
-          {list.data.length === 0 && <li className="empty-state">{t("constitutionEmpty")}</li>}
+          {list.data.length === 0 && (
+            <li className="empty-state constitution-empty">
+              <p>{t("constitutionEmpty")}</p>
+              <p className="muted">{t("constitutionNextSteps")}</p>
+              <div className="row" style={{ justifyContent: "center", gap: 12, flexWrap: "wrap" }}>
+                <Link className="btn" to="/search?q=constitution">{t("constitutionSearchLink")}</Link>
+                <Link className="btn secondary" to="/search?collection=debates">{t("constitutionDebatesLink")}</Link>
+              </div>
+            </li>
+          )}
           {list.data.map((a) => (
             <li key={a.number} className="result">
               <div>
@@ -86,6 +96,7 @@ export function ConstitutionArticlePage() {
                   <AddToList entry={{
                     item_id: e.item.id, title: e.item.title, passage_id: e.passage?.passage_id,
                     page: e.passage?.page_sequence ?? undefined, start_ms: e.passage?.start_ms ?? undefined, citation: e.citation,
+                    snippet: e.passage?.text ? clipSnippet(e.passage.text) : undefined,
                   }} />
                 </div>
               </li>

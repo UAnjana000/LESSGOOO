@@ -1,9 +1,10 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { ApiError, ArticleRef } from "../api";
 import { facetLink, type Facet } from "../filters";
 import { derivativeLabel, LANGS, pick, textLang, type Lang } from "../i18n";
-import { useSession, type BasketEntry } from "../state";
+import { BASKET_MAX, useSession, type BasketEntry } from "../state";
+import { clipSnippet } from "../basket";
 
 /** Derivative label chip. API labels ("Reviewed transcription", …) are translated; others are shown as given. */
 export function KindChip({ label }: { label: string }) {
@@ -133,15 +134,26 @@ export function ErrorState({ error, retry, notFound, message }: { error?: ApiErr
 export function AddToList({ entry }: { entry: BasketEntry }) {
   const s = useSession();
   const inList = s.inBasket(entry);
+  const [full, setFull] = useState(false);
   return (
-    <button
-      type="button"
-      className={`btn small ${inList ? "" : "secondary"}`}
-      aria-pressed={inList}
-      onClick={() => (inList ? s.removeFromBasket(entry) : s.addToBasket(entry))}
-    >
-      {inList ? s.t("inList") : s.t("addToList")}
-    </button>
+    <>
+      <button
+        type="button"
+        className={`btn small ${inList ? "" : "secondary"}`}
+        aria-pressed={inList}
+        onClick={() => {
+          if (inList) {
+            setFull(false);
+            s.removeFromBasket(entry);
+          } else {
+            setFull(!s.addToBasket({ ...entry, snippet: entry.snippet ? clipSnippet(entry.snippet) : undefined }));
+          }
+        }}
+      >
+        {inList ? s.t("inList") : s.t("addToList")}
+      </button>
+      {full && !inList && <span className="notice bad list-full-note" role="alert">{s.t("basketFull", { n: BASKET_MAX })}</span>}
+    </>
   );
 }
 
@@ -186,5 +198,6 @@ export function Page({ title, lead, children }: { title: string; lead?: ReactNod
 
 export function pickText(map: Record<string, string> | undefined, lang: string): string {
   if (!map) return "";
-  return map[lang] ?? map.en ?? Object.values(map)[0] ?? "";
+  // An empty string means "not written in this language", same as a missing key.
+  return map[lang] || map.en || Object.values(map).find(Boolean) || "";
 }

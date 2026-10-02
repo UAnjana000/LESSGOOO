@@ -84,7 +84,7 @@ function PassageBlock({ item, passage, citation, page, tab, target }: { item: It
         {showReviewed ? reviewed.text : passage.text}
       </div>
       <div className="row">
-        <AddToList entry={{ item_id: item.id, title: item.title, passage_id: showReviewed ? reviewed.passage_id : passage.id, page, citation }} />
+        <AddToList entry={{ item_id: item.id, title: item.title, passage_id: showReviewed ? reviewed.passage_id : passage.id, page, citation, snippet: (showReviewed ? reviewed.text : passage.text) ?? undefined }} />
       </div>
       {tab === "original" && <MachineTranslation passage={passage} enabled={item.machine_translation_enabled} />}
       <Narration item={item} passage={passage} />
@@ -150,7 +150,7 @@ function Media({ item, startMs, targetPassage }: { item: ItemDetail; startMs: nu
                 </p>
                 <div className="row">
                   <VerifiedChip verified={s.quote_verified} />
-                  <AddToList entry={{ item_id: item.id, title: item.title, passage_id: passage?.id, start_ms: s.start_ms, citation }} />
+                  <AddToList entry={{ item_id: item.id, title: item.title, passage_id: passage?.id, start_ms: s.start_ms, citation, snippet: s.text }} />
                 </div>
                 <ArticleLinks articles={s.articles} />
               </div>

@@ -246,6 +246,8 @@ export interface Hit {
     people?: string[];
     places?: string[];
     articles?: ArticleRef[];
+    /** The page number printed on the page, as in the citation (page_sequence is the scan order). */
+    page_label?: string | null;
   };
 }
 

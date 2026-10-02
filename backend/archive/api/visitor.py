@@ -21,7 +21,7 @@ from archive import constitution, exhibit, storage
 from archive.ask import voice
 from archive.ask.service import ask as run_ask
 from archive.config import get_settings
-from archive.search.models import get_reranker
+from archive.ask.graph import keywordise, relaxed_keyword_query
 from archive.db import get_db
 from archive.ingest.publish import current_index_version, withdrawn_item_ids
 from archive.models import (
@@ -61,6 +61,8 @@ from archive.services import sarvam_text
 
 router = APIRouter(prefix="/api/visitor", tags=["visitor"])
 DB = Annotated[Session, Depends(get_db)]
+_DEVANAGARI = re.compile(r"[ऀ-ॿ]")
+_WORD = re.compile(r"[\wऀ-ॣ०-ॿ]+", re.UNICODE)
 LANGS = ("en", "hi", "mr")
 
 PAGE_LABELS = {
@@ -310,14 +312,26 @@ def search(db: DB, q: Annotated[str, Query(min_length=1, max_length=300)], colle
                             date_to=date_to, subject=subject, person=person, place=place)
     hits, info = hybrid_search(db, q, filters, limit=20)
     if hits and not info.get("keyword_candidates"):
-        # No passage contains the words, so every hit is only the nearest by embedding, and the nearest exist for
-        # any query ("bitcoin", a typo). Keep the ones the reranker finds related at all.
-        floor = get_settings().effective_sufficiency_threshold * 0.5
-        scores = get_reranker().score(q, [h.text[: get_settings().rerank_max_chars] for h in hits])
-        kept = [h for h, sc in zip(hits, scores, strict=True) if sc >= floor]
-        info = {**info, "semantic_only": True, "below_relevance_floor": len(hits) - len(kept)}
-        hits = kept
+        hits, info = _without_unrelated(db, q, filters, hits, info)
     return {"query": q, "results": [h.as_dict() for h in hits], "info": info, "llm_calls": 0}
+
+
+def _without_unrelated(db: Session, q: str, filters: SearchFilters, hits: list, info: dict[str, Any]
+                       ) -> tuple[list, dict[str, Any]]:
+    """No passage contains every word of the query, so every hit is only the nearest by embedding, and nearest
+    neighbours exist for any query ("bitcoin", a typo). Cheap checks only (a reranker here costs seconds):
+    1. passages containing any of the query's rarer words ("Poona Pact" -> poona OR pact);
+    2. a Devanagari query over English text keeps its embedding matches, marked as other-language matches;
+    3. otherwise only embedding matches that share a content word with the query."""
+    if relaxed := relaxed_keyword_query(db, q):
+        extra, _ = hybrid_search(db, relaxed, filters, limit=20)
+        if kw := [h for h in extra if h.keyword_rank]:
+            return kw, {**info, "relaxed_keywords": relaxed}
+    if _DEVANAGARI.search(q):
+        return hits, {**info, "semantic_only": True, "cross_language": True}
+    terms = {t.lower() for t in _WORD.findall(keywordise(q)) if len(t) > 2}
+    kept = [h for h in hits if terms & {t.lower() for t in _WORD.findall(h.text)}]
+    return kept, {**info, "semantic_only": True, "below_relevance_floor": len(hits) - len(kept)}
 
 
 class AskBody(BaseModel):

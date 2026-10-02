@@ -10,12 +10,12 @@ from sqlalchemy.orm import Session
 from archive import audit
 from archive.models import ArchivalItem, MetadataRevision
 
-FIELDS = ("subjects", "people", "places", "date_text", "date_start", "date_end", "date_certainty",
+FIELDS = ("title", "subjects", "people", "places", "date_text", "date_start", "date_end", "date_certainty",
           "languages", "edition", "volume", "publisher", "creator")
 
 
 def snapshot(item: ArchivalItem) -> dict[str, Any]:
-    return {"subjects": list(item.subjects or []), "people": list(item.people or []),
+    return {"title": item.title, "subjects": list(item.subjects or []), "people": list(item.people or []),
             "places": list(item.places or []), "date_text": item.date_text,
             "date_start": item.date_start.isoformat() if item.date_start else None,
             "date_end": item.date_end.isoformat() if item.date_end else None,

@@ -131,23 +131,33 @@ def open_access() -> dict[str, bool]:
     return {"enabled": get_settings().open_staff_access}
 
 
+OPEN_ACCESS_EMAIL = "open-access (demo)"
+
+
 @router.post("/login/open")
 def login_open(db: DB) -> dict[str, Any]:
-    """Demo only: sign in the bootstrap administrator without a password."""
+    """Demo only: sign in a shared administrator account without a password. Actions are attributed to
+    "open-access (demo)". Each browser visit is not audited (it would flood the append-only log); instead one
+    `staff.open_access_enabled` event is written per day while the switch is on."""
     s = get_settings()
     if not s.open_staff_access:
         raise HTTPException(404, "Not found")
-    user = db.execute(select(StaffUser).where(StaffUser.email == s.bootstrap_admin_email.lower())).scalar()
+    user = db.execute(select(StaffUser).where(StaffUser.email == OPEN_ACCESS_EMAIL)).scalar()
     if user is None:
-        # No bootstrap password was configured; the random one is never shown.
-        user = StaffUser(email=s.bootstrap_admin_email.lower(), display_name="Administrator",
+        # The random password is never shown, so this account cannot sign in through /login.
+        user = StaffUser(email=OPEN_ACCESS_EMAIL, display_name="Open access (demo)",
                          roles=["admin", "archivist", "curator", "reviewer"], languages=[],
                          password_hash=hash_password(secrets.token_urlsafe(32)))
         db.add(user)
         db.flush()
     if not user.active:
-        raise HTTPException(403, "The administrator account is disabled.")
-    audit.record(db, user.email, "staff.login_open", "staff_user", user.id)
+        raise HTTPException(403, "The open-access account is disabled.")
+    today = dt.datetime.now(dt.UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    seen = db.execute(select(AuditEvent.id).where(AuditEvent.action == "staff.open_access_enabled",
+                                                  AuditEvent.created_at >= today).limit(1)).scalar()
+    if seen is None:
+        audit.record(db, user.email, "staff.open_access_enabled", "staff_user", user.id,
+                     detail={"note": "staff sign-in is switched off on this server; anyone with the link is admin"})
     db.commit()
     return {"token": create_token(user), "user": {"email": user.email, "name": user.display_name,
                                                  "roles": user.roles, "languages": user.languages}}
@@ -221,6 +231,21 @@ def upsert_rights(body: RightsBody, db: DB, user: Archivist) -> dict[str, Any]:
 
 # ---------------------------------------------------------------- intake
 
+async def _read_limited(f: UploadFile) -> bytes:
+    """Read an upload in chunks, spooling to a temporary file, and refuse it once it passes the configured
+    limit. The spooled upload is already on disk (Starlette), so this never builds the body twice."""
+    limit = get_settings().intake_max_upload_bytes
+    chunks: list[bytes] = []
+    total = 0
+    while chunk := await f.read(1024 * 1024):
+        total += len(chunk)
+        if total > limit:
+            raise HTTPException(413, f"{f.filename or 'file'} is larger than the {limit // (1024 * 1024)} MB "
+                                     "upload limit; split it or ask an administrator to raise the limit.")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 @router.post("/intake")
 async def intake_upload(db: DB, user: Archivist, metadata: Annotated[str, Form()],
                         files: Annotated[list[UploadFile], File()]) -> dict[str, Any]:
@@ -237,7 +262,7 @@ async def intake_upload(db: DB, user: Archivist, metadata: Annotated[str, Form()
     if errors:
         raise HTTPException(422, errors)
     expected = meta.get("sha256") or {}
-    payload = [(f.filename or "upload.bin", await f.read(), expected.get(f.filename or "")) for f in files]
+    payload = [(f.filename or "upload.bin", await _read_limited(f), expected.get(f.filename or "")) for f in files]
     meta["capture"] = {**meta.get("capture", {}), "item_key": meta["item_key"]}
     try:
         res = intake.intake_item(db, meta, payload, user.email, meta.get("page_labels"))
@@ -349,6 +374,7 @@ class MetadataBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=3, max_length=500)]
+    title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)] | None = None
     subjects: list[Tag] | None = Field(default=None, max_length=50)
     people: list[Tag] | None = Field(default=None, max_length=50)
     places: list[Tag] | None = Field(default=None, max_length=50)
@@ -370,6 +396,8 @@ def update_metadata(item_id: int, body: MetadataBody, db: DB, user: Archivist) -
         raise HTTPException(404, "item not found")
     before = metadata.snapshot(item)
     changes = {k: getattr(body, k) for k in body.model_fields_set if k in metadata.FIELDS}
+    if "title" in changes and changes["title"] is None:
+        raise HTTPException(422, "title cannot be empty")
     for k in ("subjects", "people", "places", "languages"):
         if changes.get(k) is not None:
             changes[k] = _dedupe(changes[k])
@@ -398,6 +426,33 @@ def metadata_history(item_id: int, db: DB, user: Staff) -> list[dict[str, Any]]:
                       .order_by(MetadataRevision.version.desc())).scalars()
     return [{"version": r.version, "before": r.before, "after": r.after, "actor": r.actor, "reason": r.reason,
              "at": r.created_at.isoformat()} for r in rows]
+
+
+@router.post("/items/{item_id}/fixity")
+def verify_fixity(item_id: int, db: DB, user: Archivist) -> dict[str, Any]:
+    """Re-hash every stored file of the item (in 1 MB chunks) and compare with the recorded SHA-256."""
+    _get_or_404(db, ArchivalItem, item_id, "item")
+    files = db.execute(select(FileVersion).where(FileVersion.item_id == item_id, FileVersion.deleted_at.is_(None))
+                       .order_by(FileVersion.id)).scalars().all()
+    results = []
+    for f in files:
+        try:
+            path = storage.resolve(f.storage_uri)
+            if not path.exists():
+                status, actual = "missing", None
+            else:
+                actual = storage.sha256_file(path)
+                status = "ok" if actual == f.sha256 else "mismatch"
+        except (ValueError, KeyError, OSError):
+            status, actual = "missing", None
+        results.append({"id": f.id, "role": f.role, "kind": f.kind, "name": f.original_filename,
+                        "expected_sha256": f.sha256, "actual_sha256": actual, "status": status})
+    summary = {s_: sum(1 for r in results if r["status"] == s_) for s_ in ("ok", "mismatch", "missing")}
+    audit.record(db, user.email, "item.fixity.check", "archival_item", item_id,
+                 detail={"files": len(results), **summary,
+                         "failed_file_ids": [r["id"] for r in results if r["status"] != "ok"]})
+    db.commit()
+    return {"item_id": item_id, "checked_at": utcnow().isoformat(), "summary": summary, "files": results}
 
 
 # ---------------------------------------------------------------- Constitution article links (curated)
@@ -1008,6 +1063,19 @@ class NodeBody(CurationReason):
     item_ids: list[int] = Field(min_length=1)
 
 
+@router.get("/map/nodes")
+def staff_nodes(db: DB, user: Staff) -> list[dict[str, Any]]:
+    return [{"id": n.id, "node_type": n.node_type, "labels": n.labels, "item_ids": n.item_ids, "status": n.status}
+            for n in db.execute(select(KnowledgeNode).order_by(KnowledgeNode.id)).scalars()]
+
+
+@router.get("/map/edges")
+def staff_edges(db: DB, user: Staff) -> list[dict[str, Any]]:
+    return [{"id": e.id, "from_node": e.from_node, "to_node": e.to_node, "relation": e.relation,
+             "evidence_item_ids": e.evidence_item_ids, "status": e.status}
+            for e in db.execute(select(KnowledgeEdge).order_by(KnowledgeEdge.id)).scalars()]
+
+
 @router.post("/map/nodes")
 def create_node(body: NodeBody, db: DB, user: Curator) -> dict[str, Any]:
     _check_items_exist(db, body.item_ids)
@@ -1128,7 +1196,9 @@ def stats(db: DB, user: Staff) -> dict[str, Any]:
         select(AnswerLog.outcome, func.count(), func.coalesce(func.sum(AnswerLog.tokens_in), 0),
                func.coalesce(func.sum(AnswerLog.tokens_out), 0), func.coalesce(func.sum(AnswerLog.cost_usd), 0.0),
                func.coalesce(func.avg(AnswerLog.latency_ms), 0)).group_by(AnswerLog.outcome)).all()
+    st = get_settings()
     return {
+        "answer_prices_configured": bool(st.llm_input_cost_per_mtok or st.llm_output_cost_per_mtok),
         "items_by_state": dict(db.execute(select(ArchivalItem.publication_state, func.count())
                                           .group_by(ArchivalItem.publication_state)).all()),
         "pages_by_status": dict(db.execute(select(Page.status, func.count()).group_by(Page.status)).all()),

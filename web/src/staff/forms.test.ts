@@ -29,6 +29,13 @@ describe("metadataBody", () => {
   });
 });
 
+describe("metadataBody title", () => {
+  it("sends a trimmed title and leaves a blank one out so the stored title is kept", () => {
+    expect(metadataBody({ ...metadataForm({ title: "Old" }), title: "  New title ", reason: "typo" }).title).toBe("New title");
+    expect("title" in metadataBody({ ...metadataForm({ title: "Old" }), title: " ", reason: "typo" })).toBe(false);
+  });
+});
+
 describe("detailText", () => {
   it("names the field of a validation error by its last loc element", () => {
     expect(detailText([{ type: "string_too_short", loc: ["body", "reason"], msg: "String should have at least 3 characters" }, "rights.title missing"]))

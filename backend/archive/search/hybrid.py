@@ -175,6 +175,8 @@ def load_hits(db: Session, ids: list[int]) -> dict[int, Hit]:
             extra={"edition": item.edition, "volume": item.volume, "is_fixture": item.is_fixture,
                    "translation_of_id": p.translation_of_id, "item_type": item.item_type,
                    "speaker": seg.speaker if seg is not None else None,
+                   # The page number printed on the page, as the citation shows it (not the scan sequence).
+                   "page_label": (page.printed_page_label or str(page.sequence)) if page is not None else None,
                    "rights_line": item.rights.attribution, "credit": photo_credit(photo),
                    "creator": item.creator, "date_text": item.date_text,
                    "subjects": item.subjects or [], "people": item.people or [], "places": item.places or [],

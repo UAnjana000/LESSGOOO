@@ -44,19 +44,20 @@ export function StaffAuthProvider({ children }: { children: ReactNode }) {
     setUser(r.user);
   };
 
-  // Demo installations can switch the login off: sign straight in as the administrator.
+  // Demo installations can switch the login off: sign straight in as the shared demo administrator. The flag is
+  // read even when a token is already stored, so the "demo mode" banner survives a reload.
   useEffect(() => {
-    if (token) return;
     let live = true;
     api.get<{ enabled: boolean }>("/api/staff/open-access")
       .then(async (r) => {
-        if (r.enabled) signedIn(await api.post<{ token: string; user: StaffUser }>("/api/staff/login/open", {}));
+        if (r.enabled && !token) signedIn(await api.post<{ token: string; user: StaffUser }>("/api/staff/login/open", {}));
         if (live) setOpen(r.enabled);
       })
       .catch(() => live && setOpen(false));
     return () => {
       live = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   const value: Auth = {

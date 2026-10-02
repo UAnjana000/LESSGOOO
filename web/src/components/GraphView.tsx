@@ -615,22 +615,9 @@ export function GraphView({ data, selectedId, onSelectNode }: GraphViewProps) {
                   (activeTypeFilter && source.type !== activeTypeFilter && target.type !== activeTypeFilter) ||
                   (matchingNodeIds && !matchingNodeIds.has(edge.from) && !matchingNodeIds.has(edge.to));
 
-                const midX = (source.x + target.x) / 2;
-                const midY = (source.y + target.y) / 2;
-                const relFull = relationLabel(t, edge.relation);
-                const relShown = truncateLabel(relFull, EDGE_LABEL_MAX);
-                const labelW = Math.max(36, Array.from(relShown).length * 6.8 + 18);
-
                 return (
                   <g key={edge.id} className={`heritage-edge-group ${isConnectedToFocus ? "edge-active" : ""} ${isDimmed ? "edge-dimmed" : ""}`}>
                     <line x1={source.x} y1={source.y} x2={target.x} y2={target.y} className="heritage-edge-line" />
-                    {isConnectedToFocus && (
-                      <g transform={`translate(${midX}, ${midY})`} className="heritage-edge-label">
-                        <title>{relFull}</title>
-                        <rect x={-labelW / 2} y="-11" width={labelW} height="22" rx="4" />
-                        <text y="1">{relShown}</text>
-                      </g>
-                    )}
                   </g>
                 );
               })}
@@ -700,6 +687,28 @@ export function GraphView({ data, selectedId, onSelectNode }: GraphViewProps) {
                         {labelText}
                       </text>
                     </g>
+                  </g>
+                );
+              })}
+            </g>
+
+            {/* Edge labels sit above the nodes (and their faded labels) on an opaque plate, only for the focused node's edges. */}
+            <g className="heritage-edge-labels">
+              {data.edges.map((edge) => {
+                if (activeFocusId === null || (edge.from !== activeFocusId && edge.to !== activeFocusId)) return null;
+                const source = nodeMap.get(edge.from);
+                const target = nodeMap.get(edge.to);
+                if (!source || !target) return null;
+                const midX = (source.x + target.x) / 2;
+                const midY = (source.y + target.y) / 2;
+                const relFull = relationLabel(t, edge.relation);
+                const relShown = truncateLabel(relFull, EDGE_LABEL_MAX);
+                const labelW = Math.max(36, Array.from(relShown).length * 6.8 + 18);
+                return (
+                  <g key={edge.id} transform={`translate(${midX}, ${midY})`} className="heritage-edge-label">
+                    <title>{relFull}</title>
+                    <rect x={-labelW / 2} y="-11" width={labelW} height="22" rx="4" />
+                    <text y="1">{relShown}</text>
                   </g>
                 );
               })}

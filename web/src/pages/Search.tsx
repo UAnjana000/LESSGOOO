@@ -25,7 +25,21 @@ function FacetSelect({ label, all, options, value, onChange }: { label: string; 
   );
 }
 
-function HitCard({ h }: { h: Hit }) {
+// Words worth marking in a result: the query's own words, minus the framing ones every passage contains.
+const QUERY_FILLER = new Set(["what", "which", "when", "where", "who", "why", "how", "did", "does", "the", "and", "for", "about", "say", "said", "with", "from", "that", "this", "was", "were", "are"]);
+function queryTerms(q: string): string[] {
+  return [...new Set((q.toLowerCase().match(/[\p{L}\p{M}\p{N}]+/gu) ?? []).filter((w) => w.length > 2 && !QUERY_FILLER.has(w)))];
+}
+
+/** The passage with the visitor's search words marked, so they can see why it matched. */
+function Highlighted({ text, terms }: { text: string; terms: string[] }) {
+  if (!terms.length) return <>{text}</>;
+  const escaped = terms.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const parts = text.split(new RegExp(`(${escaped.join("|")})`, "giu"));
+  return <>{parts.map((p, i) => (i % 2 ? <mark key={i}>{p}</mark> : p))}</>;
+}
+
+function HitCard({ h, terms = [] }: { h: Hit; terms?: string[] }) {
   const { t } = useSession();
   const isPhoto = h.extra?.item_type === "photograph";
   const subjects = h.extra?.subjects ?? [];
@@ -42,7 +56,7 @@ function HitCard({ h }: { h: Hit }) {
           {h.extra?.date_text && <span>{h.extra.date_text}</span>}
           <span>{t(`col_${h.collection}` as Key)}</span>
           {h.extra?.volume && <span>{h.extra.volume}</span>}
-          {h.page_sequence != null && <span>p. {h.page_sequence}</span>}
+          {h.page_sequence != null && <span>p. {h.extra?.page_label ?? h.page_sequence}</span>}
           <span lang={h.language}>{langName(h.language)}</span>
           {h.start_ms != null && <span>{t("atTime", { time: formatMs(h.start_ms) })}</span>}
         </div>
@@ -54,7 +68,7 @@ function HitCard({ h }: { h: Hit }) {
       </div>
 
       <blockquote lang={h.language} style={{ borderLeft: "3px solid var(--indigo)", paddingLeft: "14px", margin: "8px 0" }}>
-        {h.text}
+        <Highlighted text={h.text} terms={terms} />
       </blockquote>
 
       {subjects.length > 0 && (
@@ -96,6 +110,7 @@ function HitCard({ h }: { h: Hit }) {
             page: h.page_sequence ?? undefined,
             start_ms: h.start_ms ?? undefined,
             citation: h.citation,
+            snippet: h.text,
           }}
         />
       </div>
@@ -167,7 +182,7 @@ export function Search() {
   useEffect(() => setDraft(q), [q]);
 
   const searchUrl = searchPath(params);
-  const search = useApi<{ results: Hit[] }>(searchUrl);
+  const search = useApi<{ results: Hit[]; info?: { cross_language?: boolean } }>(searchUrl);
   const browse = useApi<ItemCard[]>(searchUrl ? null : browsePath(params));
   const facets = useApi<Facets>("/api/visitor/facets");
 
@@ -258,8 +273,11 @@ export function Search() {
           <p role="status" className="muted">
             {search.data.results.length ? t("results", { n: search.data.results.length }) : hasFilters(params) ? t("noResultsFiltered") : t("noResults", { q })}
           </p>
+          {search.data.info?.cross_language && search.data.results.length > 0 && (
+            <p className="notice">{t("crossLanguageResults")}</p>
+          )}
           <ul className="results">
-            {search.data.results.map((h) => <HitCard key={h.passage_id} h={h} />)}
+            {search.data.results.map((h) => <HitCard key={h.passage_id} h={h} terms={queryTerms(q)} />)}
           </ul>
         </>
       )}

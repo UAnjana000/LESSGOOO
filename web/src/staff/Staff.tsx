@@ -185,6 +185,7 @@ export function StaffLayout() {
     ["/staff/review", "stNavReview"],
     ["/staff/items", "stNavItems"],
     ...(archivist ? [["/staff/rights", "stNavRights"] as [string, Key]] : []),
+    ...(can("curator") ? [["/staff/curation", "stNavCuration"] as [string, Key]] : []),
     ["/staff/jobs", "stNavJobs"],
     ["/staff/audit", "stNavAudit"],
   ];
@@ -192,6 +193,7 @@ export function StaffLayout() {
   return (
     <div className="staff">
       <a className="skip-link" href="#main">{t("skip")}</a>
+      {open === true && <p className="staff-demo-banner" role="alert">{t("stDemoBanner")}</p>}
       <header className="staff-top">
         <strong>{t("stWorkspace")}</strong>
         <nav aria-label={t("stNavLabel")}>
@@ -201,7 +203,7 @@ export function StaffLayout() {
         </nav>
         <div className="who">
           <StaffLanguage />
-          <span>{user?.email} ({(user?.roles ?? []).join(", ")})</span>
+          <span className="who-email" title={`${user?.email ?? ""} (${(user?.roles ?? []).join(", ")})`}>{user?.email}</span>
           {!open && <button type="button" className="btn secondary small" onClick={logout}>{t("stSignOut")}</button>}
         </div>
       </header>
@@ -289,7 +291,7 @@ export function StaffDashboard() {
             <thead><tr><th>{t("stOutcome")}</th><th>{t("stCount")}</th><th>{t("stTokensIn")}</th><th>{t("stTokensOut")}</th><th>{t("stCost")}</th><th>{t("stMeanLatency")}</th></tr></thead>
             <tbody>
               {(stats.data.answers as Json[]).map((a) => (
-                <tr key={String(a.outcome)}><td>{String(a.outcome)}</td><td>{String(a.count)}</td><td>{String(a.tokens_in)}</td><td>{String(a.tokens_out)}</td><td>{Number(a.cost_usd).toFixed(4)}</td><td>{Math.round(Number(a.avg_latency_ms))}</td></tr>
+                <tr key={String(a.outcome)}><td>{String(a.outcome)}</td><td>{String(a.count)}</td><td>{String(a.tokens_in)}</td><td>{String(a.tokens_out)}</td><td>{stats.data!.answer_prices_configured ? Number(a.cost_usd).toFixed(4) : t("stCostNotConfigured")}</td><td>{Math.round(Number(a.avg_latency_ms))}</td></tr>
               ))}
             </tbody>
           </table>
@@ -1113,6 +1115,7 @@ function MetadataSection({ id, metadata, version, reload }: { id: string; metada
       <form className="stack" onSubmit={submit}>
         {/* Read-only for anyone but archivists: the fields stay visible, disabled. */}
         <fieldset className="form-grid" disabled={!can("archivist")} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+          <div style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column" }}>{text("title", "stTitle")}</div>
           {text("subjects", "stSubjects")}
           {text("people", "stPeople")}
           {text("places", "stPlaces")}
@@ -1502,6 +1505,8 @@ function ConstitutionSection({ passages, links, reload }: { passages: PublishedP
   );
 }
 
+interface FixityResult { summary: { ok: number; mismatch: number; missing: number }; files: { id: number; role: string; kind: string; name: string | null; status: string }[] }
+
 export function StaffItem() {
   const { id = "" } = useParams();
   const { token, can } = useStaff();
@@ -1510,6 +1515,9 @@ export function StaffItem() {
   const { run, busy, view } = useAction();
   const [withdrawReason, setWithdrawReason] = useState("");
   const [restoreReason, setRestoreReason] = useState("");
+  const [fixity, setFixity] = useState<FixityResult | null>(null);
+  const [fixityBusy, setFixityBusy] = useState(false);
+  const [fixityErr, setFixityErr] = useState<string | null>(null);
   if (item.error) return <p className="notice bad" role="alert">{errText(item.error)}</p>;
   if (!item.data) return <Loading center />;
   const d = item.data;
@@ -1597,7 +1605,25 @@ export function StaffItem() {
       {segments.length > 0 && <SegmentsSection segments={segments} reload={item.reload} />}
       <SummariesSection id={id} derivatives={(d.derivatives ?? []) as StaffDerivative[]} externalAllowed={externalAllowed} reload={item.reload} />
       {passages.length > 0 && <ConstitutionSection passages={passages} links={(d.constitution_links ?? []) as ConstitutionLink[]} reload={item.reload} />}
-      <Section title={t("stFiles")}>
+      <Section title={t("stFiles")} actions={archivist && (
+        <button type="button" className="btn small" disabled={busy || fixityBusy} onClick={() => { setFixityBusy(true); setFixity(null); setFixityErr(null); api.post<FixityResult>(`/api/staff/items/${id}/fixity`, {}, token!).then(setFixity).catch((e) => setFixityErr(errText(e))).finally(() => setFixityBusy(false)); }}>
+          {fixityBusy ? t("stFixityChecking") : t("stFixityCheck")}
+        </button>
+      )}>
+        {fixityErr && <p className="notice bad" role="alert">{fixityErr}</p>}
+        {fixity && (
+          <div role="status" style={{ marginBottom: 12 }}>
+            <p className={`notice${fixity.summary.mismatch || fixity.summary.missing ? " bad" : ""}`}>
+              {t("stFixitySummary", { ok: fixity.summary.ok, mismatch: fixity.summary.mismatch, missing: fixity.summary.missing })}{" "}
+              {fixity.summary.mismatch || fixity.summary.missing ? t("stFixityProblem") : t("stFixityAllOk")}
+            </p>
+            <ul>
+              {fixity.files.map((f) => (
+                <li key={f.id}>#{f.id} {f.role} {f.kind}{f.name ? ` (${f.name})` : ""}: <strong className={f.status === "ok" ? "status ok" : "status bad"}>{f.status === "ok" ? t("stFixityOk") : f.status === "mismatch" ? t("stFixityMismatch") : t("stFixityMissing")}</strong></li>
+              ))}
+            </ul>
+          </div>
+        )}
         <table className="grid" aria-label={t("stFilesOfItem")}>
           <thead><tr><th>#</th><th>{t("stRole")}</th><th>{t("stKind")}</th><th>{t("stFormat")}</th><th>{t("stBytes")}</th><th>{"SHA-256"}</th><th>{t("stGenerator")}</th></tr></thead>
           <tbody>
@@ -1609,6 +1635,54 @@ export function StaffItem() {
           </tbody>
         </table>
       </Section>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- curation
+
+interface CurationRow { id: number; status: string; [k: string]: unknown }
+
+function CurationList({ title, path, approvePath, describe }: { title: string; path: string; approvePath: string; describe: (r: CurationRow) => string }) {
+  const { token, can } = useStaff();
+  const { t } = useSession();
+  const rows = useApi<CurationRow[]>(path, token);
+  const { run, busy, view } = useAction();
+  return (
+    <Section title={title}>
+      {rows.loading && <Loading />}
+      {rows.error && <p className="notice bad" role="alert">{errText(rows.error)}</p>}
+      {rows.data && rows.data.length === 0 && <p className="muted">{t("stCurationNone")}</p>}
+      {rows.data && rows.data.length > 0 && (
+        <table className="grid" aria-label={title}>
+          <thead><tr><th>#</th><th>{t("stTitle")}</th><th>{t("stStatus")}</th><th><span className="visually-hidden">{t("stActions")}</span></th></tr></thead>
+          <tbody>
+            {rows.data.map((r) => (
+              <tr key={r.id}>
+                <td>{r.id}</td><td>{describe(r)}</td><td>{r.status}</td>
+                <td>{r.status !== "approved" && can("curator") && (
+                  <button type="button" className="btn small" disabled={busy} onClick={() => void run((tk) => api.post(`${approvePath}/${r.id}/approve`, {}, tk), t("stCurationApproved"), rows.reload)}>{t("stApprove")}</button>
+                )}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {view}
+    </Section>
+  );
+}
+
+export function StaffCuration() {
+  const { t, lang } = useSession();
+  const label = (m: unknown) => { const o = (m ?? {}) as Record<string, string>; return o[lang] || o.en || Object.values(o)[0] || ""; };
+  return (
+    <>
+      <h1>{t("stNavCuration")}</h1>
+      <p className="muted">{t("stCurationLead")}</p>
+      <CurationList title={t("stCurationTimeline")} path="/api/staff/timeline" approvePath="/api/staff/timeline" describe={(r) => `${String(r.date_text)}: ${label(r.titles)}`} />
+      <CurationList title={t("stCurationNodes")} path="/api/staff/map/nodes" approvePath="/api/staff/map/nodes" describe={(r) => `${label(r.labels)} (${String(r.node_type)})`} />
+      <CurationList title={t("stCurationEdges")} path="/api/staff/map/edges" approvePath="/api/staff/map/edges" describe={(r) => `#${String(r.from_node)} ${String(r.relation)} #${String(r.to_node)}`} />
     </>
   );
 }

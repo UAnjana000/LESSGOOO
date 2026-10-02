@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     jwt_ttl_minutes: int = 480
     # Demo only: a "continue as judge" button signs in a read-only viewer without a password.
     judge_access: bool = False
+    # Largest single file accepted by staff intake (bytes).
+    intake_max_upload_bytes: int = Field(default=1024**3, ge=1024)
     # Demo only: the staff workspace opens without a login, signed in as the bootstrap administrator.
     open_staff_access: bool = False
     bootstrap_admin_email: str = "admin@archive.local"

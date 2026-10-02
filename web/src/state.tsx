@@ -9,7 +9,11 @@ export interface BasketEntry {
   page?: number;
   start_ms?: number;
   citation: string;
+  /** Short excerpt (<=160 chars) of the saved passage, so entries from one item are told apart. */
+  snippet?: string;
 }
+
+export const BASKET_MAX = 30;
 
 export interface AskTurn {
   q: string;
@@ -31,7 +35,10 @@ interface Session {
   contrast: boolean;
   toggleContrast: () => void;
   basket: BasketEntry[];
-  addToBasket: (e: BasketEntry) => void;
+  /** False when the list is full (BASKET_MAX) and the entry was not added. */
+  addToBasket: (e: BasketEntry) => boolean;
+  clearBasket: () => void;
+  moveInBasket: (e: BasketEntry, dir: -1 | 1) => void;
   removeFromBasket: (e: BasketEntry) => void;
   inBasket: (e: Partial<BasketEntry>) => boolean;
   askHistory: AskTurn[];
@@ -131,7 +138,22 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     contrast,
     toggleContrast: () => setContrast((c) => !c),
     basket,
-    addToBasket: (e) => setBasket((b) => (b.some((x) => same(x, e)) ? b : [...b, e].slice(-30))),
+    addToBasket: (e) => {
+      if (basket.some((x) => same(x, e))) return true;
+      if (basket.length >= BASKET_MAX) return false;
+      setBasket((b) => (b.some((x) => same(x, e)) || b.length >= BASKET_MAX ? b : [...b, e]));
+      return true;
+    },
+    clearBasket: () => setBasket([]),
+    moveInBasket: (e, dir) =>
+      setBasket((b) => {
+        const i = b.findIndex((x) => same(x, e));
+        const j = i + dir;
+        if (i < 0 || j < 0 || j >= b.length) return b;
+        const out = [...b];
+        [out[i], out[j]] = [out[j], out[i]];
+        return out;
+      }),
     removeFromBasket: (e) => setBasket((b) => b.filter((x) => !same(x, e))),
     inBasket: (e) => basket.some((x) => same(x, e)),
     askHistory,
