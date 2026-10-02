@@ -126,6 +126,33 @@ def login_judge(db: DB) -> dict[str, Any]:
                                                  "roles": user.roles, "languages": user.languages}}
 
 
+@router.get("/open-access")
+def open_access() -> dict[str, bool]:
+    return {"enabled": get_settings().open_staff_access}
+
+
+@router.post("/login/open")
+def login_open(db: DB) -> dict[str, Any]:
+    """Demo only: sign in the bootstrap administrator without a password."""
+    s = get_settings()
+    if not s.open_staff_access:
+        raise HTTPException(404, "Not found")
+    user = db.execute(select(StaffUser).where(StaffUser.email == s.bootstrap_admin_email.lower())).scalar()
+    if user is None:
+        # No bootstrap password was configured; the random one is never shown.
+        user = StaffUser(email=s.bootstrap_admin_email.lower(), display_name="Administrator",
+                         roles=["admin", "archivist", "curator", "reviewer"], languages=[],
+                         password_hash=hash_password(secrets.token_urlsafe(32)))
+        db.add(user)
+        db.flush()
+    if not user.active:
+        raise HTTPException(403, "The administrator account is disabled.")
+    audit.record(db, user.email, "staff.login_open", "staff_user", user.id)
+    db.commit()
+    return {"token": create_token(user), "user": {"email": user.email, "name": user.display_name,
+                                                 "roles": user.roles, "languages": user.languages}}
+
+
 @router.get("/me")
 def me(user: Staff) -> dict[str, Any]:
     return {"email": user.email, "name": user.display_name, "roles": user.roles, "languages": user.languages}
