@@ -81,6 +81,44 @@ describe("ScanViewer", () => {
     expect(String((v.opened[1] as { url: string }).url)).toContain("/api/visitor/files/38");
   });
 
+  it("full screen covers the window where the Fullscreen API is missing, and Esc or the button leaves it", async () => {
+    await mount(new Response(JSON.stringify(INFO), { status: 200 }));
+    const wrap = () => document.querySelector<HTMLElement>(".osd-wrap")!;
+    const button = () => document.querySelector<HTMLButtonElement>(".osd-full")!;
+    expect(button().getAttribute("aria-pressed")).toBe("false");
+    await act(async () => button().click());
+    expect(wrap().classList.contains("full-window")).toBe(true);
+    expect(button().getAttribute("aria-pressed")).toBe("true");
+    expect(document.body.classList.contains("scan-fullwindow-open")).toBe(true);
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
+    expect(wrap().classList.contains("full-window")).toBe(false);
+    expect(document.body.classList.contains("scan-fullwindow-open")).toBe(false);
+    await act(async () => button().click());
+    await act(async () => button().click());
+    expect(wrap().classList.contains("is-full")).toBe(false);
+  });
+
+  it("uses the browser's Fullscreen API on the viewer when it exists", async () => {
+    const requested: Element[] = [];
+    Object.defineProperty(document, "fullscreenEnabled", { configurable: true, value: true });
+    HTMLElement.prototype.requestFullscreen = function (this: HTMLElement) {
+      requested.push(this);
+      Object.defineProperty(document, "fullscreenElement", { configurable: true, value: this });
+      document.dispatchEvent(new Event("fullscreenchange"));
+      return Promise.resolve();
+    };
+    try {
+      await mount(new Response(JSON.stringify(INFO), { status: 200 }));
+      await act(async () => document.querySelector<HTMLButtonElement>(".osd-full")!.click());
+      expect(requested).toEqual([document.querySelector(".osd-wrap")]);
+      expect(document.querySelector(".osd-wrap")!.classList.contains("is-full")).toBe(true);
+    } finally {
+      delete (HTMLElement.prototype as Partial<HTMLElement>).requestFullscreen;
+      Object.defineProperty(document, "fullscreenEnabled", { configurable: true, value: false });
+      Object.defineProperty(document, "fullscreenElement", { configurable: true, value: null });
+    }
+  });
+
   it("shows the delivery image when info.json is not available", async () => {
     const v = await mount(new Response("<!doctype html>", { status: 404 }));
     expect(v.opened).toEqual([expect.objectContaining({ type: "image" })]);

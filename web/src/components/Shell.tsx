@@ -42,11 +42,20 @@ export function Shell() {
     };
   }, [settingsOpen]);
 
+  // After Finish the visitor lands on the home page; without a word on screen that looks like nothing happened
+  // (especially when they were already on home), so say the visit ended and the list was cleared.
+  const [visitEnded, setVisitEnded] = useState(false);
   const endVisit = useCallback(() => {
     closeModal(finishRef.current);
     s.finish();
     nav("/");
+    setVisitEnded(true);
   }, [s, nav]);
+  useEffect(() => {
+    if (!visitEnded) return;
+    const id = window.setTimeout(() => setVisitEnded(false), 8000);
+    return () => window.clearTimeout(id);
+  }, [visitEnded]);
   const kiosk = isKiosk();
   const { warnRef, remaining } = useIdleReset(kiosk && !attract, () => {
     endVisit();
@@ -222,6 +231,12 @@ export function Shell() {
         {!s.online && <div className="banner offline" role="status">{exhibit.leaseValid === false ? t("leaseExpired") : t("offlineBanner")}</div>}
         {s.online && exhibit.leaseValid === false && <div className="banner warn" role="status">{t("leaseExpired")}</div>}
         {(s.config?.fixture_items_visible ?? 0) > 0 && <div className="banner">{t("fixtureBanner")}</div>}
+        {visitEnded && (
+          <div className="banner visit-ended" role="status">
+            <span>{t("visitEnded")}</span>
+            <button type="button" className="btn small secondary" onClick={() => setVisitEnded(false)}>{t("close")}</button>
+          </div>
+        )}
         <Outlet />
       </main>
       <dialog ref={finishRef} aria-labelledby="finish-title" aria-describedby="finish-body">

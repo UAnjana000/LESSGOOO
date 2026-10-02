@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import OpenSeadragon from "openseadragon";
 import { fileUrl, resolveApiUrl } from "../api";
 import { useSession } from "../state";
@@ -87,8 +87,46 @@ export function ScanViewer({ iiif, fileId, label, highlight }: Props) {
     v.viewport.applyConstraints();
   };
 
+  // Full screen: the browser's Fullscreen API on the viewer (scan and its controls), or, where an element cannot
+  // go full screen (iPhone Safari), the viewer covering the whole window until Esc or the button.
+  const wrap = useRef<HTMLDivElement>(null);
+  const [full, setFull] = useState<"native" | "window" | null>(null);
+  useEffect(() => {
+    const sync = () => setFull((cur) => (document.fullscreenElement === wrap.current ? "native" : cur === "native" ? null : cur));
+    document.addEventListener("fullscreenchange", sync);
+    return () => document.removeEventListener("fullscreenchange", sync);
+  }, []);
+  useEffect(() => {
+    if (full !== "window") return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setFull(null); };
+    document.addEventListener("keydown", onKey);
+    document.body.classList.add("scan-fullwindow-open");
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.classList.remove("scan-fullwindow-open");
+    };
+  }, [full]);
+  useEffect(() => {
+    // The canvas changed size: show the whole page again once the layout has settled.
+    const id = window.setTimeout(() => viewerRef.current?.viewport.goHome(true), 120);
+    return () => window.clearTimeout(id);
+  }, [full]);
+  const toggleFull = () => {
+    const el = wrap.current;
+    if (!el) return;
+    if (full === "native") {
+      void document.exitFullscreen?.().catch(() => setFull(null));
+    } else if (full === "window") {
+      setFull(null);
+    } else if (document.fullscreenEnabled && el.requestFullscreen) {
+      el.requestFullscreen().catch(() => setFull("window"));
+    } else {
+      setFull("window");
+    }
+  };
+
   return (
-    <div className="osd-wrap" role="group" aria-label={label}>
+    <div ref={wrap} className={`osd-wrap${full ? " is-full" : ""}${full === "window" ? " full-window" : ""}`} role="group" aria-label={label}>
       <div ref={host} className="osd" />
       <div className="osd-tools" role="group" aria-label={t("scanControls")}>
         <button type="button" onClick={() => zoom(1.4)}>
@@ -99,9 +137,13 @@ export function ScanViewer({ iiif, fileId, label, highlight }: Props) {
           <span aria-hidden="true">−</span>
           <span className="visually-hidden">{t("zoomOut")}</span>
         </button>
-        <button type="button" onClick={() => viewerRef.current?.viewport.goHome()}>
-          <span aria-hidden="true">⤢</span>
+        <button type="button" onClick={() => viewerRef.current?.viewport.goHome()} title={t("zoomReset")}>
+          <span aria-hidden="true">⟲</span>
           <span className="visually-hidden">{t("zoomReset")}</span>
+        </button>
+        <button type="button" className="osd-full" onClick={toggleFull} aria-pressed={full !== null} title={t(full ? "exitFullScreen" : "fullScreen")}>
+          <span aria-hidden="true">{full ? "✕" : "⛶"}</span>
+          <span className="visually-hidden">{t(full ? "exitFullScreen" : "fullScreen")}</span>
         </button>
       </div>
     </div>

@@ -181,6 +181,22 @@ describe("Ask requests", () => {
   });
 });
 
+describe("Finish", () => {
+  it("says the visit has ended, even when the visitor was already on the home page", async () => {
+    vi.stubGlobal("fetch", vi.fn(fakeFetch));
+    await mount("/", "button.finish");
+    const before = visit().sessionId;
+    await act(async () => document.querySelector<HTMLButtonElement>("button.finish")!.click());
+    const confirm = [...document.querySelectorAll<HTMLButtonElement>("dialog button")].find((b) => b.textContent === STRINGS.en.finishConfirm)!;
+    await act(async () => confirm.click());
+    expect(text(".visit-ended")).toContain(STRINGS.en.visitEnded);
+    expect(visit().sessionId).not.toBe(before);
+    const close = document.querySelector<HTMLButtonElement>(".visit-ended button")!;
+    await act(async () => close.click());
+    expect(document.querySelector(".visit-ended")).toBeNull();
+  });
+});
+
 describe("Ask beyond the archive", () => {
   it("a background answer is labelled as not from archive sources, has no citation marks, and links archive items", async () => {
     const answer = await answerFixture();

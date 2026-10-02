@@ -537,6 +537,8 @@ label { font-weight: 500; color: var(--ink); }
 }
 .banner.offline { border-left-color: var(--indigo); background: var(--indigo-soft); color: var(--ink); }
 .banner.warn { border-left-color: var(--danger); background: var(--danger-wash); color: var(--danger); }
+.banner.visit-ended { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  border-left-color: var(--brass-ink); background: var(--brass-wash); color: var(--ink); }
 
 /* ---------- home ---------- */
 .hero {
@@ -801,6 +803,11 @@ label { font-weight: 500; color: var(--ink); }
 }
 .scan-pane .osd { height: min(72vh, 860px); }
 .osd-wrap { position: relative; }
+/* Full screen (Fullscreen API) or full window (fallback): the scan fills the screen behind its controls. */
+.osd-wrap.is-full, .osd-wrap:fullscreen { background: #111111; }
+.osd-wrap.is-full .osd, .osd-wrap:fullscreen .osd { width: 100%; height: 100vh; height: 100dvh; }
+.osd-wrap.full-window { position: fixed; inset: 0; z-index: 2000; }
+body.scan-fullwindow-open { overflow: hidden; }
 .osd-tools { position: absolute; top: 12px; right: 12px; display: flex; gap: 8px; z-index: 2; }
 .osd-tools button {
   min-width: 48px;
